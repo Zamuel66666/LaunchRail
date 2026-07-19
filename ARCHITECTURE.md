@@ -211,7 +211,7 @@ Database constraints will enforce unique memberships, unique webhook deliveries,
 4. The route adapter switches traffic and reports the applied configuration.
 5. Reconciliation repairs a route/database mismatch after a crash; the previous runtime is retained until activation is confirmed.
 
-The lifecycle and crash windows are specified as part of the Phase 0 deployment-lifecycle design.
+The lifecycle and crash windows are specified in [docs/deployment-lifecycle.md](docs/deployment-lifecycle.md).
 
 ## Delivery and consistency guarantees
 

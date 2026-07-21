@@ -1,0 +1,13 @@
+.DS_Store
+.env
+.next/
+coverage/
+dist/
+node_modules/
+*.log
+*.tsbuildinfo
+
+# Local service data and generated test artifacts
+.launchrail/
+playwright-report/
+test-results/

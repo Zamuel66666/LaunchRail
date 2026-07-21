@@ -31,7 +31,9 @@ try {
   await main();
 } catch (error) {
   const message =
-    error instanceof ConfigurationError ? error.message : "LaunchRail worker failed to start";
+    error instanceof ConfigurationError
+      ? error.message
+      : `LaunchRail worker failed to start: ${error instanceof Error ? error.message : "unknown error"}`;
   process.stderr.write(`${message}\n`);
   process.exitCode = 1;
 }

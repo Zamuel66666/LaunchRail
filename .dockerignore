@@ -1,0 +1,11 @@
+.env
+.git
+.github
+.next
+.launchrail
+coverage
+dist
+node_modules
+playwright-report
+test-results
+*.log

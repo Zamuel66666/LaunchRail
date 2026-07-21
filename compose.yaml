@@ -1,0 +1,47 @@
+name: launchrail
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-launchrail}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-launchrail_dev_only}
+      POSTGRES_USER: ${POSTGRES_USER:-launchrail}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 2s
+      timeout: 3s
+      retries: 15
+      start_period: 5s
+    ports:
+      - 127.0.0.1:${POSTGRES_PORT:-5432}:5432
+    restart: unless-stopped
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:8-alpine
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --save
+      - "60"
+      - "1"
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+      start_period: 3s
+    ports:
+      - 127.0.0.1:${REDIS_PORT:-6379}:6379
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+
+volumes:
+  postgres-data:
+  redis-data:

@@ -2,7 +2,9 @@
 
 **A self-hosted platform that turns a GitHub repository into a health-checked application deployment with live logs, preview URLs, release history, and safe rollback.**
 
-> LaunchRail is currently in the product-definition phase. The architecture and delivery plan are documented; the runnable platform begins in Phase 1.
+> Phase 1 is complete: the repository now has a runnable web/API/worker foundation, validated configuration, local PostgreSQL and Redis services, tests, and automated quality gates. Deployment features begin in Phase 2.
+
+![LaunchRail foundation status page](docs/assets/foundation-status-page.jpg)
 
 ## What LaunchRail does
 
@@ -46,7 +48,13 @@ LaunchRail will use a modular monolith for the web/API boundary and a separate w
 - Proposed architecture and initial technology decisions.
 - Deployment lifecycle and explicit state-machine design.
 - Initial threat model, security boundaries, and phased roadmap.
-- Contribution and local development workflow for the documentation phase.
+- Pinned pnpm workspace with Next.js web, Fastify API, worker, and shared packages.
+- Health endpoints for all three applications and structured API/worker logging.
+- Validated environment configuration with actionable errors and production guards.
+- Loopback-only PostgreSQL and Redis development services with health checks.
+- Formatting, linting, type checking, unit/integration tests, builds, smoke tests, and GitHub Actions.
+- Apache 2.0 open-source license.
+- Recruiter-readable foundation status page and current screenshot.
 
 ### In progress
 
@@ -54,10 +62,9 @@ LaunchRail will use a modular monolith for the web/API boundary and a separate w
 
 ### Planned next
 
-- pnpm workspace with web, API, worker, and shared packages.
-- PostgreSQL and Redis development services in Docker Compose.
-- Formatting, linting, type checking, tests, and GitHub Actions.
-- Health endpoints and validated environment configuration.
+- Users, organizations, memberships, projects, and deployment persistence.
+- Transactional deployment events and the centrally validated state machine.
+- Initial Drizzle schema and clean PostgreSQL migrations.
 
 ### Not currently planned
 
@@ -66,11 +73,29 @@ LaunchRail will use a modular monolith for the web/API boundary and a separate w
 
 ## Try it locally
 
-There is not yet a runnable application. Phase 1 will introduce a one-command local development environment and this section will be replaced with tested setup commands. Until then, the product can be reviewed through the documentation:
+Prerequisites: Node.js 22.22 or newer, Corepack/pnpm 11.9, Docker, and Docker Compose.
 
-1. Read the [product scope](docs/product-scope.md) for the user problem and boundaries.
-2. Review the [deployment lifecycle](docs/deployment-lifecycle.md) for the core safety behavior.
-3. Follow progress in the [roadmap](ROADMAP.md).
+```bash
+corepack enable
+pnpm install --frozen-lockfile
+cp .env.example .env
+pnpm services:up
+pnpm dev
+```
+
+Open [http://localhost:3000](http://localhost:3000). Foundation health endpoints are available at:
+
+- Web: `http://localhost:3000/api/health`
+- API: `http://localhost:4000/health`
+- Worker: `http://localhost:4001/health`
+
+Stop the application processes with `Ctrl+C`, then stop PostgreSQL and Redis without deleting their volumes:
+
+```bash
+pnpm services:down
+```
+
+See the [development guide](docs/development.md) for verification, configuration, cleanup, and troubleshooting.
 
 ## Documentation
 
@@ -85,8 +110,8 @@ There is not yet a runnable application. Phase 1 will introduce a one-command lo
 
 ## Current limitations
 
-LaunchRail is not production-ready and currently contains documentation only. No authentication, repository connection, builds, deployments, preview URLs, or rollback behavior has been implemented yet. The first supported environment will be a single local Docker host, and early releases will prioritize public GitHub repositories before private-repository authentication.
+LaunchRail is not production-ready. The repository foundation runs, but there is no authentication, database schema, project management, repository connection, queue consumer, build pipeline, application deployment, preview routing, or rollback behavior yet. Health endpoints report process liveness only; they do not yet check PostgreSQL or Redis readiness.
 
 ## License
 
-A project license has not yet been selected. Until one is added, the source is not offered under an open-source license despite the project's open-source goal. License selection is tracked in the roadmap.
+LaunchRail is licensed under the [Apache License 2.0](LICENSE). See [ADR-0005](docs/adr/0005-apache-2-license.md) for the decision.

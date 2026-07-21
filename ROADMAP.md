@@ -9,6 +9,7 @@ The roadmap reports verified repository state, not aspirations as completed feat
 ### Available
 
 - **Phase 0 — Product definition:** scope, users, non-goals, architecture, data-model outline, deployment state model, threat model, technology decisions, and delivery plan.
+- **Phase 1 — Repository foundation:** runnable pnpm workspace, web/API/worker health endpoints, shared configuration, PostgreSQL, Redis, Docker Compose, tests, builds, CI, and open-source license.
 
 ### In progress
 
@@ -16,7 +17,7 @@ The roadmap reports verified repository state, not aspirations as completed feat
 
 ### Planned next
 
-- **Phase 1 — Repository foundation:** runnable pnpm workspace, web/API/worker health endpoints, shared configuration, PostgreSQL, Redis, Docker Compose, tests, and CI.
+- **Phase 2 — Domain model and persistence:** organization-owned data, projects, deployments, events, migrations, and the transactional deployment state machine.
 
 ### Planned later
 
@@ -30,13 +31,13 @@ The roadmap reports verified repository state, not aspirations as completed feat
 
 Tagged releases are created only for meaningful runnable milestones:
 
-| Target | Demonstrable outcome |
-| --- | --- |
-| `v0.1.0` | Local environment, authentication, and project management work from a clean setup. |
-| `v0.2.0` | A background worker clones repositories and builds images with live progress. |
-| `v0.3.0` | Built applications run behind generated local preview URLs. |
-| `v0.4.0` | Health-checked activation preserves healthy releases and supports rollback. |
-| `v0.5.0` | Verified GitHub push webhooks safely trigger deployments. |
+| Target   | Demonstrable outcome                                                                  |
+| -------- | ------------------------------------------------------------------------------------- |
+| `v0.1.0` | Local environment, authentication, and project management work from a clean setup.    |
+| `v0.2.0` | A background worker clones repositories and builds images with live progress.         |
+| `v0.3.0` | Built applications run behind generated local preview URLs.                           |
+| `v0.4.0` | Health-checked activation preserves healthy releases and supports rollback.           |
+| `v0.5.0` | Verified GitHub push webhooks safely trigger deployments.                             |
 | `v1.0.0` | The complete local demonstration is stable, documented, observable, and reproducible. |
 
 Versions and contents may change as implementation evidence becomes available. Phase 0 itself is not tagged because it has no runnable product.
@@ -61,23 +62,24 @@ Exit evidence: documentation link/format validation and review against the Phase
 
 ### Phase 1 — Repository foundation
 
-**Status:** Planned next
+**Status:** Available
 
-Scope:
+Delivered:
 
 - pnpm workspace with `apps/web`, `apps/api`, `apps/worker`, and shared packages.
-- An explicitly selected open-source license before implementation contributions expand.
-- Next.js, Fastify, and worker health endpoints.
-- PostgreSQL and Redis through Docker Compose.
-- Runtime-validated environment configuration and actionable startup errors.
-- Formatting, linting, type checking, Vitest, builds, and GitHub Actions.
-- Tested clean-setup instructions.
+- Apache 2.0 license and recorded licensing decision.
+- Next.js web foundation plus Fastify and worker health servers.
+- Shared health contracts, validated configuration, and redacted structured logger setup.
+- Loopback-only PostgreSQL and Redis Compose services with persistent volumes and health checks.
+- Pinned Node.js, pnpm, TypeScript, formatting, ESLint, Vitest, build, and smoke-test tooling.
+- GitHub Actions jobs for code quality, application health, and real PostgreSQL/Redis health.
+- Clean-setup, configuration, health, verification, and cleanup instructions.
 
-Exit gate: a fresh clone can start infrastructure and all applications, observe health, and pass the documented quality commands.
+Exit evidence: frozen install, format/lint/type/unit/integration/build checks, all application health smoke tests, valid Compose model, published image manifests, and green GitHub Actions service health checks.
 
 ### Phase 2 — Domain model and persistence
 
-**Status:** Planned
+**Status:** Planned next
 
 Add users, organizations, memberships, projects, deployments, events, logs, runtime instances, encrypted-variable metadata, webhook deliveries, audit events, and the centrally tested deployment state machine.
 

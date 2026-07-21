@@ -32,17 +32,17 @@ Every report includes:
 
 ## Planned scenarios
 
-| Scenario | Primary measurements | Correctness checks |
-| --- | --- | --- |
-| API latency | requests/second, median/p95 latency, error ratio | response schema and authorization remain correct |
-| Concurrent log streams | connection success, delivery lag, throughput, memory | ordering, reconnect, bounds, no cross-tenant output |
-| Queue throughput | enqueue-to-start, completion rate, retry overhead | no lost authoritative work or duplicate side effects |
-| Deployment transitions | command-to-persisted-event latency, conflict rate | valid states/events and one active release |
-| Rollback | request-to-observed-route duration | target healthy, route correct, previous release safe |
-| Build cache | cold/warm duration, bytes/resources used | same source/image outcome and declared cache state |
-| Worker recovery | interruption-to-convergence duration | no duplicate resources, explicit final state |
-| Duplicate webhook | deliveries/second, deduplication latency | exactly one deployment intent per delivery key |
-| Resource use | CPU, memory, disk, network over scenario | no limit violation or leaked orphan resource |
+| Scenario               | Primary measurements                                 | Correctness checks                                   |
+| ---------------------- | ---------------------------------------------------- | ---------------------------------------------------- |
+| API latency            | requests/second, median/p95 latency, error ratio     | response schema and authorization remain correct     |
+| Concurrent log streams | connection success, delivery lag, throughput, memory | ordering, reconnect, bounds, no cross-tenant output  |
+| Queue throughput       | enqueue-to-start, completion rate, retry overhead    | no lost authoritative work or duplicate side effects |
+| Deployment transitions | command-to-persisted-event latency, conflict rate    | valid states/events and one active release           |
+| Rollback               | request-to-observed-route duration                   | target healthy, route correct, previous release safe |
+| Build cache            | cold/warm duration, bytes/resources used             | same source/image outcome and declared cache state   |
+| Worker recovery        | interruption-to-convergence duration                 | no duplicate resources, explicit final state         |
+| Duplicate webhook      | deliveries/second, deduplication latency             | exactly one deployment intent per delivery key       |
+| Resource use           | CPU, memory, disk, network over scenario             | no limit violation or leaked orphan resource         |
 
 ## Run protocol
 
@@ -63,21 +63,27 @@ Every report includes:
 # <scenario> benchmark — <date>
 
 ## Question
+
 What user or operator outcome is measured?
 
 ## Environment
+
 Exact hardware, software, limits, revision, and configuration.
 
 ## Method
+
 Dataset, warm-up, run count, concurrency, duration, and cache/network state.
 
 ## Results
+
 Raw artifact link plus median, p95, errors, and resource observations.
 
 ## Correctness evidence
+
 Assertions run before/after and orphan inventory.
 
 ## Limitations
+
 Confounders, non-production assumptions, and what the result does not prove.
 ```
 

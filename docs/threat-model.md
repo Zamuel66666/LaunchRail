@@ -4,7 +4,7 @@
 
 LaunchRail handles unusually powerful operations: it downloads code, builds Dockerfiles, starts containers, stores application secrets, and changes network routes. A malicious repository or stolen account could therefore affect more than one deployment. The design treats source code and workloads as untrusted even though the first supported operator and host are trusted.
 
-This Phase 0 model identifies security requirements; it does not claim those controls have been implemented.
+This initial model identifies security requirements. Phase 1 implements only foundational configuration/log-redaction conventions and loopback-bound development services; the remaining controls are not claimed as complete.
 
 ## Scope and assumptions
 
@@ -33,19 +33,19 @@ This Phase 0 model identifies security requirements; it does not claim those con
 
 ## Assets
 
-| Asset | Security need |
-| --- | --- |
-| User session | Confidentiality, integrity, revocation, bounded lifetime |
-| Organization/project data | Tenant isolation and authorized modification |
-| Environment variables | Encryption, access control, redaction, rotation |
-| GitHub/webhook credentials | Minimal scope, signature integrity, rotation |
-| Source checkout | Exact revision integrity and bounded contents |
-| Built image | Traceability to source/configuration and tamper detection |
-| Docker host | Protection from workload escape and resource exhaustion |
-| Active route | Integrity and availability; must target an approved healthy release |
-| Deployment history/audit log | Integrity, ordering, retention, actor attribution |
-| Logs/metrics/traces | Availability without leaking secrets or tenant data |
-| Encryption keys | Separation from ciphertext, restricted access, versioned rotation |
+| Asset                        | Security need                                                       |
+| ---------------------------- | ------------------------------------------------------------------- |
+| User session                 | Confidentiality, integrity, revocation, bounded lifetime            |
+| Organization/project data    | Tenant isolation and authorized modification                        |
+| Environment variables        | Encryption, access control, redaction, rotation                     |
+| GitHub/webhook credentials   | Minimal scope, signature integrity, rotation                        |
+| Source checkout              | Exact revision integrity and bounded contents                       |
+| Built image                  | Traceability to source/configuration and tamper detection           |
+| Docker host                  | Protection from workload escape and resource exhaustion             |
+| Active route                 | Integrity and availability; must target an approved healthy release |
+| Deployment history/audit log | Integrity, ordering, retention, actor attribution                   |
+| Logs/metrics/traces          | Availability without leaking secrets or tenant data                 |
+| Encryption keys              | Separation from ciphertext, restricted access, versioned rotation   |
 
 ## Actors
 
@@ -106,22 +106,22 @@ Crossing a boundary requires authenticated protocols, validated schemas, bounded
 
 ## Threat scenarios and required mitigations
 
-| Threat | Example impact | Planned controls | Evidence required before claiming mitigation |
-| --- | --- | --- | --- |
-| Session theft or fixation | Account takeover | Opaque rotated sessions, secure/HTTP-only/SameSite cookies, expiry, revocation, CSRF defense | Authentication integration tests and cookie inspection |
-| Cross-organization access | Read or mutate another team's project/secrets | Organization ID in repository queries, role checks, deny-by-default policies | Negative API tests for every resource/action |
-| Server-side request forgery | Repository or health URL reaches internal services | Strict repository providers, normalized GitHub URLs, direct runtime health targets, blocked link-local/private destinations where appropriate | URL parser/property tests and integration tests |
-| Command injection | Crafted branch, path, or environment value runs host commands | Library APIs and argument arrays, typed values, no shell interpolation, allowlisted paths | Malicious-input regression tests and code review |
-| Malicious Dockerfile/build | Host compromise, secret theft, denial of service | Dedicated BuildKit policy, no control-plane secrets in context, bounded resources/time/storage/network, cleanup | Adversarial example builds and resource tests |
-| Container escape or Docker socket abuse | Host takeover | No Docker socket in workloads, non-root user, dropped capabilities, read-only filesystem where viable, seccomp/AppArmor, resource limits | Runtime policy inspection and escape-oriented tests |
-| Secret leakage | Credentials in logs, UI, metrics, images, cache, traces | Envelope encryption, scoped decryption, centralized redaction, no secrets in job payloads/build args by default | Canary-secret tests across all output channels |
-| Forged/replayed webhook | Unauthorized or duplicate deployment | HMAC verification over raw bytes, timestamp/size controls, unique delivery ID, branch filters | Invalid-signature and duplicate-delivery tests |
-| Queue message tampering/duplication | Invalid transitions or repeated side effects | Private Redis, typed schemas, stable idempotency keys, state re-read, bounded retries | Duplicate-job and malformed-contract tests |
-| Route takeover/collision | Traffic sent to wrong organization or release | Deterministic collision-resistant hostnames, unique constraints, authorized route intent, reconciliation | Collision tests and proxy integration tests |
-| Log injection/resource exhaustion | Misleading UI or unavailable telemetry | Structured encoding, display escaping, chunk/rate/retention limits, sequence IDs | Control-character, high-volume, and reconnect tests |
-| Dependency or image compromise | Malicious control-plane/runtime code | Lockfile, reviewable updates, provenance where available, dependency/image scanning | CI scan results and documented triage policy |
-| Destructive control misuse | Unauthorized stop/cancel/rollback | Role checks, confirmation UI, idempotent commands, audit events | Authorization and audit integration tests |
-| Worker crash at side-effect boundary | Duplicate containers or incorrect active route | Persist-before-act, labeled resources, leases, idempotent adapters, reconciliation | Failure-injection tests at each boundary |
+| Threat                                  | Example impact                                                | Planned controls                                                                                                                              | Evidence required before claiming mitigation           |
+| --------------------------------------- | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Session theft or fixation               | Account takeover                                              | Opaque rotated sessions, secure/HTTP-only/SameSite cookies, expiry, revocation, CSRF defense                                                  | Authentication integration tests and cookie inspection |
+| Cross-organization access               | Read or mutate another team's project/secrets                 | Organization ID in repository queries, role checks, deny-by-default policies                                                                  | Negative API tests for every resource/action           |
+| Server-side request forgery             | Repository or health URL reaches internal services            | Strict repository providers, normalized GitHub URLs, direct runtime health targets, blocked link-local/private destinations where appropriate | URL parser/property tests and integration tests        |
+| Command injection                       | Crafted branch, path, or environment value runs host commands | Library APIs and argument arrays, typed values, no shell interpolation, allowlisted paths                                                     | Malicious-input regression tests and code review       |
+| Malicious Dockerfile/build              | Host compromise, secret theft, denial of service              | Dedicated BuildKit policy, no control-plane secrets in context, bounded resources/time/storage/network, cleanup                               | Adversarial example builds and resource tests          |
+| Container escape or Docker socket abuse | Host takeover                                                 | No Docker socket in workloads, non-root user, dropped capabilities, read-only filesystem where viable, seccomp/AppArmor, resource limits      | Runtime policy inspection and escape-oriented tests    |
+| Secret leakage                          | Credentials in logs, UI, metrics, images, cache, traces       | Envelope encryption, scoped decryption, centralized redaction, no secrets in job payloads/build args by default                               | Canary-secret tests across all output channels         |
+| Forged/replayed webhook                 | Unauthorized or duplicate deployment                          | HMAC verification over raw bytes, timestamp/size controls, unique delivery ID, branch filters                                                 | Invalid-signature and duplicate-delivery tests         |
+| Queue message tampering/duplication     | Invalid transitions or repeated side effects                  | Private Redis, typed schemas, stable idempotency keys, state re-read, bounded retries                                                         | Duplicate-job and malformed-contract tests             |
+| Route takeover/collision                | Traffic sent to wrong organization or release                 | Deterministic collision-resistant hostnames, unique constraints, authorized route intent, reconciliation                                      | Collision tests and proxy integration tests            |
+| Log injection/resource exhaustion       | Misleading UI or unavailable telemetry                        | Structured encoding, display escaping, chunk/rate/retention limits, sequence IDs                                                              | Control-character, high-volume, and reconnect tests    |
+| Dependency or image compromise          | Malicious control-plane/runtime code                          | Lockfile, reviewable updates, provenance where available, dependency/image scanning                                                           | CI scan results and documented triage policy           |
+| Destructive control misuse              | Unauthorized stop/cancel/rollback                             | Role checks, confirmation UI, idempotent commands, audit events                                                                               | Authorization and audit integration tests              |
+| Worker crash at side-effect boundary    | Duplicate containers or incorrect active route                | Persist-before-act, labeled resources, leases, idempotent adapters, reconciliation                                                            | Failure-injection tests at each boundary               |
 
 ## Repository and build policy
 

@@ -20,14 +20,14 @@ This document defines the intended Phase 2 state model and later orchestration b
 
 ## State groups
 
-| Group | States | Meaning |
-| --- | --- | --- |
-| Waiting | `queued` | Persisted and eligible for worker processing. |
-| Preparing | `cloning`, `building` | Resolving source and producing an immutable image. |
-| Releasing | `deploying`, `health_checking` | Starting and validating a candidate runtime. |
-| Serving/history | `active`, `superseded`, `rolling_back`, `rolled_back`, `stopped` | Release routing and operator-controlled history. |
-| Cancellation | `cancelling`, `cancelled` | Cancellation requested and cleanup completed. |
-| Failure | `build_failed`, `deployment_failed` | Terminal attempt failure before activation. |
+| Group           | States                                                           | Meaning                                            |
+| --------------- | ---------------------------------------------------------------- | -------------------------------------------------- |
+| Waiting         | `queued`                                                         | Persisted and eligible for worker processing.      |
+| Preparing       | `cloning`, `building`                                            | Resolving source and producing an immutable image. |
+| Releasing       | `deploying`, `health_checking`                                   | Starting and validating a candidate runtime.       |
+| Serving/history | `active`, `superseded`, `rolling_back`, `rolled_back`, `stopped` | Release routing and operator-controlled history.   |
+| Cancellation    | `cancelling`, `cancelled`                                        | Cancellation requested and cleanup completed.      |
+| Failure         | `build_failed`, `deployment_failed`                              | Terminal attempt failure before activation.        |
 
 `build_failed`, `deployment_failed`, `cancelled`, `rolled_back`, and `stopped` are terminal for that deployment attempt. `superseded` remains eligible to become `active` during a rollback.
 
@@ -66,30 +66,30 @@ stateDiagram-v2
 
 All transition commands go through one domain service. Direct state updates outside that service are prohibited.
 
-| From | Allowed destination | Required condition or effect |
-| --- | --- | --- |
-| `queued` | `cloning` | Worker owns a valid lease/idempotency claim. |
-| `queued` | `cancelling` | Authorized cancellation was persisted. |
-| `cloning` | `building` | Exact commit and Dockerfile were validated and stored. |
-| `cloning` | `build_failed` | A structured source/clone failure is stored. |
-| `cloning` | `cancelling` | Cancellation signal observed. |
-| `building` | `deploying` | Image digest and build completion event are stored. |
-| `building` | `build_failed` | A structured build failure or timeout is stored. |
-| `building` | `cancelling` | Cancellation signal observed. |
-| `deploying` | `health_checking` | Runtime identifier and direct health target are stored. |
-| `deploying` | `deployment_failed` | A structured runtime-start failure is stored. |
-| `deploying` | `cancelling` | Cancellation signal observed. |
-| `health_checking` | `active` | Health policy passed; promotion transaction succeeds. |
-| `health_checking` | `deployment_failed` | Grace period or health policy is exhausted. |
-| `health_checking` | `cancelling` | Cancellation wins before promotion begins. |
-| `cancelling` | `cancelled` | Build/runtime cancellation and required cleanup are recorded. |
-| `active` | `superseded` | A different healthy release is promoted for the same project. |
-| `active` | `rolling_back` | Authorized rollback target was validated. |
-| `rolling_back` | `rolled_back` | The prior healthy target becomes active and route intent changes. |
-| `rolling_back` | `active` | Rollback fails before route intent changes; failure event is appended. |
-| `superseded` | `active` | It is the validated rollback target in the same promotion transaction. |
-| `active` | `stopped` | Route intent is removed and no active release remains. |
-| `superseded` | `stopped` | Retained historical runtime is intentionally stopped. |
+| From              | Allowed destination | Required condition or effect                                           |
+| ----------------- | ------------------- | ---------------------------------------------------------------------- |
+| `queued`          | `cloning`           | Worker owns a valid lease/idempotency claim.                           |
+| `queued`          | `cancelling`        | Authorized cancellation was persisted.                                 |
+| `cloning`         | `building`          | Exact commit and Dockerfile were validated and stored.                 |
+| `cloning`         | `build_failed`      | A structured source/clone failure is stored.                           |
+| `cloning`         | `cancelling`        | Cancellation signal observed.                                          |
+| `building`        | `deploying`         | Image digest and build completion event are stored.                    |
+| `building`        | `build_failed`      | A structured build failure or timeout is stored.                       |
+| `building`        | `cancelling`        | Cancellation signal observed.                                          |
+| `deploying`       | `health_checking`   | Runtime identifier and direct health target are stored.                |
+| `deploying`       | `deployment_failed` | A structured runtime-start failure is stored.                          |
+| `deploying`       | `cancelling`        | Cancellation signal observed.                                          |
+| `health_checking` | `active`            | Health policy passed; promotion transaction succeeds.                  |
+| `health_checking` | `deployment_failed` | Grace period or health policy is exhausted.                            |
+| `health_checking` | `cancelling`        | Cancellation wins before promotion begins.                             |
+| `cancelling`      | `cancelled`         | Build/runtime cancellation and required cleanup are recorded.          |
+| `active`          | `superseded`        | A different healthy release is promoted for the same project.          |
+| `active`          | `rolling_back`      | Authorized rollback target was validated.                              |
+| `rolling_back`    | `rolled_back`       | The prior healthy target becomes active and route intent changes.      |
+| `rolling_back`    | `active`            | Rollback fails before route intent changes; failure event is appended. |
+| `superseded`      | `active`            | It is the validated rollback target in the same promotion transaction. |
+| `active`          | `stopped`           | Route intent is removed and no active release remains.                 |
+| `superseded`      | `stopped`           | Retained historical runtime is intentionally stopped.                  |
 
 Any other pair is invalid and must return a typed conflict without changing persistence. Repeating a transition command with the same idempotency key returns the recorded result.
 

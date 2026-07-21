@@ -4,7 +4,7 @@
 
 When a deployment is slow or fails, a user should see which stage failed and what they can do. An operator should be able to follow the same deployment across the browser request, queue job, worker steps, Docker resources, health checks, and route update without searching unrelated text logs.
 
-Phase 0 defines this telemetry contract; no metrics, traces, or dashboards are available yet.
+Phase 1 establishes structured Pino logging for API and worker processes, a shared redaction list for common credential fields, and service-specific health endpoints. Correlation IDs, metrics, traces, dashboards, and dependency readiness remain planned.
 
 ## Correlation model
 
@@ -84,8 +84,8 @@ One shared redaction package will sanitize control-plane logs, deployment events
 
 ## Delivery stages
 
-1. Establish JSON logging and correlation conventions in the repository foundation.
-2. Instrument API and queue boundaries before deployment adapters expand.
+1. **Available:** establish JSON logging, baseline credential redaction, and process health conventions in the repository foundation.
+2. Add correlation IDs and instrument API/queue boundaries before deployment adapters expand.
 3. Add stage metrics and traces with each lifecycle implementation.
 4. Add health endpoints, heartbeat, dashboards, and documented queries.
 5. Run canary-secret and cardinality reviews before marking observability available.

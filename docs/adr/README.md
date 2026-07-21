@@ -10,6 +10,7 @@ Accepted ADRs can be superseded by a later record; published records are not rew
 - [ADR-0002: Fastify, Next.js, and shared TypeScript contracts](0002-application-stack.md)
 - [ADR-0003: PostgreSQL, Drizzle, Redis, and BullMQ](0003-persistence-and-jobs.md)
 - [ADR-0004: Docker BuildKit, Traefik, and server-sent events](0004-deployment-infrastructure.md)
+- [ADR-0005: License LaunchRail under Apache 2.0](0005-apache-2-license.md)
 
 ## Template
 

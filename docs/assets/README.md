@@ -11,4 +11,6 @@ Before committing an asset:
 - Link the asset from the README or the document that explains what it proves.
 - Do not add empty-form or unfinished-interface screenshots merely to make the repository look active.
 
-Phase 0 has no user interface, so no product screenshot exists yet.
+## Current assets
+
+- `foundation-status-page.jpg` — Phase 1 web foundation page showing the available platform base and next milestone.

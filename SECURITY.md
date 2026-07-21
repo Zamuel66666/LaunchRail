@@ -2,7 +2,7 @@
 
 ## Current security status
 
-LaunchRail is in Phase 0 and contains design documentation only. It is not production-ready and must not be used to run untrusted public workloads. Security controls described in the architecture and threat model are planned requirements until code and tests prove them.
+LaunchRail has a runnable Phase 1 repository foundation, but it is not production-ready and must not be exposed publicly or used to run untrusted workloads. The foundation validates process configuration, rejects the documented database password in production, binds development services to loopback, and starts redacted structured logging. Authentication, authorization, encrypted secrets, repository processing, and container execution controls are not implemented.
 
 The first implementation will target a trusted operator on a local Docker host. Docker daemon access is effectively host-level privilege; container restrictions reduce workload risk but do not turn the initial design into a hardened hostile multi-tenant platform.
 
@@ -26,9 +26,9 @@ Non-sensitive hardening suggestions and dependency-maintenance work may use ordi
 
 There are no released or supported versions yet. This table will be updated when the first tagged milestone is published.
 
-| Version | Supported |
-| --- | --- |
-| Unreleased documentation | No runtime security support |
+| Version           | Supported                                          |
+| ----------------- | -------------------------------------------------- |
+| Unreleased `main` | Active development; no production security support |
 
 ## Security principles
 
@@ -43,7 +43,7 @@ There are no released or supported versions yet. This table will be updated when
 - Prefer short-lived, scoped credentials and support rotation.
 - Fail closed while preserving the last known healthy release.
 
-## Planned minimum controls before a runnable demonstration
+## Planned minimum controls before the deployment demonstration
 
 - Validated environment configuration with no committed default secrets.
 - Secure session cookies, CSRF protection where applicable, rate limiting, and security headers.

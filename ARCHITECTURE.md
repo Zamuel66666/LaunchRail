@@ -111,17 +111,17 @@ The web application may initially be served separately during development. The A
 
 The API and worker share domain and application packages, not framework globals.
 
-| Module | Owns | Must not own |
-| --- | --- | --- |
-| Identity | users, sessions, organizations, memberships | deployment orchestration |
-| Projects | repository and deployment configuration | Git clone implementation |
-| Deployments | state machine, events, promotion, rollback rules | Docker client calls |
-| Sources | repository references and commit metadata | HTTP authorization |
-| Jobs | typed contracts, idempotency, retry policy | deployment business rules |
-| Secrets | encryption and redacted access | arbitrary environment rendering |
-| Webhooks | signature validation, deduplication, event mapping | direct build execution |
-| Audit | actor/action/resource records | application logs |
-| Observability | correlation and telemetry contracts | domain state authority |
+| Module        | Owns                                               | Must not own                    |
+| ------------- | -------------------------------------------------- | ------------------------------- |
+| Identity      | users, sessions, organizations, memberships        | deployment orchestration        |
+| Projects      | repository and deployment configuration            | Git clone implementation        |
+| Deployments   | state machine, events, promotion, rollback rules   | Docker client calls             |
+| Sources       | repository references and commit metadata          | HTTP authorization              |
+| Jobs          | typed contracts, idempotency, retry policy         | deployment business rules       |
+| Secrets       | encryption and redacted access                     | arbitrary environment rendering |
+| Webhooks      | signature validation, deduplication, event mapping | direct build execution          |
+| Audit         | actor/action/resource records                      | application logs                |
+| Observability | correlation and telemetry contracts                | domain state authority          |
 
 Dependencies point inward: infrastructure adapters depend on application ports, and application services depend on the domain model.
 
@@ -160,7 +160,11 @@ interface DeploymentQueue {
 }
 
 interface HealthChecker {
-  waitUntilHealthy(target: RuntimeTarget, policy: HealthPolicy, signal: AbortSignal): Promise<HealthResult>;
+  waitUntilHealthy(
+    target: RuntimeTarget,
+    policy: HealthPolicy,
+    signal: AbortSignal,
+  ): Promise<HealthResult>;
 }
 
 interface SecretCipher {
@@ -175,21 +179,21 @@ GitHub webhook processing is split into signature verification, delivery storage
 
 All organization-owned records carry an `organization_id`; authorization queries must include it rather than filtering only after retrieval.
 
-| Entity | Purpose and key invariants |
-| --- | --- |
-| User | Human identity; authentication details are stored separately from profile data. |
-| Organization | Tenant boundary and owner of projects, secrets, deployments, and audit events. |
-| Membership | Unique user/organization pair with an explicit role. |
-| Session | Hashed opaque token metadata, expiry, and revocation state. |
-| Project | Repository reference, selected branch, Dockerfile path, runtime and health configuration. |
-| Deployment | Immutable source revision plus current state, attempt, failure category, and timestamps. |
-| Deployment event | Append-only transition and diagnostic history with monotonic ordering per deployment. |
-| Build log | Ordered, bounded log chunks with redaction applied before persistence or fan-out. |
-| Runtime instance | Container/image identifiers, lifecycle state, resource metadata, and cleanup status. |
-| Active release | One project-level pointer updated atomically only after health succeeds. |
-| Environment variable | Name, scope, encrypted value, key version, and redacted metadata. |
-| Webhook delivery | Unique provider delivery ID, verification result, processing result, and received time. |
-| Audit event | Immutable actor, action, target, organization, outcome, and correlation metadata. |
+| Entity               | Purpose and key invariants                                                                |
+| -------------------- | ----------------------------------------------------------------------------------------- |
+| User                 | Human identity; authentication details are stored separately from profile data.           |
+| Organization         | Tenant boundary and owner of projects, secrets, deployments, and audit events.            |
+| Membership           | Unique user/organization pair with an explicit role.                                      |
+| Session              | Hashed opaque token metadata, expiry, and revocation state.                               |
+| Project              | Repository reference, selected branch, Dockerfile path, runtime and health configuration. |
+| Deployment           | Immutable source revision plus current state, attempt, failure category, and timestamps.  |
+| Deployment event     | Append-only transition and diagnostic history with monotonic ordering per deployment.     |
+| Build log            | Ordered, bounded log chunks with redaction applied before persistence or fan-out.         |
+| Runtime instance     | Container/image identifiers, lifecycle state, resource metadata, and cleanup status.      |
+| Active release       | One project-level pointer updated atomically only after health succeeds.                  |
+| Environment variable | Name, scope, encrypted value, key version, and redacted metadata.                         |
+| Webhook delivery     | Unique provider delivery ID, verification result, processing result, and received time.   |
+| Audit event          | Immutable actor, action, target, organization, outcome, and correlation metadata.         |
 
 Database constraints will enforce unique memberships, unique webhook deliveries, one active release per project, valid identifiers, and referential ownership. The deployment transition service will lock the affected rows and append an event in the same transaction as the state update.
 
@@ -221,7 +225,7 @@ The lifecycle and crash windows are specified in [docs/deployment-lifecycle.md](
 - Logs may be delivered more than once across reconnects and therefore carry sequence identifiers.
 - Promotion is transactional at the data layer and convergent at the proxy layer; the exact crash behavior will be tested and documented.
 
-## Repository layout planned for Phase 1
+## Repository layout
 
 ```text
 apps/
@@ -229,15 +233,13 @@ apps/
   web/          Next.js user interface
   worker/       BullMQ consumers and orchestration
 packages/
-  domain/       framework-independent rules and value objects
-  application/  use cases and infrastructure ports
-  database/     Drizzle schema, migrations, and repositories
   contracts/    API, event, and job schemas
   config/       validated shared configuration
   observability/ telemetry setup and conventions
-examples/       healthy and intentionally failing applications
 docs/           lifecycle, operations, decisions, and evidence
 ```
+
+Phase 1 implements the listed application entry points and the `contracts`, `config`, and `observability` packages. Phase 2 adds `domain`, `application`, and `database` packages when their APIs can be driven by the real state machine and persistence model. Later phases add the healthy and intentionally failing `examples/` applications alongside the adapters they test.
 
 ## Architecture decisions
 
@@ -247,7 +249,8 @@ Accepted decisions are recorded in [docs/adr](docs/adr):
 - [ADR-0002: Fastify, Next.js, and shared TypeScript contracts](docs/adr/0002-application-stack.md)
 - [ADR-0003: PostgreSQL, Drizzle, Redis, and BullMQ](docs/adr/0003-persistence-and-jobs.md)
 - [ADR-0004: Docker BuildKit, Traefik, and server-sent events](docs/adr/0004-deployment-infrastructure.md)
+- [ADR-0005: License LaunchRail under Apache 2.0](docs/adr/0005-apache-2-license.md)
 
 ## Known limitations
 
-This is a Phase 0 design. Adapter contracts will be refined with executable tests during implementation. Single-host Docker means the host remains a large trust and failure boundary; no design in this document makes LaunchRail production-ready or safe for hostile public multi-tenancy.
+Phase 1 implements the web/API/worker process boundaries plus shared configuration, health contracts, logging conventions, and local PostgreSQL/Redis services. Domain, application, database, queue, build, runtime, routing, and telemetry adapters remain design targets for later phases. Single-host Docker remains a large trust and failure boundary; nothing in this architecture makes LaunchRail production-ready or safe for hostile public multi-tenancy.

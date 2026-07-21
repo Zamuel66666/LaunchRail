@@ -4,22 +4,22 @@
 
 LaunchRail tests observable outcomes and safety invariants across domain logic, persistence, queues, infrastructure adapters, and browser workflows. A green unit suite alone cannot prove that a deployment survives real process and service failures, so each layer has a distinct job.
 
-No executable test suite exists in Phase 0. This document defines evidence required as implementation phases land.
+Phase 1 provides Vitest unit tests for the health/configuration contracts, Fastify injection tests, a real worker HTTP-socket test, a web route test, and an application health smoke script. The broader scenarios below remain required as implementation phases land.
 
 ## Test layers
 
-| Layer | Main evidence | Intended tools |
-| --- | --- | --- |
-| Domain unit | Valid/invalid transitions, value objects, policy decisions, redaction rules | Vitest |
-| Application unit | Use-case orchestration through deterministic fake ports | Vitest |
-| Database integration | Constraints, transactions, locks, migrations, organization isolation | Vitest + disposable PostgreSQL |
-| Queue integration | Typed contracts, retry/backoff, timeout, duplicate jobs, dead-letter behavior | Vitest + disposable Redis/BullMQ |
-| Adapter contract | Git, BuildKit, Docker, Traefik, health and streaming behavior | Vitest + controlled local services |
-| API integration | Schemas, auth/authz, rate limits, webhooks, idempotency, OpenAPI | Fastify injection + real database where needed |
-| Browser end to end | Sign-in, projects, deployment progress/controls, errors, accessibility | Playwright |
-| Resilience | Process/service interruption and reconciliation | Failure-injection harness |
-| Security | Injection, isolation, signature, redaction, runtime restrictions | Layer-appropriate regression suites |
-| Benchmarks | Repeatable latency, throughput, recovery, cache, and resources | Versioned scripts and documented environment |
+| Layer                | Main evidence                                                                 | Intended tools                                 |
+| -------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------- |
+| Domain unit          | Valid/invalid transitions, value objects, policy decisions, redaction rules   | Vitest                                         |
+| Application unit     | Use-case orchestration through deterministic fake ports                       | Vitest                                         |
+| Database integration | Constraints, transactions, locks, migrations, organization isolation          | Vitest + disposable PostgreSQL                 |
+| Queue integration    | Typed contracts, retry/backoff, timeout, duplicate jobs, dead-letter behavior | Vitest + disposable Redis/BullMQ               |
+| Adapter contract     | Git, BuildKit, Docker, Traefik, health and streaming behavior                 | Vitest + controlled local services             |
+| API integration      | Schemas, auth/authz, rate limits, webhooks, idempotency, OpenAPI              | Fastify injection + real database where needed |
+| Browser end to end   | Sign-in, projects, deployment progress/controls, errors, accessibility        | Playwright                                     |
+| Resilience           | Process/service interruption and reconciliation                               | Failure-injection harness                      |
+| Security             | Injection, isolation, signature, redaction, runtime restrictions              | Layer-appropriate regression suites            |
+| Benchmarks           | Repeatable latency, throughput, recovery, cache, and resources                | Versioned scripts and documented environment   |
 
 ## Required scenario matrix
 
@@ -76,6 +76,8 @@ The `examples/` directory will contain small versioned fixtures for healthy Node
 ## Quality-gate policy
 
 Each commit runs the smallest complete set that covers its behavior. Pull requests run the repository's full practical CI baseline. Nightly or explicitly invoked suites may hold resource-heavy Docker, resilience, security scanning, and benchmarks. Skipped tests must report the exact environmental blocker and must not be described as passed.
+
+The current baseline is `pnpm test` for package/web unit tests, `pnpm test:integration` for API and worker HTTP behavior, and `pnpm smoke:health` after a production build. A separate GitHub Actions job starts and probes real PostgreSQL and Redis services.
 
 ## Defect workflow
 

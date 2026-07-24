@@ -13,7 +13,7 @@
     "build": "pnpm build:packages && pnpm --filter './apps/*' --parallel build",
     "build:packages": "pnpm --filter './packages/*' build",
     "db:generate": "pnpm --filter @launchrail/domain build && pnpm --filter @launchrail/database db:generate",
-    "db:migrate": "pnpm --filter @launchrail/database db:migrate",
+    "db:migrate": "pnpm build:packages && pnpm --filter @launchrail/database db:migrate",
     "dev": "pnpm build:packages && concurrently --kill-others-on-fail --names api,worker,web --prefix-colors blue,magenta,green 'pnpm --filter @launchrail/api dev' 'pnpm --filter @launchrail/worker dev' 'pnpm --filter @launchrail/web dev'",
     "docs:lint": "markdownlint-cli2 '*.md' 'docs/**/*.md'",
     "format": "prettier --write .",

@@ -4,7 +4,7 @@
 
 LaunchRail handles unusually powerful operations: it downloads code, builds Dockerfiles, starts containers, stores application secrets, and changes network routes. A malicious repository or stolen account could therefore affect more than one deployment. The design treats source code and workloads as untrusted even though the first supported operator and host are trusted.
 
-This initial model identifies security requirements. Phase 1 implements only foundational configuration/log-redaction conventions and loopback-bound development services; the remaining controls are not claimed as complete.
+This initial model identifies security requirements. Phases 1 and 2 implement foundational configuration/log redaction, loopback-bound services, organization-scoped foreign keys, immutable deployment snapshots, health-gated active-release constraints, and append-only event/audit insertion through the transition adapter. Authentication, authorization, secret encryption, workload isolation, and the remaining controls are not claimed as complete.
 
 ## Scope and assumptions
 

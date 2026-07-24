@@ -6,7 +6,7 @@ A deployment is a recorded attempt to turn one exact source revision into a runn
 
 If a candidate fails, the previously healthy release stays active. Every step is recorded so a user can see what happened, and a restarted worker reconstructs work from PostgreSQL rather than assuming an in-memory job completed.
 
-This document defines the intended Phase 2 state model and later orchestration behavior. Phase 0 does not implement these transitions yet.
+Phase 2 implements this state model, ordinary transactional transitions, and healthy active-release promotion in PostgreSQL. Queue delivery, container orchestration, route reconciliation, cancellation side effects, and rollback execution remain later-phase behavior.
 
 ## Terms
 

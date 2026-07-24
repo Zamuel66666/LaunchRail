@@ -235,11 +235,14 @@ apps/
 packages/
   contracts/    API, event, and job schemas
   config/       validated shared configuration
+  domain/       framework-independent deployment rules
+  application/  use cases and persistence ports
+  database/     Drizzle schema, migrations, and PostgreSQL adapters
   observability/ telemetry setup and conventions
 docs/           lifecycle, operations, decisions, and evidence
 ```
 
-Phase 1 implements the listed application entry points and the `contracts`, `config`, and `observability` packages. Phase 2 adds `domain`, `application`, and `database` packages when their APIs can be driven by the real state machine and persistence model. Later phases add the healthy and intentionally failing `examples/` applications alongside the adapters they test.
+Phases 1 and 2 implement the listed application entry points plus the `contracts`, `config`, `observability`, `domain`, `application`, and `database` packages. The database adapter now persists ordinary transitions and healthy promotions through the central domain rules. Later phases connect these use cases to authenticated API and worker boundaries and add healthy and intentionally failing `examples/` applications alongside the adapters they test.
 
 ## Architecture decisions
 
@@ -253,4 +256,4 @@ Accepted decisions are recorded in [docs/adr](docs/adr):
 
 ## Known limitations
 
-Phase 1 implements the web/API/worker process boundaries plus shared configuration, health contracts, logging conventions, and local PostgreSQL/Redis services. Domain, application, database, queue, build, runtime, routing, and telemetry adapters remain design targets for later phases. Single-host Docker remains a large trust and failure boundary; nothing in this architecture makes LaunchRail production-ready or safe for hostile public multi-tenancy.
+Phases 1 and 2 implement process boundaries, shared foundations, the domain transition model, PostgreSQL schema/migrations, and transactional transition persistence. Authentication, API/worker wiring, queue, build, runtime, routing, and full telemetry adapters remain later phases. Single-host Docker remains a large trust and failure boundary; nothing in this architecture makes LaunchRail production-ready or safe for hostile public multi-tenancy.

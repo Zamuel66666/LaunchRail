@@ -2,7 +2,7 @@
 
 **A self-hosted platform that turns a GitHub repository into a health-checked application deployment with live logs, preview URLs, release history, and safe rollback.**
 
-> Phase 1 is complete: the repository now has a runnable web/API/worker foundation, validated configuration, local PostgreSQL and Redis services, tests, and automated quality gates. Deployment features begin in Phase 2.
+> Phase 2 is complete: LaunchRail now has an organization-scoped PostgreSQL model, explicit deployment state machine, transactional event history, idempotent transition commands, and health-gated active-release promotion.
 
 ![LaunchRail foundation status page](docs/assets/foundation-status-page.jpg)
 
@@ -54,7 +54,12 @@ LaunchRail will use a modular monolith for the web/API boundary and a separate w
 - Loopback-only PostgreSQL and Redis development services with health checks.
 - Formatting, linting, type checking, unit/integration tests, builds, smoke tests, and GitHub Actions.
 - Apache 2.0 open-source license.
-- Recruiter-readable foundation status page and current screenshot.
+- Organization-scoped users, memberships, projects, deployments, events, logs, runtime instances, encrypted-variable metadata, webhook deliveries, and audit events.
+- Generated Drizzle migrations plus an immutable deployment snapshot guard.
+- Central fourteen-state deployment lifecycle with exhaustive valid/invalid transition tests.
+- Transactional, idempotent PostgreSQL transitions that append ordered events and audit records.
+- Health-gated promotion that atomically supersedes the previous release and maintains one active pointer.
+- Recruiter-readable Phase 2 status page.
 
 ### In progress
 
@@ -62,9 +67,9 @@ LaunchRail will use a modular monolith for the web/API boundary and a separate w
 
 ### Planned next
 
-- Users, organizations, memberships, projects, and deployment persistence.
-- Transactional deployment events and the centrally validated state machine.
-- Initial Drizzle schema and clean PostgreSQL migrations.
+- Secure authentication and opaque sessions.
+- Membership-role authorization at every organization-scoped API boundary.
+- Cross-organization denial tests, rate limits, security headers, and sign-in UI.
 
 ### Not currently planned
 
@@ -106,11 +111,12 @@ See the [development guide](docs/development.md) for verification, configuration
 - [Roadmap](ROADMAP.md) and [changelog](CHANGELOG.md)
 - [Contributing](CONTRIBUTING.md) and [development workflow](docs/development.md)
 - [Testing strategy](docs/testing.md), [observability design](docs/observability.md), and [benchmark methodology](docs/benchmarks.md)
+- [Persistence model and transaction rules](docs/persistence.md)
 - [Architecture decisions](docs/adr/)
 
 ## Current limitations
 
-LaunchRail is not production-ready. The repository foundation runs, but there is no authentication, database schema, project management, repository connection, queue consumer, build pipeline, application deployment, preview routing, or rollback behavior yet. Health endpoints report process liveness only; they do not yet check PostgreSQL or Redis readiness.
+LaunchRail is not production-ready. Persistence is implemented as a package and proven in CI, but it is not yet connected to authenticated API routes or the worker. There is no sign-in, project UI, repository connection, queue consumer, build pipeline, application deployment, preview routing, or rollback control. Health endpoints still report process liveness only.
 
 ## License
 

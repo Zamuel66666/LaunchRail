@@ -21,10 +21,16 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 - GitHub Actions quality and real development-service health verification.
 - Apache 2.0 license and licensing architecture decision.
 - Recruiter-readable web foundation page and milestone screenshot.
+- Organization-owned PostgreSQL schema for identity, projects, deployments, events, logs, runtime records, encrypted-variable metadata, webhook deliveries, and audit history.
+- Reviewable Drizzle migrations and an immutable deployment source/configuration snapshot guard.
+- Framework-independent domain and application packages with an exhaustive fourteen-state deployment transition map.
+- Transactional PostgreSQL transition and promotion operations with row locking, ordered events, audit records, idempotent replay, and tenant-scoped lookup.
+- Disposable-PostgreSQL CI coverage for clean migrations, constraints, rollback, failed-candidate preservation, and concurrent promotion.
 
 ### Current limitations
 
-- The runnable foundation does not yet contain authentication, persistence schema, project management, queue processing, builds, deployments, log streaming, preview URLs, or rollback.
+- Persistence is not yet connected to authenticated API routes or worker orchestration.
+- The runnable product does not yet contain authentication, project management UI, queue processing, builds, deployments, log streaming, preview URLs, or rollback controls.
 - Application health endpoints currently report process liveness rather than dependency readiness.
 - No release has been tagged.
 

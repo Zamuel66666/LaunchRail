@@ -2,7 +2,7 @@
 
 ## Current repository state
 
-Phase 1 provides a runnable TypeScript workspace with a Next.js web application, Fastify API, worker process, shared configuration/contracts/logging packages, PostgreSQL, Redis, and automated quality checks. Product data and deployment orchestration begin in Phase 2.
+Phases 1 and 2 provide a runnable TypeScript workspace, web/API/worker processes, shared foundations, a framework-independent deployment domain, and a PostgreSQL persistence package with generated migrations and transactional transition operations. Authentication and API wiring begin in Phase 3.
 
 ## Prerequisites
 
@@ -91,9 +91,12 @@ packages/config           Runtime-validated process configuration
 packages/contracts        Shared transport and health contracts
 packages/observability    Redacted structured logger conventions
 scripts                   Repeatable application smoke checks
+packages/domain           Deployment states and transition invariants
+packages/application      Deployment use cases and persistence ports
+packages/database         Drizzle schema, migrations, and PostgreSQL adapter
 ```
 
-Domain, application, and database packages are added with Phase 2 so their first APIs are driven by real persistence and state-machine behavior rather than placeholders.
+The dependency direction is `database -> application -> domain`; package builds run in topological order.
 
 ## Quality commands
 
@@ -105,6 +108,7 @@ pnpm docs:lint
 pnpm lint
 pnpm typecheck
 pnpm test
+pnpm test:database
 pnpm test:integration
 pnpm build
 pnpm smoke:health
@@ -113,7 +117,9 @@ docker compose --env-file .env.example config --quiet
 
 `pnpm smoke:health` starts built applications on temporary loopback ports, validates each service/status payload, prints logs on failure, and shuts the processes down. It does not require PostgreSQL or Redis because Phase 1 health is intentionally liveness-only.
 
-GitHub Actions runs the same code checks from a frozen install and separately starts real PostgreSQL and Redis containers, waits for health, probes both services, and removes its volumes.
+`pnpm test:database` requires `DATABASE_URL` and a PostgreSQL database that may be truncated by the suite. GitHub Actions starts a disposable database, applies migrations from empty state, runs the database integration suite, verifies Redis, and removes the service volumes.
+
+See [persistence.md](persistence.md) for the schema, migration, transaction, and clean-database workflow.
 
 ## Session workflow
 

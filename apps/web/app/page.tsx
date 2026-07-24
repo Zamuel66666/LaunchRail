@@ -1,9 +1,9 @@
-const foundationItems = [
-  "Typed web, API, worker, and shared-package workspace",
-  "Independent health endpoints for every application",
-  "Validated environment configuration with safe production guards",
-  "Local PostgreSQL and Redis services",
-  "Automated format, lint, type, test, and build checks",
+const milestoneItems = [
+  "Organization-scoped users, memberships, projects, and deployments",
+  "Fourteen-state deployment lifecycle validated in one domain module",
+  "Transactional state changes, ordered events, and audit records",
+  "Idempotent commands and health-gated active-release promotion",
+  "Generated migrations verified against disposable PostgreSQL in CI",
 ];
 
 export default function HomePage() {
@@ -18,15 +18,15 @@ export default function HomePage() {
         </p>
         <div className="status" role="status">
           <span className="status-dot" aria-hidden="true" />
-          Repository foundation available
+          Domain and persistence milestone available
         </div>
       </section>
 
-      <section className="panel" aria-labelledby="foundation-title">
+      <section className="panel" aria-labelledby="milestone-title">
         <p className="section-label">Current milestone</p>
-        <h2 id="foundation-title">A dependable base for the deployment lifecycle</h2>
+        <h2 id="milestone-title">Deployment truth now survives process restarts</h2>
         <ul>
-          {foundationItems.map((item) => (
+          {milestoneItems.map((item) => (
             <li key={item}>{item}</li>
           ))}
         </ul>
@@ -34,10 +34,10 @@ export default function HomePage() {
 
       <section className="next" aria-labelledby="next-title">
         <p className="section-label">Next milestone</p>
-        <h2 id="next-title">Model projects and deployments</h2>
+        <h2 id="next-title">Secure access to organization data</h2>
         <p>
-          The next phase adds durable users, organizations, projects, deployment events, and the
-          centrally validated state machine that keeps releases consistent.
+          The next phase adds sign-in, secure sessions, membership-based authorization, request
+          hardening, and negative tests for every cross-organization access path.
         </p>
       </section>
     </main>

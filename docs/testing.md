@@ -4,7 +4,7 @@
 
 LaunchRail tests observable outcomes and safety invariants across domain logic, persistence, queues, infrastructure adapters, and browser workflows. A green unit suite alone cannot prove that a deployment survives real process and service failures, so each layer has a distinct job.
 
-Phase 1 provides Vitest unit tests for the health/configuration contracts, Fastify injection tests, a real worker HTTP-socket test, a web route test, and an application health smoke script. The broader scenarios below remain required as implementation phases land.
+Phases 1 and 2 provide Vitest tests for health/configuration contracts, the complete deployment transition matrix, application ports, Fastify injection, a real worker socket, and the web route. A disposable PostgreSQL suite proves clean migrations, ownership constraints, transactional rollback, idempotency, immutable snapshots, failed-candidate safety, and serialized promotion.
 
 ## Test layers
 
@@ -77,7 +77,7 @@ The `examples/` directory will contain small versioned fixtures for healthy Node
 
 Each commit runs the smallest complete set that covers its behavior. Pull requests run the repository's full practical CI baseline. Nightly or explicitly invoked suites may hold resource-heavy Docker, resilience, security scanning, and benchmarks. Skipped tests must report the exact environmental blocker and must not be described as passed.
 
-The current baseline is `pnpm test` for package/web unit tests, `pnpm test:integration` for API and worker HTTP behavior, and `pnpm smoke:health` after a production build. A separate GitHub Actions job starts and probes real PostgreSQL and Redis services.
+The current baseline is `pnpm test` for package/web unit tests, `pnpm test:integration` for API and worker HTTP behavior, `pnpm test:database` against disposable PostgreSQL, and `pnpm smoke:health` after a production build. The service CI job applies migrations from an empty database before running persistence tests.
 
 ## Defect workflow
 

@@ -10,6 +10,7 @@ The roadmap reports verified repository state, not aspirations as completed feat
 
 - **Phase 0 — Product definition:** scope, users, non-goals, architecture, data-model outline, deployment state model, threat model, technology decisions, and delivery plan.
 - **Phase 1 — Repository foundation:** runnable pnpm workspace, web/API/worker health endpoints, shared configuration, PostgreSQL, Redis, Docker Compose, tests, builds, CI, and open-source license.
+- **Phase 2 — Domain model and persistence:** organization-owned records, generated migrations, immutable deployment snapshots, centrally validated state transitions, transactional events, idempotency, and atomic active-release promotion.
 
 ### In progress
 
@@ -17,11 +18,11 @@ The roadmap reports verified repository state, not aspirations as completed feat
 
 ### Planned next
 
-- **Phase 2 — Domain model and persistence:** organization-owned data, projects, deployments, events, migrations, and the transactional deployment state machine.
+- **Phase 3 — Authentication and authorization:** secure sessions, organization roles, request hardening, audit coverage, and sign-in UI.
 
 ### Planned later
 
-- Phases 2–16 below.
+- Phases 3–16 below.
 
 ### Not currently planned
 
@@ -79,15 +80,22 @@ Exit evidence: frozen install, format/lint/type/unit/integration/build checks, a
 
 ### Phase 2 — Domain model and persistence
 
-**Status:** Planned next
+**Status:** Available
 
-Add users, organizations, memberships, projects, deployments, events, logs, runtime instances, encrypted-variable metadata, webhook deliveries, audit events, and the centrally tested deployment state machine.
+Delivered:
 
-Exit gate: clean migrations succeed and transactional tests prove ownership and transition invariants.
+- Organization-scoped users, memberships, projects, deployments, events, build logs, runtime instances, encrypted-variable metadata, webhook deliveries, and audit events.
+- Generated Drizzle migrations with database constraints for ownership, ordered records, failure details, health-gated releases, and one active release per project.
+- Immutable source and configuration snapshots protected by a PostgreSQL trigger.
+- Framework-independent domain and application packages with one exhaustive transition map.
+- PostgreSQL transition adapter with row locks, command idempotency, ordered events, audit records, and transactional failure rollback.
+- Healthy promotion transaction that serializes on the project and atomically supersedes the prior release.
+
+Exit evidence: clean migrations and real-PostgreSQL integration tests in GitHub Actions prove tenant ownership, snapshot immutability, atomic state/event writes, replay behavior, failed-candidate preservation, and concurrent single-release promotion.
 
 ### Phase 3 — Authentication and authorization
 
-**Status:** Planned
+**Status:** Planned next
 
 Add secure sessions, membership roles, organization isolation, rate limiting, security headers, audit events, and sign-in UI.
 

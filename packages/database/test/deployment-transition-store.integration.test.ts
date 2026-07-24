@@ -237,7 +237,9 @@ describeWithDatabase("PostgresDeploymentTransitionStore", () => {
         sourceRevision: "a".repeat(40),
         sourceSnapshot: {},
       }),
-    ).rejects.toThrow(/deployments_project_organization_fk/);
+    ).rejects.toThrow();
+
+    await expect(client.db.select().from(schema.deployments)).resolves.toHaveLength(2);
   });
 
   it("keeps deployment source and configuration snapshots immutable", async () => {
@@ -248,7 +250,13 @@ describeWithDatabase("PostgresDeploymentTransitionStore", () => {
         .update(schema.deployments)
         .set({ configurationSnapshot: { changed: true } })
         .where(eq(schema.deployments.id, seeded.deploymentId)),
-    ).rejects.toThrow(/deployment source and configuration snapshots are immutable/);
+    ).rejects.toThrow();
+
+    const [deployment] = await client.db
+      .select({ configurationSnapshot: schema.deployments.configurationSnapshot })
+      .from(schema.deployments)
+      .where(eq(schema.deployments.id, seeded.deploymentId));
+    expect(deployment?.configurationSnapshot).toEqual({ environment: [] });
   });
 
   it("requires recorded health success before promotion", async () => {

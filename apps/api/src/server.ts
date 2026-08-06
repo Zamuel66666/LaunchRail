@@ -43,13 +43,15 @@ export function buildServer({
   server.get("/health", async () => createHealthResponse({ now, service: "api", version }));
 
   if (identityStore !== undefined) {
-    registerAuthRoutes(server, {
-      cookieName,
-      identityStore,
-      now: now ?? (() => new Date()),
-      secureCookies,
-      signInRateLimitMax,
-      webOrigin,
+    void server.register(async (authServer) => {
+      registerAuthRoutes(authServer, {
+        cookieName,
+        identityStore,
+        now: now ?? (() => new Date()),
+        secureCookies,
+        signInRateLimitMax,
+        webOrigin,
+      });
     });
   }
 

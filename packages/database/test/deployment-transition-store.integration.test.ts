@@ -66,7 +66,12 @@ describeWithDatabase("PostgresDeploymentTransitionStore", () => {
         organizationId,
         repositoryName: `repository-${projectId.slice(0, 8)}`,
         repositoryOwner: "launchrail-test",
-        runtimeConfig: {},
+        runtimeConfig: {
+          cpuMillicores: 500,
+          memoryMegabytes: 512,
+          processLimit: 256,
+          readOnlyRootFilesystem: true,
+        },
       });
     }
 

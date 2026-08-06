@@ -14,6 +14,17 @@ set -a
 source "$environment_file"
 set +a
 
+if [[ -z "${LAUNCHRAIL_SECRET_KEYRING:-}" ]]; then
+  ephemeral_secret_key=$(
+    node --input-type=module -e \
+      'import { randomBytes } from "node:crypto"; process.stdout.write(randomBytes(32).toString("base64url"));'
+  )
+  LAUNCHRAIL_SECRET_KEYRING="1:${ephemeral_secret_key}"
+  LAUNCHRAIL_ACTIVE_SECRET_KEY_VERSION=1
+  export LAUNCHRAIL_SECRET_KEYRING LAUNCHRAIL_ACTIVE_SECRET_KEY_VERSION
+  unset ephemeral_secret_key
+fi
+
 available_port() {
   node --input-type=module - <<'NODE'
 import { createServer } from "node:net";

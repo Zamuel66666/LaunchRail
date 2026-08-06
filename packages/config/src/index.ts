@@ -8,6 +8,52 @@ const portSchema = z.coerce.number().int().min(1).max(65_535);
 const positiveIntegerSchema = z.coerce.number().int().positive();
 const urlSchema = z.string().url();
 
+const secretKeyringEntryLimit = 8;
+const secretKeyByteLength = 32;
+const secretKeyBase64UrlPattern = /^[A-Za-z0-9_-]{43}$/;
+const secretKeyringError =
+  "must contain 1 to 8 unique positive version:base64url entries with 32-byte keys";
+
+function decodeSecretKeyring(value: string): ReadonlyMap<number, Uint8Array> | null {
+  const entries = value.split(",");
+  if (entries.length === 0 || entries.length > secretKeyringEntryLimit) {
+    return null;
+  }
+
+  const keyring = new Map<number, Uint8Array>();
+  for (const entry of entries) {
+    const separatorIndex = entry.indexOf(":");
+    if (separatorIndex <= 0 || separatorIndex !== entry.lastIndexOf(":")) {
+      return null;
+    }
+
+    const versionText = entry.slice(0, separatorIndex);
+    const encodedKey = entry.slice(separatorIndex + 1);
+    if (!/^[1-9][0-9]*$/.test(versionText) || !secretKeyBase64UrlPattern.test(encodedKey)) {
+      return null;
+    }
+
+    const version = Number(versionText);
+    if (!Number.isSafeInteger(version) || keyring.has(version)) {
+      return null;
+    }
+
+    const key = Buffer.from(encodedKey, "base64url");
+    if (key.byteLength !== secretKeyByteLength || key.toString("base64url") !== encodedKey) {
+      return null;
+    }
+
+    keyring.set(version, Uint8Array.from(key));
+  }
+
+  return keyring.size === 0 ? null : keyring;
+}
+
+const secretKeyringSchema = z
+  .string()
+  .refine((value) => decodeSecretKeyring(value) !== null, secretKeyringError)
+  .transform((value) => decodeSecretKeyring(value) as ReadonlyMap<number, Uint8Array>);
+
 const sharedServiceSchema = z.object({
   DATABASE_URL: urlSchema,
   LOG_LEVEL: logLevelSchema.default("info"),
@@ -18,6 +64,8 @@ const sharedServiceSchema = z.object({
 const apiSchema = sharedServiceSchema.extend({
   API_HOST: z.string().min(1).default("127.0.0.1"),
   API_PORT: portSchema.default(4000),
+  LAUNCHRAIL_ACTIVE_SECRET_KEY_VERSION: positiveIntegerSchema,
+  LAUNCHRAIL_SECRET_KEYRING: secretKeyringSchema,
   SESSION_ABSOLUTE_TTL_HOURS: positiveIntegerSchema.max(168).default(24),
   SESSION_COOKIE_NAME: z
     .string()
@@ -50,6 +98,14 @@ export class ConfigurationError extends Error {
     this.name = "ConfigurationError";
     this.issues = issues;
   }
+}
+
+export function parseSecretKeyring(value: string): ReadonlyMap<number, Uint8Array> {
+  const keyring = decodeSecretKeyring(value);
+  if (keyring === null) {
+    throw new ConfigurationError([`LAUNCHRAIL_SECRET_KEYRING: ${secretKeyringError}`]);
+  }
+  return keyring;
 }
 
 function parseConfig<T>(schema: z.ZodType<T>, source: EnvironmentSource): T {
@@ -85,6 +141,11 @@ function rejectDevelopmentCredentialsInProduction(config: {
 
 function validateApiSecurity(config: ApiConfig): void {
   const issues: string[] = [];
+  if (!config.LAUNCHRAIL_SECRET_KEYRING.has(config.LAUNCHRAIL_ACTIVE_SECRET_KEY_VERSION)) {
+    issues.push(
+      "LAUNCHRAIL_ACTIVE_SECRET_KEY_VERSION: must identify a key in LAUNCHRAIL_SECRET_KEYRING",
+    );
+  }
   if (config.SESSION_IDLE_TTL_MINUTES > config.SESSION_ABSOLUTE_TTL_HOURS * 60) {
     issues.push("SESSION_IDLE_TTL_MINUTES: cannot exceed the absolute session lifetime");
   }

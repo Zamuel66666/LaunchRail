@@ -1,4 +1,9 @@
-import { deploymentFailureCategories, deploymentStates, membershipRoles } from "@launchrail/domain";
+import {
+  deploymentFailureCategories,
+  deploymentStates,
+  membershipRoles,
+  type ProjectRuntimeConfig,
+} from "@launchrail/domain";
 import { sql } from "drizzle-orm";
 import {
   bigint,
@@ -163,14 +168,60 @@ export const projects = pgTable(
     dockerfilePath: text("dockerfile_path").default("Dockerfile").notNull(),
     healthCheckPath: text("health_check_path").default("/").notNull(),
     healthCheckPort: integer("health_check_port").notNull(),
-    runtimeConfig: jsonb("runtime_config").$type<Readonly<Record<string, unknown>>>().notNull(),
+    runtimeConfig: jsonb("runtime_config").$type<ProjectRuntimeConfig>().notNull(),
+    version: integer("version").default(1).notNull(),
+    archivedAt: timestamp("archived_at", { mode: "date", withTimezone: true }),
     ...timestamps,
   },
   (table) => [
     unique("projects_id_organization_unique").on(table.id, table.organizationId),
-    uniqueIndex("projects_name_lower_unique").on(table.organizationId, sql`lower(${table.name})`),
-    check("projects_name_not_blank", sql`length(trim(${table.name})) > 0`),
+    uniqueIndex("projects_active_name_lower_unique")
+      .on(table.organizationId, sql`lower(${table.name})`)
+      .where(sql`${table.archivedAt} is null`),
+    index("projects_organization_active_index").on(table.organizationId, table.archivedAt),
+    check(
+      "projects_name_bounds",
+      sql`length(${table.name}) between 1 and 80 and ${table.name} = trim(${table.name})`,
+    ),
+    check("projects_provider_github", sql`${table.repositoryProvider} = 'github'`),
+    check(
+      "projects_repository_owner_format",
+      sql`${table.repositoryOwner} ~ '^[A-Za-z0-9]([A-Za-z0-9-]{0,37}[A-Za-z0-9])?$'`,
+    ),
+    check(
+      "projects_repository_name_format",
+      sql`length(${table.repositoryName}) between 1 and 100 and ${table.repositoryName} ~ '^[A-Za-z0-9._-]+$' and ${table.repositoryName} not in ('.', '..')`,
+    ),
+    check(
+      "projects_default_branch_bounds",
+      sql`length(${table.defaultBranch}) between 1 and 255 and ${table.defaultBranch} !~ '[[:cntrl:] ~^:?*\\\\]'`,
+    ),
+    check(
+      "projects_dockerfile_path_bounds",
+      sql`length(${table.dockerfilePath}) between 1 and 256 and ${table.dockerfilePath} !~ '[[:cntrl:]\\\\]' and ${table.dockerfilePath} !~ '^/'`,
+    ),
+    check(
+      "projects_health_path_bounds",
+      sql`length(${table.healthCheckPath}) between 1 and 256 and ${table.healthCheckPath} ~ '^/[^?#[:cntrl:]]*$' and ${table.healthCheckPath} !~ '^//'`,
+    ),
     check("projects_health_check_port_range", sql`${table.healthCheckPort} between 1 and 65535`),
+    check("projects_version_positive", sql`${table.version} > 0`),
+    check(
+      "projects_runtime_config_shape",
+      sql`jsonb_typeof(${table.runtimeConfig}) = 'object'
+        and ${table.runtimeConfig} ?& array['cpuMillicores', 'memoryMegabytes', 'processLimit', 'readOnlyRootFilesystem']
+        and (${table.runtimeConfig} - array['cpuMillicores', 'memoryMegabytes', 'processLimit', 'readOnlyRootFilesystem']) = '{}'::jsonb
+        and jsonb_typeof(${table.runtimeConfig}->'cpuMillicores') = 'number'
+        and (${table.runtimeConfig}->>'cpuMillicores')::numeric between 100 and 4000
+        and mod((${table.runtimeConfig}->>'cpuMillicores')::numeric, 1) = 0
+        and jsonb_typeof(${table.runtimeConfig}->'memoryMegabytes') = 'number'
+        and (${table.runtimeConfig}->>'memoryMegabytes')::numeric between 64 and 8192
+        and mod((${table.runtimeConfig}->>'memoryMegabytes')::numeric, 1) = 0
+        and jsonb_typeof(${table.runtimeConfig}->'processLimit') = 'number'
+        and (${table.runtimeConfig}->>'processLimit')::numeric between 16 and 1024
+        and mod((${table.runtimeConfig}->>'processLimit')::numeric, 1) = 0
+        and jsonb_typeof(${table.runtimeConfig}->'readOnlyRootFilesystem') = 'boolean'`,
+    ),
   ],
 );
 
@@ -352,6 +403,7 @@ export const environmentVariables = pgTable(
     name: text("name").notNull(),
     encryptedValue: text("encrypted_value").notNull(),
     nonce: text("nonce").notNull(),
+    authTag: text("auth_tag").notNull(),
     algorithm: text("algorithm").notNull(),
     keyVersion: integer("key_version").notNull(),
     ...timestamps,
@@ -363,7 +415,18 @@ export const environmentVariables = pgTable(
       name: "environment_variables_project_organization_fk",
     }).onDelete("cascade"),
     unique("environment_variables_project_name_unique").on(table.projectId, table.name),
-    check("environment_variables_name_format", sql`${table.name} ~ '^[A-Z_][A-Z0-9_]*$'`),
+    unique("environment_variables_key_nonce_unique").on(table.keyVersion, table.nonce),
+    check(
+      "environment_variables_name_format",
+      sql`length(${table.name}) between 1 and 128 and ${table.name} ~ '^[A-Z_][A-Z0-9_]*$'`,
+    ),
+    check(
+      "environment_variables_ciphertext_format",
+      sql`length(${table.encryptedValue}) between 2 and 22000 and ${table.encryptedValue} ~ '^[A-Za-z0-9_-]+$'`,
+    ),
+    check("environment_variables_nonce_format", sql`${table.nonce} ~ '^[A-Za-z0-9_-]{16}$'`),
+    check("environment_variables_auth_tag_format", sql`${table.authTag} ~ '^[A-Za-z0-9_-]{22}$'`),
+    check("environment_variables_algorithm", sql`${table.algorithm} = 'aes-256-gcm'`),
     check("environment_variables_key_version_positive", sql`${table.keyVersion} > 0`),
   ],
 );

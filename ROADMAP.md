@@ -23,7 +23,7 @@ The roadmap reports verified repository state, not aspirations as completed feat
 
 ### Planned later
 
-- Phases 4–16 below.
+- Phases 5–16 below.
 
 ### Not currently planned
 

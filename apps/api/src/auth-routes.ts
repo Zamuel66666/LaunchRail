@@ -1,6 +1,7 @@
 import {
   MembershipUpdateConflictError,
   type IdentityStore,
+  type ProjectManagementStore,
   type SessionPrincipal,
 } from "@launchrail/application";
 import {
@@ -10,10 +11,13 @@ import {
 } from "@launchrail/domain";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
+import { registerProjectRoutes } from "./project-routes.js";
+
 interface RegisterAuthRoutesOptions {
   readonly cookieName: string;
   readonly identityStore: IdentityStore;
   readonly now: () => Date;
+  readonly projectStore?: ProjectManagementStore;
   readonly secureCookies: boolean;
   readonly signInRateLimitMax: number;
   readonly webOrigin: string;
@@ -314,4 +318,11 @@ export function registerAuthRoutes(
           };
     },
   );
+
+  if (options.projectStore !== undefined) {
+    registerProjectRoutes(server, {
+      authorizeOrganization,
+      projectStore: options.projectStore,
+    });
+  }
 }

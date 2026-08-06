@@ -1,5 +1,5 @@
 import { createHealthResponse } from "@launchrail/contracts";
-import type { IdentityStore } from "@launchrail/application";
+import type { IdentityStore, ProjectManagementStore } from "@launchrail/application";
 import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
@@ -13,6 +13,7 @@ interface BuildServerOptions {
   readonly identityStore?: IdentityStore;
   readonly logger?: FastifyServerOptions["logger"];
   readonly now?: () => Date;
+  readonly projectStore?: ProjectManagementStore;
   readonly secureCookies?: boolean;
   readonly signInRateLimitMax?: number;
   readonly version?: string;
@@ -24,17 +25,20 @@ export function buildServer({
   identityStore,
   logger = false,
   now,
+  projectStore,
   secureCookies = false,
   signInRateLimitMax = 5,
   version = "0.1.0",
   webOrigin = "http://localhost:3000",
 }: BuildServerOptions = {}): FastifyInstance {
-  const server = Fastify({ bodyLimit: 16_384, logger });
+  // A 16 KiB secret can expand substantially when JSON escapes control characters.
+  // Route schemas and domain validation still enforce the decoded field limits.
+  const server = Fastify({ bodyLimit: 131_072, logger });
 
   void server.register(cookie);
   void server.register(cors, {
     credentials: true,
-    methods: ["GET", "PATCH", "POST"],
+    methods: ["DELETE", "GET", "PATCH", "POST", "PUT"],
     origin: webOrigin,
   });
   void server.register(helmet);
@@ -48,6 +52,7 @@ export function buildServer({
         cookieName,
         identityStore,
         now: now ?? (() => new Date()),
+        ...(projectStore === undefined ? {} : { projectStore }),
         secureCookies,
         signInRateLimitMax,
         webOrigin,

@@ -2,7 +2,7 @@
 
 ## Current repository state
 
-Phases 1 and 2 provide a runnable TypeScript workspace, web/API/worker processes, shared foundations, a framework-independent deployment domain, and a PostgreSQL persistence package with generated migrations and transactional transition operations. Authentication and API wiring begin in Phase 3.
+Phases 1 through 3 provide a runnable TypeScript workspace, web/API/worker processes, shared foundations, a framework-independent deployment domain, PostgreSQL transition persistence, and authenticated organization identity routes with a working sign-in UI. Project and deployment API orchestration begins in Phase 4.
 
 ## Prerequisites
 
@@ -22,6 +22,9 @@ corepack enable
 pnpm install --frozen-lockfile
 cp .env.example .env
 pnpm services:up
+pnpm db:migrate
+# Configure LAUNCHRAIL_BOOTSTRAP_* in .env for a new database.
+pnpm auth:bootstrap
 pnpm dev
 ```
 
@@ -77,15 +80,19 @@ The volume-deleting command is not wrapped in the normal shutdown script so data
 | `NEXT_PUBLIC_API_BASE_URL`                 | Browser-facing API base URL     | `http://localhost:4000` |
 | `DATABASE_URL`                             | PostgreSQL connection URL       | Local Compose service   |
 | `REDIS_URL`                                | Redis connection URL            | Local Compose service   |
+| `WEB_ORIGIN`                               | Allowed browser request origin  | `http://localhost:3000` |
+| `SESSION_*`                                | Cookie and session lifetimes    | See `.env.example`      |
+| `SIGN_IN_RATE_LIMIT_MAX`                   | Sign-in attempts/client/minute  | `5`                     |
+| `LAUNCHRAIL_BOOTSTRAP_*`                   | One-time initial owner fields   | No active default       |
 | `POSTGRES_*`, `REDIS_PORT`                 | Compose service configuration   | See `.env.example`      |
 
-Configuration parsing reports every invalid field without echoing supplied values. Production mode rejects the documented development database password. Encryption, session, GitHub, and webhook secrets will have no insecure production defaults when those features are introduced.
+Configuration parsing reports every invalid field without echoing supplied values. Production mode rejects the documented development database password and an insecure browser origin. GitHub, encryption, and webhook secrets will have no insecure production defaults when those features are introduced.
 
 ## Workspace layout
 
 ```text
 apps/api                  Fastify HTTP boundary and health endpoint
-apps/web                  Next.js interface and web health endpoint
+apps/web                  Next.js interface, sign-in surface, and web health endpoint
 apps/worker               Worker process and health server
 packages/config           Runtime-validated process configuration
 packages/contracts        Shared transport and health contracts
@@ -93,7 +100,7 @@ packages/observability    Redacted structured logger conventions
 scripts                   Repeatable application smoke checks
 packages/domain           Deployment states and transition invariants
 packages/application      Deployment use cases and persistence ports
-packages/database         Drizzle schema, migrations, and PostgreSQL adapter
+packages/database         Drizzle schema, migrations, identity and deployment adapters
 ```
 
 The dependency direction is `database -> application -> domain`; package builds run in topological order.
@@ -119,7 +126,7 @@ docker compose --env-file .env.example config --quiet
 
 `pnpm test:database` requires `DATABASE_URL` and a PostgreSQL database that may be truncated by the suite. GitHub Actions starts a disposable database, applies migrations from empty state, runs the database integration suite, verifies Redis, and removes the service volumes.
 
-See [persistence.md](persistence.md) for the schema, migration, transaction, and clean-database workflow.
+See [persistence.md](persistence.md) for the schema, migration, transaction, and clean-database workflow. See [authentication.md](authentication.md) for bootstrap, session, role, route, and security behavior.
 
 ## Session workflow
 

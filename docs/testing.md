@@ -4,7 +4,7 @@
 
 LaunchRail tests observable outcomes and safety invariants across domain logic, persistence, queues, infrastructure adapters, and browser workflows. A green unit suite alone cannot prove that a deployment survives real process and service failures, so each layer has a distinct job.
 
-Phases 1 and 2 provide Vitest tests for health/configuration contracts, the complete deployment transition matrix, application ports, Fastify injection, a real worker socket, and the web route. A disposable PostgreSQL suite proves clean migrations, ownership constraints, transactional rollback, idempotency, immutable snapshots, failed-candidate safety, and serialized promotion.
+Phases 1 through 3 provide Vitest tests for health/configuration contracts, deployment transitions, role policy, password hashing, application ports, Fastify injection, a real worker socket, and web routes. A disposable PostgreSQL suite proves clean migrations, ownership constraints, transactional rollback, idempotency, immutable snapshots, failed-candidate safety, serialized promotion, session behavior, and organization authorization.
 
 ## Test layers
 
@@ -47,12 +47,15 @@ Phases 1 and 2 provide Vitest tests for health/configuration contracts, the comp
 - Starts, logs, stops, cleanup, resource limits, non-root policy, and orphan reconciliation.
 - Delayed startup, unhealthy application, health timeout, and malformed response.
 
-### Webhooks and authorization
+### Authentication, webhooks, and authorization
+
+- Password verification, opaque token hashing, absolute/idle expiry, revocation, and disabled users.
+- Generic credential failures, strict mutation origin, secure cookie attributes, security headers, and sign-in throttling.
+- Owner/admin/developer/viewer permissions for every protected organization route and membership mutation.
+- Cross-organization identifiers concealed on every organization detail, member, role-change, and audit-history path.
 
 - Valid/invalid signatures over exact raw payload bytes.
 - Duplicate delivery ID, unsupported event, branch mismatch, oversized body, and replay.
-- Viewer/developer/admin permissions for every mutation.
-- Cross-organization identifiers rejected without information leakage.
 
 ### Logs and secrets
 
@@ -77,7 +80,7 @@ The `examples/` directory will contain small versioned fixtures for healthy Node
 
 Each commit runs the smallest complete set that covers its behavior. Pull requests run the repository's full practical CI baseline. Nightly or explicitly invoked suites may hold resource-heavy Docker, resilience, security scanning, and benchmarks. Skipped tests must report the exact environmental blocker and must not be described as passed.
 
-The current baseline is `pnpm test` for package/web unit tests, `pnpm test:integration` for API and worker HTTP behavior, `pnpm test:database` against disposable PostgreSQL, and `pnpm smoke:health` after a production build. The service CI job applies migrations from an empty database before running persistence tests.
+The current baseline is `pnpm test` for package/web unit tests, `pnpm test:integration` for API and worker HTTP behavior, `pnpm test:database` against disposable PostgreSQL, and `pnpm smoke:health` after a production build. The service CI job applies migrations from an empty database before running persistence and authenticated API tests. When a local Docker daemon is unavailable, that database suite must be reported as unverified locally and proven by the GitHub Actions service job.
 
 ## Defect workflow
 

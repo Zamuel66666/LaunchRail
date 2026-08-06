@@ -11,6 +11,7 @@ The roadmap reports verified repository state, not aspirations as completed feat
 - **Phase 0 — Product definition:** scope, users, non-goals, architecture, data-model outline, deployment state model, threat model, technology decisions, and delivery plan.
 - **Phase 1 — Repository foundation:** runnable pnpm workspace, web/API/worker health endpoints, shared configuration, PostgreSQL, Redis, Docker Compose, tests, builds, CI, and open-source license.
 - **Phase 2 — Domain model and persistence:** organization-owned records, generated migrations, immutable deployment snapshots, centrally validated state transitions, transactional events, idempotency, and atomic active-release promotion.
+- **Phase 3 — Authentication and authorization:** bootstrapped owners, password verification, secure opaque sessions, organization roles, hardened requests, audited membership changes, and sign-in UI.
 
 ### In progress
 
@@ -18,11 +19,11 @@ The roadmap reports verified repository state, not aspirations as completed feat
 
 ### Planned next
 
-- **Phase 3 — Authentication and authorization:** secure sessions, organization roles, request hardening, audit coverage, and sign-in UI.
+- **Phase 4 — Project management:** safe organization-scoped project configuration, encrypted environment variables, and project UI.
 
 ### Planned later
 
-- Phases 3–16 below.
+- Phases 4–16 below.
 
 ### Not currently planned
 
@@ -95,15 +96,23 @@ Exit evidence: clean migrations and real-PostgreSQL integration tests in GitHub 
 
 ### Phase 3 — Authentication and authorization
 
-**Status:** Planned next
+**Status:** Available
 
-Add secure sessions, membership roles, organization isolation, rate limiting, security headers, audit events, and sign-in UI.
+Delivered:
 
-Exit gate: positive and negative integration tests cover every role and cross-organization access path.
+- One-time first-owner bootstrap with scrypt password hashing and no secret output.
+- Cryptographically random opaque sessions stored only as SHA-256 hashes, with absolute and rolling idle expiry plus revocation.
+- Owner, admin, developer, and viewer permission matrices shared by the API and session principals.
+- Authenticated organization, membership, role-change, and audit-history endpoints with cross-organization concealment.
+- Strict mutation-origin validation, HttpOnly SameSite cookies, production Secure cookies, bounded request bodies, security headers, and sign-in rate limiting.
+- Audit records for bootstrap, accepted/rejected sign-in, sign-out, and membership role changes.
+- Responsive sign-in/session UI with accessible controls and clear unavailable-service feedback.
+
+Exit evidence: exhaustive domain policy tests and real-PostgreSQL API integration tests cover every role, every protected cross-organization route, privileged role changes, final-owner protection, session hashing/revocation, request hardening, and generic credential failures.
 
 ### Phase 4 — Project management
 
-**Status:** Planned
+**Status:** Planned next
 
 Add project CRUD, safe GitHub repository configuration, Dockerfile/health/runtime settings, encrypted environment variables, and project UI.
 

@@ -2,7 +2,7 @@
 
 ## Current security status
 
-LaunchRail has a runnable Phase 1 repository foundation, but it is not production-ready and must not be exposed publicly or used to run untrusted workloads. The foundation validates process configuration, rejects the documented database password in production, binds development services to loopback, and starts redacted structured logging. Authentication, authorization, encrypted secrets, repository processing, and container execution controls are not implemented.
+LaunchRail has a runnable Phase 3 authentication boundary, but it is not production-ready and must not be exposed publicly or used to run untrusted workloads. It validates process configuration, rejects documented development credentials in production, binds development services to loopback, uses scrypt password hashes, stores only hashes of opaque sessions, enforces organization roles, rejects cross-origin mutations, throttles sign-in, and records identity audit events. Password recovery, invitations, MFA, SSO, encrypted application secrets, repository processing, and container execution controls are not implemented.
 
 The first implementation will target a trusted operator on a local Docker host. Docker daemon access is effectively host-level privilege; container restrictions reduce workload risk but do not turn the initial design into a hardened hostile multi-tenant platform.
 
@@ -43,11 +43,11 @@ There are no released or supported versions yet. This table will be updated when
 - Prefer short-lived, scoped credentials and support rotation.
 - Fail closed while preserving the last known healthy release.
 
-## Planned minimum controls before the deployment demonstration
+## Minimum controls before the deployment demonstration
 
-- Validated environment configuration with no committed default secrets.
-- Secure session cookies, CSRF protection where applicable, rate limiting, and security headers.
-- Organization-scoped authorization queries and cross-organization integration tests.
+- [x] Validated environment configuration with no committed default secrets.
+- [x] Secure session cookies, origin-based request protection, sign-in rate limiting, and security headers.
+- [x] Organization-scoped authorization and cross-organization integration tests.
 - Repository URL allowlisting/normalization and command-injection regression tests.
 - Encrypted environment variables with versioned key metadata.
 - GitHub webhook HMAC verification using the raw request body and constant-time comparison.

@@ -60,4 +60,4 @@ GitHub Actions creates fresh Compose volumes, applies the migration history, exe
 
 ## Current limitations
 
-The persistence adapter is not yet connected to authenticated HTTP handlers or the deployment worker. Queue publication and stream notification happen after a future API/worker integration; this milestone stores no plaintext environment-variable value and does not yet implement encryption/decryption. Rollback, cancellation cleanup, and route reconciliation require later infrastructure phases even though their legal state pairs are already centralized.
+The identity adapter is connected to authenticated HTTP handlers; deployment transitions are not yet connected to project/deployment routes or the worker. Queue publication and stream notification happen after a future API/worker integration. The schema stores no plaintext environment-variable value and does not yet implement encryption/decryption. Rollback, cancellation cleanup, and route reconciliation require later infrastructure phases even though their legal state pairs are already centralized.

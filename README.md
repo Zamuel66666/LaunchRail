@@ -2,9 +2,7 @@
 
 **A self-hosted platform that turns a GitHub repository into a health-checked application deployment with live logs, preview URLs, release history, and safe rollback.**
 
-> Phase 2 is complete: LaunchRail now has an organization-scoped PostgreSQL model, explicit deployment state machine, transactional event history, idempotent transition commands, and health-gated active-release promotion.
-
-![LaunchRail foundation status page](docs/assets/foundation-status-page.jpg)
+> Phase 3 is complete: LaunchRail now has bootstrapped owner accounts, opaque server-side sessions, role-based organization authorization, hardened browser requests, audit history, and a working sign-in surface.
 
 ## What LaunchRail does
 
@@ -59,7 +57,12 @@ LaunchRail will use a modular monolith for the web/API boundary and a separate w
 - Central fourteen-state deployment lifecycle with exhaustive valid/invalid transition tests.
 - Transactional, idempotent PostgreSQL transitions that append ordered events and audit records.
 - Health-gated promotion that atomically supersedes the previous release and maintains one active pointer.
-- Recruiter-readable Phase 2 status page.
+- Scrypt password credentials and bootstrapped first-owner setup without logged secrets.
+- Hashed opaque sessions with absolute/idle expiry, rolling activity, and revocation.
+- Owner, admin, developer, and viewer permission policies enforced at organization API boundaries.
+- Cross-organization concealment, strict origin checks, sign-in throttling, secure cookie policy, and security headers.
+- Organization member management, audit-history APIs, and a responsive sign-in/session surface.
+- Real-PostgreSQL authorization coverage for every role and protected cross-organization path.
 
 ### In progress
 
@@ -67,9 +70,9 @@ LaunchRail will use a modular monolith for the web/API boundary and a separate w
 
 ### Planned next
 
-- Secure authentication and opaque sessions.
-- Membership-role authorization at every organization-scoped API boundary.
-- Cross-organization denial tests, rate limits, security headers, and sign-in UI.
+- Organization-scoped project CRUD.
+- Safe GitHub repository, Dockerfile, health-check, and runtime configuration.
+- Encrypted environment-variable management and project UI.
 
 ### Not currently planned
 
@@ -85,6 +88,9 @@ corepack enable
 pnpm install --frozen-lockfile
 cp .env.example .env
 pnpm services:up
+pnpm db:migrate
+# Set the LAUNCHRAIL_BOOTSTRAP_* values in .env, then run:
+pnpm auth:bootstrap
 pnpm dev
 ```
 
@@ -112,11 +118,12 @@ See the [development guide](docs/development.md) for verification, configuration
 - [Contributing](CONTRIBUTING.md) and [development workflow](docs/development.md)
 - [Testing strategy](docs/testing.md), [observability design](docs/observability.md), and [benchmark methodology](docs/benchmarks.md)
 - [Persistence model and transaction rules](docs/persistence.md)
+- [Authentication and authorization](docs/authentication.md)
 - [Architecture decisions](docs/adr/)
 
 ## Current limitations
 
-LaunchRail is not production-ready. Persistence is implemented as a package and proven in CI, but it is not yet connected to authenticated API routes or the worker. There is no sign-in, project UI, repository connection, queue consumer, build pipeline, application deployment, preview routing, or rollback control. Health endpoints still report process liveness only.
+LaunchRail is not production-ready. Authentication currently uses local password credentials and does not provide password reset, invitations, MFA, SSO, or session administration. The API exposes identity and organization access only; there is no project UI, repository connection, queue consumer, build pipeline, application deployment, preview routing, or rollback control. Health endpoints still report process liveness only.
 
 ## License
 

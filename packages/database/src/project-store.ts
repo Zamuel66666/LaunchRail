@@ -13,7 +13,7 @@ import {
   type SecretCipher,
   type UpdateProjectRecordCommand,
 } from "@launchrail/application";
-import type { DeploymentState } from "@launchrail/domain";
+import type { DeploymentState, ProjectRuntimeConfig } from "@launchrail/domain";
 import { and, asc, desc, eq, inArray, isNull, notInArray } from "drizzle-orm";
 
 import type { LaunchRailDatabase } from "./client.js";
@@ -49,6 +49,18 @@ function repositoryParts(repositoryUrl: string): {
 
 function repositoryUrl(row: ProjectRow): string {
   return `https://github.com/${row.repositoryOwner}/${row.repositoryName}`;
+}
+
+function runtimeConfigurationsMatch(
+  existing: ProjectRuntimeConfig,
+  next: ProjectRuntimeConfig,
+): boolean {
+  return (
+    existing.cpuMillicores === next.cpuMillicores &&
+    existing.memoryMegabytes === next.memoryMegabytes &&
+    existing.processLimit === next.processLimit &&
+    existing.readOnlyRootFilesystem === next.readOnlyRootFilesystem
+  );
 }
 
 function toEnvironmentVariableMetadata(
@@ -102,7 +114,7 @@ function changedConfigurationFields(
   if (existing.dockerfilePath !== configuration.dockerfilePath) fields.push("dockerfilePath");
   if (existing.healthCheckPath !== configuration.healthCheckPath) fields.push("healthCheckPath");
   if (existing.healthCheckPort !== configuration.healthCheckPort) fields.push("healthCheckPort");
-  if (JSON.stringify(existing.runtimeConfig) !== JSON.stringify(configuration.runtimeConfig)) {
+  if (!runtimeConfigurationsMatch(existing.runtimeConfig, configuration.runtimeConfig)) {
     fields.push("runtimeConfig");
   }
   return fields;

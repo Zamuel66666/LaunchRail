@@ -189,6 +189,15 @@ describe("project API contract", () => {
       payload: { ...projectInput, repositoryUrl: "https://github.com/openai/../../etc" },
       url: `/v1/organizations/${organizationId}/projects`,
     });
+    const unsupportedRuntimeCapability = await server.inject({
+      headers: headers(),
+      method: "POST",
+      payload: {
+        ...projectInput,
+        runtimeConfig: { ...projectInput.runtimeConfig, privileged: true },
+      },
+      url: `/v1/organizations/${organizationId}/projects`,
+    });
     const crossOrigin = await server.inject({
       headers: headers("https://attacker.example"),
       method: "POST",
@@ -198,6 +207,8 @@ describe("project API contract", () => {
 
     expect(unsafe.statusCode).toBe(400);
     expect(unsafe.json().error).toMatchObject({ code: "invalid_project_configuration" });
+    expect(unsupportedRuntimeCapability.statusCode).toBe(400);
+    expect(unsupportedRuntimeCapability.json().error).toMatchObject({ code: "invalid_request" });
     expect(crossOrigin.statusCode).toBe(403);
     expect(projectStore.created).toHaveLength(0);
   });

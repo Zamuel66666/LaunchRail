@@ -33,7 +33,11 @@ export function buildServer({
 }: BuildServerOptions = {}): FastifyInstance {
   // A 16 KiB secret can expand substantially when JSON escapes control characters.
   // Route schemas and domain validation still enforce the decoded field limits.
-  const server = Fastify({ bodyLimit: 131_072, logger });
+  const server = Fastify({
+    ajv: { customOptions: { removeAdditional: false } },
+    bodyLimit: 131_072,
+    logger,
+  });
 
   void server.register(cookie);
   void server.register(cors, {

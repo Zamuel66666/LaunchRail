@@ -19,6 +19,11 @@ describe("configuration", () => {
       API_PORT: 4100,
       LOG_LEVEL: "info",
       NODE_ENV: "development",
+      SESSION_ABSOLUTE_TTL_HOURS: 24,
+      SESSION_COOKIE_NAME: "launchrail_session",
+      SESSION_IDLE_TTL_MINUTES: 30,
+      SIGN_IN_RATE_LIMIT_MAX: 5,
+      WEB_ORIGIN: "http://localhost:3000",
     });
     expect(loadWorkerConfig(serviceEnvironment)).toMatchObject({
       WORKER_HEALTH_HOST: "127.0.0.1",
@@ -52,5 +57,23 @@ describe("configuration", () => {
         REDIS_URL: "redis://localhost:6379",
       }),
     ).toThrow("development password cannot be used in production");
+  });
+
+  it("rejects unsafe production origins and invalid session lifetimes", () => {
+    expect(() =>
+      loadApiConfig({
+        ...serviceEnvironment,
+        NODE_ENV: "production",
+        WEB_ORIGIN: "http://launchrail.example",
+      }),
+    ).toThrow("production browser origin must use HTTPS");
+
+    expect(() =>
+      loadApiConfig({
+        ...serviceEnvironment,
+        SESSION_ABSOLUTE_TTL_HOURS: "1",
+        SESSION_IDLE_TTL_MINUTES: "61",
+      }),
+    ).toThrow("cannot exceed the absolute session lifetime");
   });
 });

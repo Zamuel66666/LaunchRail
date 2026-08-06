@@ -5,6 +5,7 @@ type EnvironmentSource = Readonly<Record<string, string | undefined>>;
 const environmentSchema = z.enum(["development", "test", "production"]);
 const logLevelSchema = z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]);
 const portSchema = z.coerce.number().int().min(1).max(65_535);
+const positiveIntegerSchema = z.coerce.number().int().positive();
 const urlSchema = z.string().url();
 
 const sharedServiceSchema = z.object({
@@ -17,6 +18,14 @@ const sharedServiceSchema = z.object({
 const apiSchema = sharedServiceSchema.extend({
   API_HOST: z.string().min(1).default("127.0.0.1"),
   API_PORT: portSchema.default(4000),
+  SESSION_ABSOLUTE_TTL_HOURS: positiveIntegerSchema.max(168).default(24),
+  SESSION_COOKIE_NAME: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]+$/)
+    .default("launchrail_session"),
+  SESSION_IDLE_TTL_MINUTES: positiveIntegerSchema.max(1_440).default(30),
+  SIGN_IN_RATE_LIMIT_MAX: positiveIntegerSchema.max(100).default(5),
+  WEB_ORIGIN: urlSchema.default("http://localhost:3000"),
 });
 
 const workerSchema = sharedServiceSchema.extend({
@@ -74,9 +83,23 @@ function rejectDevelopmentCredentialsInProduction(config: {
   }
 }
 
+function validateApiSecurity(config: ApiConfig): void {
+  const issues: string[] = [];
+  if (config.SESSION_IDLE_TTL_MINUTES > config.SESSION_ABSOLUTE_TTL_HOURS * 60) {
+    issues.push("SESSION_IDLE_TTL_MINUTES: cannot exceed the absolute session lifetime");
+  }
+  if (config.NODE_ENV === "production" && new URL(config.WEB_ORIGIN).protocol !== "https:") {
+    issues.push("WEB_ORIGIN: production browser origin must use HTTPS");
+  }
+  if (issues.length > 0) {
+    throw new ConfigurationError(issues);
+  }
+}
+
 export function loadApiConfig(source: EnvironmentSource = process.env): ApiConfig {
   const config = parseConfig(apiSchema, source);
   rejectDevelopmentCredentialsInProduction(config);
+  validateApiSecurity(config);
   return config;
 }
 

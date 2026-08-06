@@ -1,4 +1,4 @@
-import { deploymentFailureCategories, deploymentStates } from "@launchrail/domain";
+import { deploymentFailureCategories, deploymentStates, membershipRoles } from "@launchrail/domain";
 import { sql } from "drizzle-orm";
 import {
   bigint,
@@ -22,7 +22,7 @@ const timestamps = {
   updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
 };
 
-export const membershipRole = pgEnum("membership_role", ["owner", "admin", "developer", "viewer"]);
+export const membershipRole = pgEnum("membership_role", membershipRoles);
 export const deploymentState = pgEnum("deployment_state", deploymentStates);
 export const deploymentFailureCategory = pgEnum(
   "deployment_failure_category",
@@ -60,11 +60,58 @@ export const users = pgTable(
     id: uuid("id").defaultRandom().primaryKey(),
     email: text("email").notNull(),
     displayName: text("display_name").notNull(),
+    disabledAt: timestamp("disabled_at", { mode: "date", withTimezone: true }),
     ...timestamps,
   },
   (table) => [
     uniqueIndex("users_email_lower_unique").on(sql`lower(${table.email})`),
     check("users_email_not_blank", sql`length(trim(${table.email})) > 0`),
+  ],
+);
+
+export const passwordCredentials = pgTable(
+  "password_credentials",
+  {
+    userId: uuid("user_id")
+      .primaryKey()
+      .references(() => users.id, { onDelete: "cascade" }),
+    passwordHash: text("password_hash").notNull(),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    check("password_credentials_hash_not_blank", sql`length(trim(${table.passwordHash})) > 0`),
+  ],
+);
+
+export const sessions = pgTable(
+  "sessions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: timestamp("expires_at", { mode: "date", withTimezone: true }).notNull(),
+    idleExpiresAt: timestamp("idle_expires_at", {
+      mode: "date",
+      withTimezone: true,
+    }).notNull(),
+    lastSeenAt: timestamp("last_seen_at", { mode: "date", withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    revokedAt: timestamp("revoked_at", { mode: "date", withTimezone: true }),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    unique("sessions_token_hash_unique").on(table.tokenHash),
+    index("sessions_user_expires_index").on(table.userId, table.expiresAt),
+    check("sessions_token_hash_format", sql`${table.tokenHash} ~ '^[0-9a-f]{64}$'`),
+    check("sessions_absolute_expiry_order", sql`${table.expiresAt} > ${table.createdAt}`),
+    check(
+      "sessions_idle_expiry_order",
+      sql`${table.idleExpiresAt} > ${table.createdAt} and ${table.idleExpiresAt} <= ${table.expiresAt}`,
+    ),
   ],
 );
 

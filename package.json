@@ -10,6 +10,7 @@
     "pnpm": ">=11.9.0"
   },
   "scripts": {
+    "auth:bootstrap": "pnpm build:packages && pnpm --filter @launchrail/database auth:bootstrap",
     "build": "pnpm build:packages && pnpm --filter './apps/*' --parallel build",
     "build:packages": "pnpm --filter './packages/*' build",
     "db:generate": "pnpm --filter @launchrail/domain build && pnpm --filter @launchrail/database db:generate",

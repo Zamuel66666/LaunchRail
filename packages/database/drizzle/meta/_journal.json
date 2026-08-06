@@ -15,6 +15,13 @@
       "when": 1784890149275,
       "tag": "0001_protect-deployment-snapshots",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786005197563,
+      "tag": "0002_romantic_the_anarchist",
+      "breakpoints": true
     }
   ]
 }

@@ -1,9 +1,11 @@
+import Link from "next/link";
+
 const milestoneItems = [
-  "Organization-scoped users, memberships, projects, and deployments",
-  "Fourteen-state deployment lifecycle validated in one domain module",
-  "Transactional state changes, ordered events, and audit records",
-  "Idempotent commands and health-gated active-release promotion",
-  "Generated migrations verified against disposable PostgreSQL in CI",
+  "Opaque sessions with hashed server-side tokens and bounded lifetimes",
+  "Owner, admin, developer, and viewer permission matrices",
+  "Cross-organization concealment on every protected access path",
+  "Origin validation, secure cookies, headers, and sign-in throttling",
+  "Audited sign-in, sign-out, bootstrap, and membership changes",
 ];
 
 export default function HomePage() {
@@ -18,13 +20,16 @@ export default function HomePage() {
         </p>
         <div className="status" role="status">
           <span className="status-dot" aria-hidden="true" />
-          Domain and persistence milestone available
+          Authentication and authorization milestone available
         </div>
+        <Link className="primary-link" href="/sign-in">
+          Open secure sign-in <span aria-hidden="true">→</span>
+        </Link>
       </section>
 
       <section className="panel" aria-labelledby="milestone-title">
         <p className="section-label">Current milestone</p>
-        <h2 id="milestone-title">Deployment truth now survives process restarts</h2>
+        <h2 id="milestone-title">Organization data now has a security boundary</h2>
         <ul>
           {milestoneItems.map((item) => (
             <li key={item}>{item}</li>
@@ -34,10 +39,10 @@ export default function HomePage() {
 
       <section className="next" aria-labelledby="next-title">
         <p className="section-label">Next milestone</p>
-        <h2 id="next-title">Secure access to organization data</h2>
+        <h2 id="next-title">Create and manage projects</h2>
         <p>
-          The next phase adds sign-in, secure sessions, membership-based authorization, request
-          hardening, and negative tests for every cross-organization access path.
+          The next phase adds organization-scoped project CRUD, repository configuration,
+          environment metadata, and complete ownership tests at the API and database layers.
         </p>
       </section>
     </main>

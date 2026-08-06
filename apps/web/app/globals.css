@@ -24,6 +24,10 @@ body {
     linear-gradient(160deg, #08111d 0%, #0c1928 54%, #07101a 100%);
 }
 
+a {
+  color: inherit;
+}
+
 main {
   width: min(72rem, calc(100% - 2rem));
   margin: 0 auto;
@@ -94,6 +98,28 @@ h2 {
   box-shadow: 0 0 0 0.3rem rgb(84 221 151 / 12%);
 }
 
+.primary-link {
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  gap: 0.65rem;
+  margin-top: 1.4rem;
+  padding: 0.85rem 1.1rem;
+  border-radius: 0.65rem;
+  background: #d9f8ff;
+  color: #07131e;
+  font-weight: 760;
+  text-decoration: none;
+  transition:
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.primary-link:hover {
+  background: #fff;
+  transform: translateY(-1px);
+}
+
 .panel,
 .next {
   margin-top: clamp(4rem, 10vw, 7rem);
@@ -140,6 +166,200 @@ li::before {
   line-height: 1.65;
 }
 
+.auth-shell {
+  display: grid;
+  min-height: 100vh;
+  grid-template-columns: minmax(0, 1.15fr) minmax(21rem, 0.85fr);
+  align-items: center;
+  gap: clamp(2rem, 8vw, 8rem);
+  padding-top: clamp(2rem, 5vw, 4rem);
+  padding-bottom: clamp(2rem, 5vw, 4rem);
+}
+
+.auth-context {
+  max-width: 44rem;
+}
+
+.wordmark {
+  display: inline-block;
+  margin-bottom: clamp(4rem, 10vw, 8rem);
+  color: #f3fbff;
+  font-size: 1.15rem;
+  font-weight: 820;
+  letter-spacing: -0.04em;
+  text-decoration: none;
+}
+
+.auth-context h1 {
+  max-width: 44rem;
+  margin-bottom: 1.5rem;
+  font-size: clamp(3rem, 7vw, 5.8rem);
+}
+
+.security-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 2rem;
+}
+
+.security-strip span {
+  padding: 0.42rem 0.68rem;
+  border: 1px solid #2d5269;
+  border-radius: 999px;
+  color: #aee7f3;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.035em;
+}
+
+.auth-card {
+  min-height: 31rem;
+  padding: clamp(1.5rem, 4vw, 2.6rem);
+  border: 1px solid #2b475d;
+  border-radius: 1.2rem;
+  background: rgb(8 23 36 / 92%);
+  box-shadow: 0 2rem 6rem rgb(0 0 0 / 35%);
+}
+
+.auth-heading h2,
+.signed-in h2 {
+  margin-bottom: 0.7rem;
+}
+
+.auth-heading > p:last-child,
+.signed-in-email {
+  color: #9fb6c9;
+  line-height: 1.55;
+}
+
+form {
+  display: grid;
+  margin-top: 2.2rem;
+}
+
+label {
+  margin-bottom: 0.55rem;
+  color: #c7d9e7;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+input {
+  width: 100%;
+  margin-bottom: 1.25rem;
+  padding: 0.88rem 0.95rem;
+  border: 1px solid #36536a;
+  border-radius: 0.6rem;
+  outline: none;
+  background: #0b1b29;
+  color: #f1f8fc;
+  font: inherit;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+input:focus {
+  border-color: #72d9ee;
+  box-shadow: 0 0 0 0.2rem rgb(114 217 238 / 12%);
+}
+
+button {
+  width: 100%;
+  margin-top: 0.5rem;
+  padding: 0.9rem 1rem;
+  border: 0;
+  border-radius: 0.65rem;
+  background: #64d9ef;
+  color: #06131e;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 790;
+}
+
+button:hover:not(:disabled) {
+  background: #a8edfa;
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: 0.68;
+}
+
+.button-secondary {
+  border: 1px solid #36536a;
+  background: transparent;
+  color: #dcecf5;
+}
+
+.session-check {
+  display: flex;
+  min-height: 25rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  color: #abc0d1;
+}
+
+.form-message {
+  margin: 0 0 0.7rem;
+  color: #b7c9d7;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.error-message {
+  color: #ffb5ae;
+}
+
+.membership-list {
+  display: grid;
+  gap: 0.7rem;
+  margin: 2rem 0;
+}
+
+.membership-list article {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem;
+  border: 1px solid #29465b;
+  border-radius: 0.7rem;
+  background: #0b1c2a;
+}
+
+.membership-list h3,
+.membership-list p {
+  margin: 0;
+}
+
+.membership-list h3 {
+  font-size: 0.95rem;
+}
+
+.membership-list p {
+  margin-top: 0.3rem;
+  color: #8099ad;
+  font-size: 0.8rem;
+}
+
+.role {
+  padding: 0.35rem 0.52rem;
+  border-radius: 0.4rem;
+  background: #1d3a4d;
+  color: #bdebf4;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.role-owner {
+  background: #44391f;
+  color: #ffe6a0;
+}
+
 @media (max-width: 42rem) {
   main {
     width: min(100% - 1.25rem, 72rem);
@@ -148,6 +368,20 @@ li::before {
 
   ul {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 56rem) {
+  .auth-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .wordmark {
+    margin-bottom: 3rem;
+  }
+
+  .auth-card {
+    min-height: 0;
   }
 }
 

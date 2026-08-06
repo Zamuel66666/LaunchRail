@@ -1,11 +1,11 @@
 import Link from "next/link";
 
 const milestoneItems = [
-  "Opaque sessions with hashed server-side tokens and bounded lifetimes",
-  "Owner, admin, developer, and viewer permission matrices",
-  "Cross-organization concealment on every protected access path",
-  "Origin validation, secure cookies, headers, and sign-in throttling",
-  "Audited sign-in, sign-out, bootstrap, and membership changes",
+  "Organization-scoped project creation, editing, and archival",
+  "Canonical GitHub HTTPS repository and checkout-safe path validation",
+  "Bounded health-check and runtime resource configuration",
+  "Encrypted, write-only environment-variable management",
+  "Permission-aware controls with explicit async and empty states",
 ];
 
 export default function HomePage() {
@@ -20,16 +20,21 @@ export default function HomePage() {
         </p>
         <div className="status" role="status">
           <span className="status-dot" aria-hidden="true" />
-          Authentication and authorization milestone available
+          Project management milestone available
         </div>
-        <Link className="primary-link" href="/sign-in">
-          Open secure sign-in <span aria-hidden="true">→</span>
-        </Link>
+        <div className="hero-actions">
+          <Link className="primary-link" href="/projects">
+            Open project workspace <span aria-hidden="true">→</span>
+          </Link>
+          <Link className="secondary-link" href="/sign-in">
+            Manage session
+          </Link>
+        </div>
       </section>
 
       <section className="panel" aria-labelledby="milestone-title">
         <p className="section-label">Current milestone</p>
-        <h2 id="milestone-title">Organization data now has a security boundary</h2>
+        <h2 id="milestone-title">Projects can be configured without leaking secrets</h2>
         <ul>
           {milestoneItems.map((item) => (
             <li key={item}>{item}</li>
@@ -39,10 +44,10 @@ export default function HomePage() {
 
       <section className="next" aria-labelledby="next-title">
         <p className="section-label">Next milestone</p>
-        <h2 id="next-title">Create and manage projects</h2>
+        <h2 id="next-title">Queue reliable background work</h2>
         <p>
-          The next phase adds organization-scoped project CRUD, repository configuration,
-          environment metadata, and complete ownership tests at the API and database layers.
+          The next phase adds typed deployment jobs, retry and timeout policy, dead-letter handling,
+          worker heartbeats, and restart-safe reconciliation entry points.
         </p>
       </section>
     </main>

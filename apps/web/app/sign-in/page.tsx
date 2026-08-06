@@ -3,35 +3,7 @@
 import Link from "next/link";
 import { type FormEvent, useEffect, useState } from "react";
 
-interface Membership {
-  readonly organizationId: string;
-  readonly organizationName: string;
-  readonly organizationSlug: string;
-  readonly permissions: readonly string[];
-  readonly role: "owner" | "admin" | "developer" | "viewer";
-}
-
-interface SessionUser {
-  readonly displayName: string;
-  readonly email: string;
-  readonly memberships: readonly Membership[];
-  readonly userId: string;
-}
-
-interface ErrorResponse {
-  readonly error?: { readonly message?: string };
-}
-
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
-
-async function readError(response: Response): Promise<string> {
-  try {
-    const body = (await response.json()) as ErrorResponse;
-    return body.error?.message ?? "The request could not be completed.";
-  } catch {
-    return "The request could not be completed.";
-  }
-}
+import { ApiError, getSession, signIn, signOut, type SessionUser } from "../../lib/api";
 
 export default function SignInPage() {
   const [email, setEmail] = useState("");
@@ -43,18 +15,16 @@ export default function SignInPage() {
   useEffect(() => {
     const controller = new AbortController();
 
-    void fetch(`${apiBaseUrl}/v1/auth/session`, {
-      credentials: "include",
-      signal: controller.signal,
-    })
-      .then(async (response) => {
-        if (response.ok) {
-          const body = (await response.json()) as { readonly user: SessionUser };
-          setUser(body.user);
+    void getSession(controller.signal)
+      .then((sessionUser) => setUser(sessionUser))
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted && (!(error instanceof ApiError) || error.status !== 401)) {
+          setMessage("LaunchRail API is unavailable. Check the local services and try again.");
         }
       })
-      .catch(() => undefined)
-      .finally(() => setStatus("idle"));
+      .finally(() => {
+        if (!controller.signal.aborted) setStatus("idle");
+      });
 
     return () => controller.abort();
   }, []);
@@ -65,44 +35,34 @@ export default function SignInPage() {
     setStatus("submitting");
 
     try {
-      const response = await fetch(`${apiBaseUrl}/v1/auth/sign-in`, {
-        body: JSON.stringify({ email, password }),
-        credentials: "include",
-        headers: { "content-type": "application/json" },
-        method: "POST",
-      });
-      if (!response.ok) {
-        setMessage(await readError(response));
-        return;
-      }
-
-      const body = (await response.json()) as { readonly user: SessionUser };
+      const sessionUser = await signIn(email, password);
       setPassword("");
-      setUser(body.user);
-    } catch {
-      setMessage("LaunchRail API is unavailable. Check the local services and try again.");
+      setUser(sessionUser);
+    } catch (error) {
+      setMessage(
+        error instanceof ApiError
+          ? error.message
+          : "LaunchRail API is unavailable. Check the local services and try again.",
+      );
     } finally {
       setStatus("idle");
     }
   }
 
-  async function signOut(): Promise<void> {
+  async function endSession(): Promise<void> {
     setMessage("");
     setStatus("submitting");
 
     try {
-      const response = await fetch(`${apiBaseUrl}/v1/auth/sign-out`, {
-        credentials: "include",
-        method: "POST",
-      });
-      if (!response.ok) {
-        setMessage(await readError(response));
-        return;
-      }
+      await signOut();
       setUser(null);
       setEmail("");
-    } catch {
-      setMessage("LaunchRail API is unavailable. Check the local services and try again.");
+    } catch (error) {
+      setMessage(
+        error instanceof ApiError
+          ? error.message
+          : "LaunchRail API is unavailable. Check the local services and try again.",
+      );
     } finally {
       setStatus("idle");
     }
@@ -187,10 +147,15 @@ export default function SignInPage() {
               <p className="form-message">This account has no organization memberships.</p>
             ) : null}
             {message.length > 0 ? <p className="form-message error-message">{message}</p> : null}
+            {user.memberships.length > 0 ? (
+              <Link className="primary-link workspace-link" href="/projects">
+                Open project workspace <span aria-hidden="true">→</span>
+              </Link>
+            ) : null}
             <button
               className="button-secondary"
               disabled={status === "submitting"}
-              onClick={() => void signOut()}
+              onClick={() => void endSession()}
               type="button"
             >
               {status === "submitting" ? "Signing out…" : "Sign out"}

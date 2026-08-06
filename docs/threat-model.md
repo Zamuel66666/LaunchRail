@@ -4,7 +4,7 @@
 
 LaunchRail handles unusually powerful operations: it downloads code, builds Dockerfiles, starts containers, stores application secrets, and changes network routes. A malicious repository or stolen account could therefore affect more than one deployment. The design treats source code and workloads as untrusted even though the first supported operator and host are trusted.
 
-This initial model identifies security requirements. Phases 1 through 3 implement foundational configuration/log redaction, loopback-bound services, organization-scoped foreign keys, immutable deployment snapshots, health-gated active-release constraints, password authentication, hashed opaque sessions, organization role enforcement, request hardening, and identity/deployment audit insertion. Password recovery and second factors, secret encryption, workload isolation, and the remaining controls are not claimed as complete.
+This initial model identifies security requirements. Phases 1 through 4 implement foundational structured-log redaction, loopback-bound services, organization-scoped foreign keys, immutable deployment snapshots, health-gated active-release constraints, password authentication, hashed opaque sessions, organization role enforcement, request hardening, validated project input, authenticated environment-variable encryption, and identity/project/deployment audit insertion. Password recovery/second factors, repository retrieval, deployment-time secret injection, workload isolation, and the remaining controls are not claimed as complete.
 
 ## Scope and assumptions
 
@@ -51,7 +51,7 @@ This initial model identifies security requirements. Phases 1 through 3 implemen
 
 - **Viewer:** reads permitted projects, deployments, and redacted logs.
 - **Developer:** creates projects and deployments and manages non-administrative configuration.
-- **Organization administrator:** manages memberships, sensitive settings, and secrets.
+- **Organization owner/administrator:** manages memberships, archival, sensitive settings, and secrets.
 - **LaunchRail operator:** controls the host and infrastructure configuration.
 - **GitHub:** supplies source data and signed webhook events.
 - **Deployed application:** untrusted workload that may be vulnerable or intentionally malicious.
@@ -106,22 +106,22 @@ Crossing a boundary requires authenticated protocols, validated schemas, bounded
 
 ## Threat scenarios and required mitigations
 
-| Threat                                  | Example impact                                                | Planned controls                                                                                                                              | Evidence required before claiming mitigation          |
-| --------------------------------------- | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| Session theft or fixation               | Account takeover                                              | Hashed opaque sessions, secure/HTTP-only/SameSite cookies, absolute/idle expiry, revocation, origin defense                                   | Implemented for local passwords; integration tested   |
-| Cross-organization access               | Read or mutate another team's project/secrets                 | Membership lookup, role checks, organization-scoped queries, deny-by-default policies                                                         | Identity routes tested; future resources remain gated |
-| Server-side request forgery             | Repository or health URL reaches internal services            | Strict repository providers, normalized GitHub URLs, direct runtime health targets, blocked link-local/private destinations where appropriate | URL parser/property tests and integration tests       |
-| Command injection                       | Crafted branch, path, or environment value runs host commands | Library APIs and argument arrays, typed values, no shell interpolation, allowlisted paths                                                     | Malicious-input regression tests and code review      |
-| Malicious Dockerfile/build              | Host compromise, secret theft, denial of service              | Dedicated BuildKit policy, no control-plane secrets in context, bounded resources/time/storage/network, cleanup                               | Adversarial example builds and resource tests         |
-| Container escape or Docker socket abuse | Host takeover                                                 | No Docker socket in workloads, non-root user, dropped capabilities, read-only filesystem where viable, seccomp/AppArmor, resource limits      | Runtime policy inspection and escape-oriented tests   |
-| Secret leakage                          | Credentials in logs, UI, metrics, images, cache, traces       | Envelope encryption, scoped decryption, centralized redaction, no secrets in job payloads/build args by default                               | Canary-secret tests across all output channels        |
-| Forged/replayed webhook                 | Unauthorized or duplicate deployment                          | HMAC verification over raw bytes, timestamp/size controls, unique delivery ID, branch filters                                                 | Invalid-signature and duplicate-delivery tests        |
-| Queue message tampering/duplication     | Invalid transitions or repeated side effects                  | Private Redis, typed schemas, stable idempotency keys, state re-read, bounded retries                                                         | Duplicate-job and malformed-contract tests            |
-| Route takeover/collision                | Traffic sent to wrong organization or release                 | Deterministic collision-resistant hostnames, unique constraints, authorized route intent, reconciliation                                      | Collision tests and proxy integration tests           |
-| Log injection/resource exhaustion       | Misleading UI or unavailable telemetry                        | Structured encoding, display escaping, chunk/rate/retention limits, sequence IDs                                                              | Control-character, high-volume, and reconnect tests   |
-| Dependency or image compromise          | Malicious control-plane/runtime code                          | Lockfile, reviewable updates, provenance where available, dependency/image scanning                                                           | CI scan results and documented triage policy          |
-| Destructive control misuse              | Unauthorized stop/cancel/rollback                             | Role checks, confirmation UI, idempotent commands, audit events                                                                               | Authorization and audit integration tests             |
-| Worker crash at side-effect boundary    | Duplicate containers or incorrect active route                | Persist-before-act, labeled resources, leases, idempotent adapters, reconciliation                                                            | Failure-injection tests at each boundary              |
+| Threat                                  | Example impact                                                | Planned controls                                                                                                                         | Evidence required before claiming mitigation           |
+| --------------------------------------- | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Session theft or fixation               | Account takeover                                              | Hashed opaque sessions, secure/HTTP-only/SameSite cookies, absolute/idle expiry, revocation, origin defense                              | Implemented for local passwords; integration tested    |
+| Cross-organization access               | Read or mutate another team's project/secrets                 | Membership lookup, role checks, organization-scoped queries, deny-by-default policies                                                    | Identity/project routes integration tested             |
+| Server-side request forgery             | Repository or health URL reaches internal services            | Canonical GitHub URLs, direct runtime health targets, blocked link-local/private destinations where appropriate                          | URL syntax tested; network adapters remain future      |
+| Command injection                       | Crafted branch, path, or environment value runs host commands | Typed validated values, library APIs/argument arrays, no shell interpolation, checkout containment                                       | Project input tested; adapter tests remain future      |
+| Malicious Dockerfile/build              | Host compromise, secret theft, denial of service              | Dedicated BuildKit policy, no control-plane secrets in context, bounded resources/time/storage/network, cleanup                          | Adversarial example builds and resource tests          |
+| Container escape or Docker socket abuse | Host takeover                                                 | No Docker socket in workloads, non-root user, dropped capabilities, read-only filesystem where viable, seccomp/AppArmor, resource limits | Runtime policy inspection and escape-oriented tests    |
+| Secret leakage                          | Credentials in logs, UI, metrics, images, cache, traces       | Authenticated encryption, scoped metadata/read APIs, structured-log redaction, no secret job/build arguments by default                  | Control-plane canaries tested; future channels pending |
+| Forged/replayed webhook                 | Unauthorized or duplicate deployment                          | HMAC verification over raw bytes, timestamp/size controls, unique delivery ID, branch filters                                            | Invalid-signature and duplicate-delivery tests         |
+| Queue message tampering/duplication     | Invalid transitions or repeated side effects                  | Private Redis, typed schemas, stable idempotency keys, state re-read, bounded retries                                                    | Duplicate-job and malformed-contract tests             |
+| Route takeover/collision                | Traffic sent to wrong organization or release                 | Deterministic collision-resistant hostnames, unique constraints, authorized route intent, reconciliation                                 | Collision tests and proxy integration tests            |
+| Log injection/resource exhaustion       | Misleading UI or unavailable telemetry                        | Structured encoding, display escaping, chunk/rate/retention limits, sequence IDs                                                         | Control-character, high-volume, and reconnect tests    |
+| Dependency or image compromise          | Malicious control-plane/runtime code                          | Lockfile, reviewable updates, provenance where available, dependency/image scanning                                                      | CI scan results and documented triage policy           |
+| Destructive control misuse              | Unauthorized stop/cancel/rollback                             | Role checks, confirmation UI, idempotent commands, audit events                                                                          | Authorization and audit integration tests              |
+| Worker crash at side-effect boundary    | Duplicate containers or incorrect active route                | Persist-before-act, labeled resources, leases, idempotent adapters, reconciliation                                                       | Failure-injection tests at each boundary               |
 
 ## Repository and build policy
 
@@ -131,6 +131,8 @@ Crossing a boundary requires authenticated protocols, validated schemas, bounded
 - Validate the Dockerfile path remains inside the checkout.
 - Treat Dockerfile directives and build output as untrusted; never convert them into shell commands or HTML.
 - Label images and containers with opaque LaunchRail IDs for reconciliation, not user-provided names.
+
+Phase 4 implements only the first syntax boundary plus branch, Dockerfile, health path, and runtime bounds. It does not prove a repository is public or exists, authenticate private repositories, resolve a reference, clone content, or contain symlinks. Those controls and their network/filesystem evidence belong to Phase 6.
 
 ## Workload isolation baseline
 
@@ -150,13 +152,15 @@ Build isolation remains weaker than a hardened remote builder because BuildKit a
 ## Secret lifecycle
 
 1. Validate secret names and size at the API boundary.
-2. Encrypt values with an authenticated cipher and organization/project context.
-3. Store ciphertext, nonce, algorithm, and key version in PostgreSQL; store the master key separately.
+2. Encrypt values with AES-256-GCM, a fresh nonce/tag, and organization/project/name authenticated context.
+3. Store ciphertext, nonce, authentication tag, algorithm, and key version in PostgreSQL; store the keyring separately.
 4. Decrypt only in the worker immediately before runtime injection.
 5. Redact exact and encoded canary forms before emitting logs/events.
 6. Never return stored plaintext through read APIs.
 7. Audit create, update, delete, and access operations without recording the value.
 8. Support key rotation by version and re-encryption without changing the logical secret.
+
+Phase 4 implements steps 1–3, the no-plaintext API part of step 6, value-free write/delete audit events in step 7, and versioned active/historical keys for step 8. Runtime decryption/injection, exact/encoded runtime-output redaction, secret-access auditing, and automated re-encryption remain future work. Operators must retain historical keys until every referenced row is replaced.
 
 ## Security verification gates
 
@@ -169,7 +173,7 @@ Build isolation remains weaker than a hardened remote builder because BuildKit a
 
 ## Residual risks
 
-Even after planned controls, the single Docker host, third-party dependencies, and execution of user-supplied builds remain material risks. Early releases will document that only trusted repositories should be deployed. Production-readiness claims require an updated model, external review, isolation testing, incident processes, backups, key management, and operational evidence that are outside Phase 0.
+Even after planned controls, the single Docker host, third-party dependencies, execution of user-supplied builds, locally managed keyring, and absent automated key re-encryption remain material risks. Phase 4 validates repository-shaped input but does not inspect remote source, so only trusted intended-public repositories should be configured. Production-readiness claims require an updated model, external review, isolation testing, incident processes, backups, managed keys, and operational evidence beyond the current milestone.
 
 ## Review triggers
 

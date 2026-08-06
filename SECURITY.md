@@ -2,7 +2,7 @@
 
 ## Current security status
 
-LaunchRail has a runnable Phase 3 authentication boundary, but it is not production-ready and must not be exposed publicly or used to run untrusted workloads. It validates process configuration, rejects documented development credentials in production, binds development services to loopback, uses scrypt password hashes, stores only hashes of opaque sessions, enforces organization roles, rejects cross-origin mutations, throttles sign-in, and records identity audit events. Password recovery, invitations, MFA, SSO, encrypted application secrets, repository processing, and container execution controls are not implemented.
+LaunchRail has a runnable Phase 4 project-management boundary, but it is not production-ready and must not be exposed publicly or used to run untrusted workloads. It validates process and project configuration, rejects documented development credentials in production, binds development services to loopback, uses scrypt password hashes, stores only hashes of opaque sessions, enforces organization roles, rejects cross-origin mutations, throttles sign-in, and audits identity/project changes. Environment-variable values are encrypted with AES-256-GCM and never returned by read APIs. Password recovery, invitations, MFA, SSO, repository processing, deployment-time secret injection, and container execution controls are not implemented.
 
 The first implementation will target a trusted operator on a local Docker host. Docker daemon access is effectively host-level privilege; container restrictions reduce workload risk but do not turn the initial design into a hardened hostile multi-tenant platform.
 
@@ -48,16 +48,21 @@ There are no released or supported versions yet. This table will be updated when
 - [x] Validated environment configuration with no committed default secrets.
 - [x] Secure session cookies, origin-based request protection, sign-in rate limiting, and security headers.
 - [x] Organization-scoped authorization and cross-organization integration tests.
-- Repository URL allowlisting/normalization and command-injection regression tests.
-- Encrypted environment variables with versioned key metadata.
+- [x] Canonical GitHub HTTPS URL normalization plus branch/path command-injection regression tests.
+- [x] Encrypted environment variables with authenticated context and versioned key metadata.
 - GitHub webhook HMAC verification using the raw request body and constant-time comparison.
 - Restricted build/runtime policies, timeouts, cancellation, and cleanup.
-- Central secret redaction applied before logs, events, metrics, and traces leave a process.
+- [x] Structured logger redaction for request values, passwords, tokens, cookies, authorization headers, and keyring fields.
+- Full canary redaction before future logs, events, metrics, traces, job payloads, images, and runtime output leave their boundary.
 - Dependency and container-image scanning in documented quality gates.
 
 ## Secrets and test data
 
 Never commit production credentials, `.env` files, GitHub tokens, webhook secrets, encryption keys, private repository URLs, or screenshots containing personal data. Examples and fixtures must use unmistakably fake values. If a secret is committed, revoke it first, then remove it from the current tree; history rewriting requires explicit maintainer coordination.
+
+Project secret encryption has no fallback key. Generate a 32-byte base64url value locally, place it only in the untracked `.env` file as `LAUNCHRAIL_SECRET_KEYRING=1:<key>`, and set `LAUNCHRAIL_ACTIVE_SECRET_KEY_VERSION=1`. The API refuses to start if the active version is absent from the one-to-eight-entry keyring.
+
+To rotate, append a new `version:key` entry, retain every older key needed to decrypt existing rows, and select the new version as active. New writes use the active version while old rows remain readable by their recorded version. Automated re-encryption is not implemented, so removing a historical key before affected rows are replaced makes those values undecryptable. See [project management](docs/project-management.md) for the exact procedure.
 
 ## Further detail
 

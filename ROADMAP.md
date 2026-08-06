@@ -12,6 +12,7 @@ The roadmap reports verified repository state, not aspirations as completed feat
 - **Phase 1 — Repository foundation:** runnable pnpm workspace, web/API/worker health endpoints, shared configuration, PostgreSQL, Redis, Docker Compose, tests, builds, CI, and open-source license.
 - **Phase 2 — Domain model and persistence:** organization-owned records, generated migrations, immutable deployment snapshots, centrally validated state transitions, transactional events, idempotency, and atomic active-release promotion.
 - **Phase 3 — Authentication and authorization:** bootstrapped owners, password verification, secure opaque sessions, organization roles, hardened requests, audited membership changes, and sign-in UI.
+- **Phase 4 — Project management:** validated organization-scoped project configuration, encrypted environment variables, optimistic archival, audited APIs, and a permission-aware project UI.
 
 ### In progress
 
@@ -19,11 +20,11 @@ The roadmap reports verified repository state, not aspirations as completed feat
 
 ### Planned next
 
-- **Phase 4 — Project management:** safe organization-scoped project configuration, encrypted environment variables, and project UI.
+- **Phase 5 — Queue and worker foundation:** typed deployment jobs, idempotency, retries, dead letters, heartbeats, reconciliation entry points, and graceful shutdown.
 
 ### Planned later
 
-- Phases 5–16 below.
+- Phases 6–16 below.
 
 ### Not currently planned
 
@@ -112,15 +113,22 @@ Exit evidence: exhaustive domain policy tests and real-PostgreSQL API integratio
 
 ### Phase 4 — Project management
 
-**Status:** Planned next
+**Status:** Available
 
-Add project CRUD, safe GitHub repository configuration, Dockerfile/health/runtime settings, encrypted environment variables, and project UI.
+Delivered:
 
-Exit gate: a user can configure a valid project without exposing secrets or accepting unsafe repository input.
+- Organization-scoped project creation, listing, detail, optimistic update, and soft archival with audited writes and cross-organization concealment.
+- Canonical public `github.com` HTTPS repository input and strict branch, relative Dockerfile path, origin-only health path, port, and runtime-resource bounds.
+- AES-256-GCM environment-variable encryption with a fresh nonce and authentication tag, versioned keyring, and authenticated context bound to organization, project, and variable name.
+- Write-only environment-variable values; owner/admin users can manage secrets and read names/timestamps, developers can create/update projects, and viewers can read project configuration.
+- Soft archival that hides projects, purges their secrets, preserves terminal deployment history, and rejects projects with an active release or non-terminal deployment.
+- Responsive project workspace with organization selection, loading/empty/error states, optimistic-conflict feedback, confirmation for archival, and role-aware controls.
+
+Exit evidence: domain/cipher tests exercise malicious inputs, authenticated-encryption tampering and key rotation; Fastify tests cover route schemas, secret response boundaries, and role behavior; clean PostgreSQL tests cover organization scope, concurrency, audit records, archival, secret purging, and history preservation; production builds and browser verification exercise the project workflow.
 
 ### Phase 5 — Queue and worker foundation
 
-**Status:** Planned
+**Status:** Planned next
 
 Add typed BullMQ contracts, idempotency, retry/timeout policies, dead-letter handling, heartbeat, reconciliation entry points, and graceful shutdown.
 

@@ -33,12 +33,22 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 - Strict mutation-origin enforcement, HttpOnly/SameSite cookies, production Secure cookies, security headers, bounded bodies, and sign-in throttling.
 - Responsive Next.js sign-in and active-session experience.
 - Real-PostgreSQL tests for every role, every protected cross-organization path, membership conflicts, token storage, and audit outcomes.
+- Organization-scoped project create, list, detail, optimistic update, and soft-archive APIs with audited writes and cross-organization concealment.
+- Canonical GitHub HTTPS repository normalization with safe branch, Dockerfile, health-check, and bounded runtime configuration.
+- AES-256-GCM environment-variable encryption with fresh nonces, authentication tags, versioned keys, and organization/project/name-bound authenticated context.
+- Write-only secret APIs that expose only environment-variable names and timestamps to owner/admin users.
+- Project archival that purges encrypted variables, preserves terminal deployment history, and rejects active or in-flight projects.
+- Responsive project workspace with organization selection, accessible state handling, role-aware controls, optimistic-conflict feedback, and archive confirmation.
+- Structured logger redaction for secret values, passwords, authorization/cookie data, and secret-keyring fields.
 
 ### Current limitations
 
 - Authentication is local-password only and does not yet include password recovery, invitations, MFA, SSO, or session administration.
-- The runnable product does not yet contain project management UI, queue processing, builds, deployments, log streaming, preview URLs, or rollback controls.
+- Project configuration does not yet verify GitHub existence/access, resolve revisions, authenticate private repositories, clone source, or prove Dockerfile containment after symlink resolution.
+- Project configuration and encrypted variables are not yet injected into deployment jobs or application runtimes, and key re-encryption is manual/not yet automated.
+- The runnable product does not yet contain queue processing, builds, deployments, log streaming, preview URLs, or rollback controls.
 - Application health endpoints currently report process liveness rather than dependency readiness.
+- The Phase 4 migration intentionally rejects databases containing legacy environment-variable rows because those rows have no AES-GCM authentication tag; back up and re-enter those values before migration.
 - No release has been tagged.
 
 [Unreleased]: https://github.com/Zamuel66666/LaunchRail/commits/main

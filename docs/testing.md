@@ -4,7 +4,7 @@
 
 LaunchRail tests observable outcomes and safety invariants across domain logic, persistence, queues, infrastructure adapters, and browser workflows. A green unit suite alone cannot prove that a deployment survives real process and service failures, so each layer has a distinct job.
 
-Phases 1 through 3 provide Vitest tests for health/configuration contracts, deployment transitions, role policy, password hashing, application ports, Fastify injection, a real worker socket, and web routes. A disposable PostgreSQL suite proves clean migrations, ownership constraints, transactional rollback, idempotency, immutable snapshots, failed-candidate safety, serialized promotion, session behavior, and organization authorization.
+Phases 1 through 4 provide Vitest tests for health/configuration contracts, deployment transitions, project validation and encryption, role policy, password hashing, application ports, Fastify injection, a real worker socket, and web routes. A disposable PostgreSQL suite proves clean migrations, ownership constraints, transactional rollback, idempotency, immutable snapshots, failed-candidate safety, serialized promotion, session/organization authorization, and project archival/secret-storage behavior.
 
 ## Test layers
 
@@ -51,11 +51,21 @@ Phases 1 through 3 provide Vitest tests for health/configuration contracts, depl
 
 - Password verification, opaque token hashing, absolute/idle expiry, revocation, and disabled users.
 - Generic credential failures, strict mutation origin, secure cookie attributes, security headers, and sign-in throttling.
-- Owner/admin/developer/viewer permissions for every protected organization route and membership mutation.
-- Cross-organization identifiers concealed on every organization detail, member, role-change, and audit-history path.
+- Owner/admin/developer/viewer permissions for every protected organization, membership, project, and environment-variable route.
+- Cross-organization identifiers concealed on every organization detail, member, role-change, audit-history, project, and secret path.
 
 - Valid/invalid signatures over exact raw payload bytes.
 - Duplicate delivery ID, unsupported event, branch mismatch, oversized body, and replay.
+
+### Project configuration and secrets
+
+- Canonical GitHub HTTPS normalization plus malformed hosts, credentials, encodings, Git reference, traversal, Dockerfile, and health-path input.
+- Exact runtime fields and integer bounds for CPU, memory, process count, health port, and read-only-root setting.
+- Environment-variable name syntax, UTF-8 byte limits, null-byte rejection, and response bodies that never echo values or envelope fields.
+- AES-256-GCM randomized envelopes, authentication-tag/ciphertext tampering, malformed encoding, missing key versions, historical-key reads, and wrong organization/project/name context.
+- Optimistic version conflicts, active-name conflicts, write/audit atomicity, cross-organization scoping, and canary absence from database plaintext/audit/API output.
+- Archive rejection for active/in-flight projects, encrypted-variable purging, active-read hiding, and terminal deployment-history preservation.
+- Browser loading, signed-out, no-membership, empty, read-only, create/edit/conflict, secret, archive-confirmation, unavailable, keyboard-focus, and responsive states.
 
 ### Logs and secrets
 
@@ -80,7 +90,7 @@ The `examples/` directory will contain small versioned fixtures for healthy Node
 
 Each commit runs the smallest complete set that covers its behavior. Pull requests run the repository's full practical CI baseline. Nightly or explicitly invoked suites may hold resource-heavy Docker, resilience, security scanning, and benchmarks. Skipped tests must report the exact environmental blocker and must not be described as passed.
 
-The current baseline is `pnpm test` for package/web unit tests, `pnpm test:integration` for API and worker HTTP behavior, `pnpm test:database` against disposable PostgreSQL, and `pnpm smoke:health` after a production build. The service CI job applies migrations from an empty database before running persistence and authenticated API tests. When a local Docker daemon is unavailable, that database suite must be reported as unverified locally and proven by the GitHub Actions service job.
+The current baseline is `pnpm test` for package/web unit tests, `pnpm test:integration` for API and worker HTTP behavior, `pnpm test:database` against disposable PostgreSQL, and `pnpm smoke:health` after a production build. The service CI job applies migrations from an empty database before running persistence and authenticated identity/project API tests. Phase 4 completion additionally requires a production web build and browser verification of the `/projects` workflow. When a local Docker daemon is unavailable, the database suite must be reported as unverified locally and proven by the GitHub Actions service job.
 
 ## Defect workflow
 

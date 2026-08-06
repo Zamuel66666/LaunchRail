@@ -2,7 +2,7 @@
 
 **A self-hosted platform that turns a GitHub repository into a health-checked application deployment with live logs, preview URLs, release history, and safe rollback.**
 
-> Phase 3 is complete: LaunchRail now has bootstrapped owner accounts, opaque server-side sessions, role-based organization authorization, hardened browser requests, audit history, and a working sign-in surface.
+> Phase 4 is complete: signed-in teams can safely configure organization projects, edit bounded runtime settings, and manage encrypted environment variables from a permission-aware project workspace.
 
 ## What LaunchRail does
 
@@ -63,6 +63,11 @@ LaunchRail will use a modular monolith for the web/API boundary and a separate w
 - Cross-organization concealment, strict origin checks, sign-in throttling, secure cookie policy, and security headers.
 - Organization member management, audit-history APIs, and a responsive sign-in/session surface.
 - Real-PostgreSQL authorization coverage for every role and protected cross-organization path.
+- Organization-scoped project create, read, update, and soft-archive APIs with optimistic versions and audited writes.
+- Canonical `https://github.com/owner/repository` input plus safe branch, Dockerfile, health-check, and bounded runtime configuration.
+- AES-256-GCM environment-variable storage with fresh nonces, authentication tags, a versioned keyring, and organization/project/name-bound authenticated context.
+- Write-only secret values: owner/admin users receive names and timestamps, while plaintext is never returned by project APIs.
+- Responsive `/projects` workspace with role-aware create, edit, archive, and environment-variable controls.
 
 ### In progress
 
@@ -70,9 +75,9 @@ LaunchRail will use a modular monolith for the web/API boundary and a separate w
 
 ### Planned next
 
-- Organization-scoped project CRUD.
-- Safe GitHub repository, Dockerfile, health-check, and runtime configuration.
-- Encrypted environment-variable management and project UI.
+- Typed BullMQ deployment contracts and stable idempotency keys.
+- Retry, timeout, dead-letter, heartbeat, reconciliation, and graceful-shutdown policy.
+- Restart-safe worker behavior with PostgreSQL remaining authoritative.
 
 ### Not currently planned
 
@@ -87,6 +92,8 @@ Prerequisites: Node.js 22.22 or newer, Corepack/pnpm 11.9, Docker, and Docker Co
 corepack enable
 pnpm install --frozen-lockfile
 cp .env.example .env
+# Generate a local project-secret key directly into the untracked .env file.
+node -e "process.stdout.write('LAUNCHRAIL_SECRET_KEYRING=1:'+require('node:crypto').randomBytes(32).toString('base64url')+'\nLAUNCHRAIL_ACTIVE_SECRET_KEY_VERSION=1\n')" >> .env
 pnpm services:up
 pnpm db:migrate
 # Set the LAUNCHRAIL_BOOTSTRAP_* values in .env, then run:
@@ -94,7 +101,7 @@ pnpm auth:bootstrap
 pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Foundation health endpoints are available at:
+Never commit `.env` or the generated key. Open [http://localhost:3000/projects](http://localhost:3000/projects) for project management or [http://localhost:3000](http://localhost:3000) for the recruiter-readable overview. Health endpoints are available at:
 
 - Web: `http://localhost:3000/api/health`
 - API: `http://localhost:4000/health`
@@ -119,11 +126,12 @@ See the [development guide](docs/development.md) for verification, configuration
 - [Testing strategy](docs/testing.md), [observability design](docs/observability.md), and [benchmark methodology](docs/benchmarks.md)
 - [Persistence model and transaction rules](docs/persistence.md)
 - [Authentication and authorization](docs/authentication.md)
+- [Project management and secret rotation](docs/project-management.md)
 - [Architecture decisions](docs/adr/)
 
 ## Current limitations
 
-LaunchRail is not production-ready. Authentication currently uses local password credentials and does not provide password reset, invitations, MFA, SSO, or session administration. The API exposes identity and organization access only; there is no project UI, repository connection, queue consumer, build pipeline, application deployment, preview routing, or rollback control. Health endpoints still report process liveness only.
+LaunchRail is not production-ready. Authentication remains local-password only without password reset, invitations, MFA, SSO, or session administration. Project configuration does not yet verify that a GitHub repository, branch, or Dockerfile exists; private-repository authentication, revision resolution, cloning, and checkout/symlink containment arrive in Phase 6. Saved configuration and secrets are not yet injected into jobs or workloads, and automated key re-encryption is not implemented. There is no queue consumer, build pipeline, application runtime, preview routing, log streaming, or rollback control. Health endpoints still report process liveness only.
 
 ## License
 

@@ -2,7 +2,7 @@
 
 ## Current repository state
 
-Phases 1 through 3 provide a runnable TypeScript workspace, web/API/worker processes, shared foundations, a framework-independent deployment domain, PostgreSQL transition persistence, and authenticated organization identity routes with a working sign-in UI. Project and deployment API orchestration begins in Phase 4.
+Phases 1 through 4 provide a runnable TypeScript workspace, web/API/worker processes, shared foundations, deployment-domain/PostgreSQL transition persistence, authenticated organization routes, and a project workspace backed by validated project APIs and encrypted environment-variable storage. Phase 5 adds the queue and worker foundation.
 
 ## Prerequisites
 
@@ -21,6 +21,8 @@ From a fresh clone:
 corepack enable
 pnpm install --frozen-lockfile
 cp .env.example .env
+# Generate a local 32-byte project-secret key without printing it.
+node -e "process.stdout.write('LAUNCHRAIL_SECRET_KEYRING=1:'+require('node:crypto').randomBytes(32).toString('base64url')+'\nLAUNCHRAIL_ACTIVE_SECRET_KEY_VERSION=1\n')" >> .env
 pnpm services:up
 pnpm db:migrate
 # Configure LAUNCHRAIL_BOOTSTRAP_* in .env for a new database.
@@ -33,6 +35,7 @@ pnpm dev
 Open:
 
 - Web application: `http://localhost:3000`
+- Project workspace: `http://localhost:3000/projects`
 - Web health: `http://localhost:3000/api/health`
 - API health: `http://localhost:4000/health`
 - Worker health: `http://localhost:4001/health`
@@ -83,24 +86,26 @@ The volume-deleting command is not wrapped in the normal shutdown script so data
 | `WEB_ORIGIN`                               | Allowed browser request origin  | `http://localhost:3000` |
 | `SESSION_*`                                | Cookie and session lifetimes    | See `.env.example`      |
 | `SIGN_IN_RATE_LIMIT_MAX`                   | Sign-in attempts/client/minute  | `5`                     |
+| `LAUNCHRAIL_SECRET_KEYRING`                | Versioned AES-256 project keys  | No default              |
+| `LAUNCHRAIL_ACTIVE_SECRET_KEY_VERSION`     | Key version for new writes      | No default              |
 | `LAUNCHRAIL_BOOTSTRAP_*`                   | One-time initial owner fields   | No active default       |
 | `POSTGRES_*`, `REDIS_PORT`                 | Compose service configuration   | See `.env.example`      |
 
-Configuration parsing reports every invalid field without echoing supplied values. Production mode rejects the documented development database password and an insecure browser origin. GitHub, encryption, and webhook secrets will have no insecure production defaults when those features are introduced.
+Configuration parsing reports every invalid field without echoing supplied values. Production mode rejects the documented development database password and an insecure browser origin. The API has no encryption-key default: its comma-separated keyring accepts one to eight unique positive versions with exact 32-byte base64url keys, and the selected active version must exist. Never commit `.env`; retain historical keys during manual rotation until every affected value has been replaced. GitHub and webhook credentials will likewise have no insecure production defaults when introduced.
 
 ## Workspace layout
 
 ```text
-apps/api                  Fastify HTTP boundary and health endpoint
-apps/web                  Next.js interface, sign-in surface, and web health endpoint
+apps/api                  Fastify identity/project boundary and health endpoint
+apps/web                  Next.js sign-in/project interface and web health endpoint
 apps/worker               Worker process and health server
 packages/config           Runtime-validated process configuration
 packages/contracts        Shared transport and health contracts
 packages/observability    Redacted structured logger conventions
 scripts                   Repeatable application smoke checks
-packages/domain           Deployment states and transition invariants
-packages/application      Deployment use cases and persistence ports
-packages/database         Drizzle schema, migrations, identity and deployment adapters
+packages/domain           Deployment transitions and safe project value rules
+packages/application      Deployment/project use cases and persistence ports
+packages/database         Migrations plus identity, project, secret, and deployment adapters
 ```
 
 The dependency direction is `database -> application -> domain`; package builds run in topological order.
@@ -122,11 +127,11 @@ pnpm smoke:health
 docker compose --env-file .env.example config --quiet
 ```
 
-`pnpm smoke:health` starts built applications on temporary loopback ports, validates each service/status payload, prints logs on failure, and shuts the processes down. It does not require PostgreSQL or Redis because Phase 1 health is intentionally liveness-only.
+`pnpm smoke:health` starts built applications on temporary loopback ports, synthesizes an ephemeral keyring only when the environment lacks one, validates each service/status payload, prints logs on failure, and shuts the processes down. It does not require PostgreSQL or Redis because health is intentionally liveness-only.
 
 `pnpm test:database` requires `DATABASE_URL` and a PostgreSQL database that may be truncated by the suite. GitHub Actions starts a disposable database, applies migrations from empty state, runs the database integration suite, verifies Redis, and removes the service volumes.
 
-See [persistence.md](persistence.md) for the schema, migration, transaction, and clean-database workflow. See [authentication.md](authentication.md) for bootstrap, session, role, route, and security behavior.
+See [persistence.md](persistence.md) for the schema, migration, transaction, and clean-database workflow; [authentication.md](authentication.md) for bootstrap/session behavior; and [project-management.md](project-management.md) for project routes, bounds, encryption, archival, and key rotation.
 
 ## Session workflow
 
@@ -143,6 +148,8 @@ See [persistence.md](persistence.md) for the schema, migration, transaction, and
 ## Database changes
 
 Every schema change must include a generated, reviewable migration and tests from a clean database. Migrations should be forward-safe for the supported unreleased/release path; if rollback is supported, test it. Never edit an already-published migration to disguise a later change.
+
+The Phase 4 migration intentionally refuses databases that already contain legacy environment-variable rows because those rows lack an authentication tag. Follow the backup/re-entry procedure in [project-management.md](project-management.md#migration-note) rather than bypassing the guard.
 
 ## API changes
 
@@ -161,4 +168,5 @@ Exercise loading, empty, success, permission-denied, and failure states. Run rel
 - `Cannot connect to the Docker daemon`: start the host's Docker service and confirm `docker info` works for the current user.
 - Port already in use: change the corresponding port in `.env`; the smoke test selects temporary ports automatically.
 - Invalid configuration: read the complete field list in the startup error and compare it with `.env.example`.
+- Missing active secret key: generate the local key once, then confirm the active version exists in `LAUNCHRAIL_SECRET_KEYRING`; do not replace old keys during rotation until their rows have been re-encrypted.
 - Stale generated output: remove ignored `dist`/`.next` directories and rerun `pnpm build`; do not delete source or service volumes.

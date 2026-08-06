@@ -55,7 +55,7 @@ The web application may initially be served separately during development. The A
 
 ### Web application
 
-- Presents authentication, projects, deployments, logs, health, controls, settings, and audit history.
+- Presents authentication and the implemented organization project workspace; deployment, log, health, and release controls remain planned.
 - Uses generated API types and treats server state as authoritative.
 - Consumes server-sent events for ordered, resumable deployment events and log chunks.
 - Confirms destructive operations and provides accessible loading, empty, success, and failure states.
@@ -64,6 +64,7 @@ The web application may initially be served separately during development. The A
 
 - Authenticates users and authorizes every organization-scoped operation.
 - Validates repository, project, deployment, health-check, and secret inputs.
+- Exposes project create/read/update/archive and write-only environment-variable operations without returning encrypted or plaintext values.
 - Persists deployment intent before publishing a job.
 - Exposes resource APIs, control endpoints, health endpoints, and event streams.
 - Verifies and deduplicates GitHub webhook deliveries.
@@ -80,7 +81,7 @@ The web application may initially be served separately during development. The A
 ### PostgreSQL
 
 - Stores identity, configuration metadata, deployment state, event history, encrypted secrets, webhook deliveries, and audit events.
-- Provides the transaction boundary for deployment transitions and active-release promotion.
+- Provides transaction boundaries for project writes/archival, secret replacement, deployment transitions, and active-release promotion.
 - Is the source of truth; Redis queue state is not the authoritative deployment state.
 
 ### Redis and BullMQ
@@ -123,7 +124,7 @@ The API and worker share domain and application packages, not framework globals.
 | Audit         | actor/action/resource records                      | application logs                |
 | Observability | correlation and telemetry contracts                | domain state authority          |
 
-Dependencies point inward: infrastructure adapters depend on application ports, and application services depend on the domain model.
+Dependencies point inward: infrastructure adapters depend on application ports, and application services depend on the domain model. The Phase 4 project adapter applies organization filters in PostgreSQL rather than relying on response filtering.
 
 ## Infrastructure ports
 
@@ -195,9 +196,24 @@ All organization-owned records carry an `organization_id`; authorization queries
 | Webhook delivery     | Unique provider delivery ID, verification result, processing result, and received time.   |
 | Audit event          | Immutable actor, action, target, organization, outcome, and correlation metadata.         |
 
-Database constraints will enforce unique memberships, unique webhook deliveries, one active release per project, valid identifiers, and referential ownership. The deployment transition service will lock the affected rows and append an event in the same transaction as the state update.
+Database constraints enforce unique memberships, unique active project names, typed project bounds, unique webhook deliveries, one active release per project, valid identifiers, authenticated-encryption envelope shape, and referential ownership. Project configuration and deployment transition services lock affected rows and append audit/event records within their state-changing transaction.
 
 ## Key request flows
+
+### Manage project configuration
+
+1. The API authenticates the session and checks an organization role permission.
+2. Transport schemas reject unknown/malformed shapes; domain rules normalize the canonical GitHub URL and validate branch, relative Dockerfile, origin-only health path, port, and runtime bounds.
+3. The PostgreSQL adapter scopes by organization and writes the project plus audit event in one transaction.
+4. Update/archive operations lock the row and compare `expectedVersion`; stale clients receive a conflict.
+5. Archive rejects an active release or non-terminal deployment, purges encrypted variables, retains terminal deployment history, increments the version, and hides the project from active reads.
+
+### Store environment variable
+
+1. The API requires owner/admin secret permission and validates the normalized uppercase name and UTF-8 value size.
+2. AES-256-GCM encrypts the value with a fresh nonce and an authentication tag. Additional authenticated data binds the purpose/envelope version to organization, project, and variable name.
+3. The adapter replaces ciphertext and envelope metadata transactionally and records a value-free audit event.
+4. API reads expose only variable IDs, names, and timestamps to owner/admin users. Plaintext, ciphertext, nonce, tag, algorithm, and key version never cross the response boundary.
 
 ### Start deployment
 
@@ -242,7 +258,7 @@ packages/
 docs/           lifecycle, operations, decisions, and evidence
 ```
 
-Phases 1 through 3 implement the listed application entry points plus the `contracts`, `config`, `observability`, `domain`, `application`, and `database` packages. The database adapters persist deployment transitions, healthy promotions, password credentials, opaque sessions, memberships, and identity audit records. The Fastify boundary now authenticates browser sessions and authorizes organization identity routes; later phases connect project and deployment use cases to the API and worker and add healthy and intentionally failing `examples/` applications alongside the adapters they test.
+Phases 1 through 4 implement the listed application entry points plus the `contracts`, `config`, `observability`, `domain`, `application`, and `database` packages. Database adapters persist deployment transitions/promotions, identity/session data, organization-scoped projects, AES-256-GCM environment-variable envelopes, and audit records. The Fastify boundary authenticates browser sessions and authorizes identity and project routes; the Next.js workspace exposes role-aware project and secret controls. Later phases connect deployment use cases to the queue/worker and add healthy and intentionally failing `examples/` applications alongside the adapters they test.
 
 ## Architecture decisions
 
@@ -256,4 +272,4 @@ Accepted decisions are recorded in [docs/adr](docs/adr):
 
 ## Known limitations
 
-Phases 1 through 3 implement process boundaries, shared foundations, the domain transition model, PostgreSQL schema/migrations, transactional transition persistence, local-password authentication, organization authorization, and identity API/UI paths. Project/deployment API wiring, password recovery and second factors, queue, build, runtime, routing, and full telemetry adapters remain later phases. Single-host Docker remains a large trust and failure boundary; nothing in this architecture makes LaunchRail production-ready or safe for hostile public multi-tenancy.
+Phases 1 through 4 implement process boundaries, shared foundations, deployment-domain/persistence rules, local-password authentication, organization authorization, and project configuration/secret API and UI paths. The canonical GitHub URL is syntactically validated but not contacted: repository existence/private access, revision resolution, cloning, and symlink containment remain Phase 6. Project settings and secrets are not yet injected into queue jobs or runtimes; automated key re-encryption, password recovery/second factors, queue, build, runtime, routing, and full telemetry adapters remain later phases. Single-host Docker remains a large trust and failure boundary; nothing in this architecture makes LaunchRail production-ready or safe for hostile public multi-tenancy.

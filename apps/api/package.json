@@ -20,7 +20,7 @@
     "@launchrail/database": "workspace:*",
     "@launchrail/domain": "workspace:*",
     "@launchrail/observability": "workspace:*",
-    "fastify": "5.10.0"
+    "fastify": "5.11.3"
   },
   "devDependencies": {
     "@types/node": "catalog:",

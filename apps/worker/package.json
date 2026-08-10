@@ -15,7 +15,8 @@
     "@launchrail/contracts": "workspace:*",
     "@launchrail/database": "workspace:*",
     "@launchrail/observability": "workspace:*",
-    "@launchrail/queue": "workspace:*"
+    "@launchrail/queue": "workspace:*",
+    "@launchrail/source": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

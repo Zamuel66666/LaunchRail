@@ -78,3 +78,23 @@ export {
   type UpdateProjectCommand,
   type UpdateProjectRecordCommand,
 } from "./projects.js";
+export {
+  PrepareRepository,
+  SourcePreparationError,
+  createDeploymentSourcePersistence,
+  sourcePreparationErrorCodes,
+  type CheckoutRepositoryCommand,
+  type DeploymentSourcePersistenceV1,
+  type DeploymentSourceSnapshotV1,
+  type PrepareRepositoryCommand,
+  type PrepareRepositoryOptions,
+  type PreparedDockerfile,
+  type PreparedRepositoryCheckout,
+  type PublicGitHubRepository,
+  type RepositoryCheckout,
+  type RepositoryProvider,
+  type RepositoryTreeEntry,
+  type ResolveRepositoryRevisionCommand,
+  type ResolvedRepositoryRevision,
+  type SourcePreparationErrorCode,
+} from "./sources.js";

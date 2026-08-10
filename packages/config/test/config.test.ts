@@ -52,6 +52,17 @@ describe("configuration", () => {
       WORKER_RECONCILIATION_BATCH_SIZE: 100,
       WORKER_RECONCILIATION_INTERVAL_MS: 15_000,
       WORKER_SHUTDOWN_GRACE_MS: 30_000,
+      WORKER_SOURCE_CLONE_TIMEOUT_MS: 120_000,
+      WORKER_SOURCE_GIT_DIRECTORY_BYTES: 402_653_184,
+      WORKER_SOURCE_GIT_OUTPUT_BYTES: 65_536,
+      WORKER_SOURCE_MAX_BYTES: 268_435_456,
+      WORKER_SOURCE_MAX_DEPTH: 64,
+      WORKER_SOURCE_MAX_FILE_BYTES: 16_777_216,
+      WORKER_SOURCE_MAX_FILES: 20_000,
+      WORKER_SOURCE_MAX_PATH_BYTES: 1_024,
+      WORKER_SOURCE_RESOLVE_RESPONSE_BYTES: 4_194_304,
+      WORKER_SOURCE_RESOLVE_TIMEOUT_MS: 10_000,
+      WORKER_SOURCE_ROOT: expect.stringMatching(/\/\.launchrail\/sources$/),
     });
     expect(loadWebConfig({})).toEqual({
       NEXT_PUBLIC_API_BASE_URL: "http://localhost:4000",
@@ -120,6 +131,11 @@ describe("configuration", () => {
         WORKER_RECONCILIATION_BATCH_SIZE: "25",
         WORKER_RECONCILIATION_INTERVAL_MS: "2000",
         WORKER_SHUTDOWN_GRACE_MS: "7500",
+        WORKER_SOURCE_CLONE_TIMEOUT_MS: "9000",
+        WORKER_SOURCE_MAX_BYTES: "1048576",
+        WORKER_SOURCE_MAX_FILE_BYTES: "524288",
+        WORKER_SOURCE_RESOLVE_TIMEOUT_MS: "3000",
+        WORKER_SOURCE_ROOT: "/tmp/launchrail-test-sources",
       }),
     ).toMatchObject({
       WORKER_BACKOFF_BASE_MS: 250,
@@ -135,6 +151,11 @@ describe("configuration", () => {
       WORKER_RECONCILIATION_BATCH_SIZE: 25,
       WORKER_RECONCILIATION_INTERVAL_MS: 2_000,
       WORKER_SHUTDOWN_GRACE_MS: 7_500,
+      WORKER_SOURCE_CLONE_TIMEOUT_MS: 9_000,
+      WORKER_SOURCE_MAX_BYTES: 1_048_576,
+      WORKER_SOURCE_MAX_FILE_BYTES: 524_288,
+      WORKER_SOURCE_RESOLVE_TIMEOUT_MS: 3_000,
+      WORKER_SOURCE_ROOT: "/tmp/launchrail-test-sources",
     });
   });
 
@@ -146,6 +167,14 @@ describe("configuration", () => {
     ["unsafe queue name", { WORKER_QUEUE_NAME: "launchrail:deployments" }],
     ["excessive concurrency", { WORKER_CONCURRENCY: "33" }],
     ["excessive attempts", { WORKER_MAX_ATTEMPTS: "21" }],
+    ["relative source root", { WORKER_SOURCE_ROOT: "./sources" }],
+    ["filesystem source root", { WORKER_SOURCE_ROOT: "/" }],
+    ["resolve timeout order", { WORKER_SOURCE_RESOLVE_TIMEOUT_MS: "300001" }],
+    ["clone timeout order", { WORKER_SOURCE_CLONE_TIMEOUT_MS: "300001" }],
+    [
+      "source file bound order",
+      { WORKER_SOURCE_MAX_BYTES: "1024", WORKER_SOURCE_MAX_FILE_BYTES: "2048" },
+    ],
   ])("rejects invalid worker setting relationships: %s", (_description, override) => {
     expect(() => loadWorkerConfig({ ...serviceEnvironment, ...override })).toThrow(
       ConfigurationError,

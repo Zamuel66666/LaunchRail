@@ -1,3 +1,5 @@
+import { isAbsolute, parse, resolve } from "node:path";
+
 import { z } from "zod";
 
 type EnvironmentSource = Readonly<Record<string, string | undefined>>;
@@ -8,6 +10,14 @@ const portSchema = z.coerce.number().int().min(1).max(65_535);
 const positiveIntegerSchema = z.coerce.number().int().positive();
 const urlSchema = z.string().url();
 const workerIdentifierSchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/);
+const defaultWorkerSourceRoot = resolve(process.cwd(), ".launchrail/sources");
+const workerSourceRootSchema = z.string().refine((value) => {
+  if (!isAbsolute(value) || value.includes("\0")) {
+    return false;
+  }
+  const normalized = resolve(value);
+  return normalized === value && normalized !== parse(normalized).root;
+}, "must be a normalized absolute directory below the filesystem root");
 
 const secretKeyringEntryLimit = 8;
 const secretKeyByteLength = 32;
@@ -93,6 +103,17 @@ const workerSchema = sharedServiceSchema.extend({
   WORKER_RECONCILIATION_BATCH_SIZE: positiveIntegerSchema.max(1_000).default(100),
   WORKER_RECONCILIATION_INTERVAL_MS: positiveIntegerSchema.max(3_600_000).default(15_000),
   WORKER_SHUTDOWN_GRACE_MS: positiveIntegerSchema.max(3_600_000).default(30_000),
+  WORKER_SOURCE_CLONE_TIMEOUT_MS: positiveIntegerSchema.max(3_600_000).default(120_000),
+  WORKER_SOURCE_GIT_DIRECTORY_BYTES: positiveIntegerSchema.max(10_737_418_240).default(402_653_184),
+  WORKER_SOURCE_GIT_OUTPUT_BYTES: positiveIntegerSchema.max(1_048_576).default(65_536),
+  WORKER_SOURCE_MAX_BYTES: positiveIntegerSchema.max(10_737_418_240).default(268_435_456),
+  WORKER_SOURCE_MAX_DEPTH: positiveIntegerSchema.max(256).default(64),
+  WORKER_SOURCE_MAX_FILE_BYTES: positiveIntegerSchema.max(1_073_741_824).default(16_777_216),
+  WORKER_SOURCE_MAX_FILES: positiveIntegerSchema.max(1_000_000).default(20_000),
+  WORKER_SOURCE_MAX_PATH_BYTES: positiveIntegerSchema.max(16_384).default(1_024),
+  WORKER_SOURCE_RESOLVE_RESPONSE_BYTES: positiveIntegerSchema.max(16_777_216).default(4_194_304),
+  WORKER_SOURCE_RESOLVE_TIMEOUT_MS: positiveIntegerSchema.max(300_000).default(10_000),
+  WORKER_SOURCE_ROOT: workerSourceRootSchema.default(defaultWorkerSourceRoot),
 });
 
 const webSchema = z.object({
@@ -184,6 +205,15 @@ function validateWorkerRuntime(config: WorkerConfig): void {
   }
   if (config.WORKER_JOB_TIMEOUT_MS <= config.WORKER_HEARTBEAT_INTERVAL_MS) {
     issues.push("WORKER_JOB_TIMEOUT_MS: must exceed WORKER_HEARTBEAT_INTERVAL_MS");
+  }
+  if (config.WORKER_SOURCE_RESOLVE_TIMEOUT_MS > config.WORKER_JOB_TIMEOUT_MS) {
+    issues.push("WORKER_SOURCE_RESOLVE_TIMEOUT_MS: cannot exceed WORKER_JOB_TIMEOUT_MS");
+  }
+  if (config.WORKER_SOURCE_CLONE_TIMEOUT_MS > config.WORKER_JOB_TIMEOUT_MS) {
+    issues.push("WORKER_SOURCE_CLONE_TIMEOUT_MS: cannot exceed WORKER_JOB_TIMEOUT_MS");
+  }
+  if (config.WORKER_SOURCE_MAX_FILE_BYTES > config.WORKER_SOURCE_MAX_BYTES) {
+    issues.push("WORKER_SOURCE_MAX_FILE_BYTES: cannot exceed WORKER_SOURCE_MAX_BYTES");
   }
   if (issues.length > 0) {
     throw new ConfigurationError(issues);

@@ -4,7 +4,7 @@
 
 LaunchRail handles unusually powerful operations: it downloads code, builds Dockerfiles, starts containers, stores application secrets, and changes network routes. A malicious repository or stolen account could therefore affect more than one deployment. The design treats source code and workloads as untrusted even though the first supported operator and host are trusted.
 
-This initial model identifies security requirements. Phases 1 through 4 implement foundational structured-log redaction, loopback-bound services, organization-scoped foreign keys, immutable deployment snapshots, health-gated active-release constraints, password authentication, hashed opaque sessions, organization role enforcement, request hardening, validated project input, authenticated environment-variable encryption, and identity/project/deployment audit insertion. Password recovery/second factors, repository retrieval, deployment-time secret injection, workload isolation, and the remaining controls are not claimed as complete.
+This initial model identifies security requirements. Phases 1 through 5 implement foundational structured-log redaction, loopback-bound services, organization-scoped foreign keys, immutable deployment snapshots, health-gated active-release constraints, password authentication, hashed opaque sessions, organization role enforcement, request hardening, validated project input, authenticated environment-variable encryption, identity/project/deployment audit insertion, and identifier-only fenced queue claims. Password recovery/second factors, repository retrieval, deployment-time secret injection, workload isolation, and the remaining controls are not claimed as complete.
 
 ## Scope and assumptions
 
@@ -116,12 +116,14 @@ Crossing a boundary requires authenticated protocols, validated schemas, bounded
 | Container escape or Docker socket abuse | Host takeover                                                 | No Docker socket in workloads, non-root user, dropped capabilities, read-only filesystem where viable, seccomp/AppArmor, resource limits | Runtime policy inspection and escape-oriented tests    |
 | Secret leakage                          | Credentials in logs, UI, metrics, images, cache, traces       | Authenticated encryption, scoped metadata/read APIs, structured-log redaction, no secret job/build arguments by default                  | Control-plane canaries tested; future channels pending |
 | Forged/replayed webhook                 | Unauthorized or duplicate deployment                          | HMAC verification over raw bytes, timestamp/size controls, unique delivery ID, branch filters                                            | Invalid-signature and duplicate-delivery tests         |
-| Queue message tampering/duplication     | Invalid transitions or repeated side effects                  | Private Redis, typed schemas, stable idempotency keys, state re-read, bounded retries                                                    | Duplicate-job and malformed-contract tests             |
+| Queue message tampering/duplication     | Invalid transitions or repeated side effects                  | Private Redis, identifier-only strict schemas, stable idempotency keys, PostgreSQL state re-read, leases/fencing, bounded retries        | Unit and clean-service integration tests passed        |
 | Route takeover/collision                | Traffic sent to wrong organization or release                 | Deterministic collision-resistant hostnames, unique constraints, authorized route intent, reconciliation                                 | Collision tests and proxy integration tests            |
 | Log injection/resource exhaustion       | Misleading UI or unavailable telemetry                        | Structured encoding, display escaping, chunk/rate/retention limits, sequence IDs                                                         | Control-character, high-volume, and reconnect tests    |
 | Dependency or image compromise          | Malicious control-plane/runtime code                          | Lockfile, reviewable updates, provenance where available, dependency/image scanning                                                      | CI scan results and documented triage policy           |
 | Destructive control misuse              | Unauthorized stop/cancel/rollback                             | Role checks, confirmation UI, idempotent commands, audit events                                                                          | Authorization and audit integration tests              |
-| Worker crash at side-effect boundary    | Duplicate containers or incorrect active route                | Persist-before-act, labeled resources, leases, idempotent adapters, reconciliation                                                       | Failure-injection tests at each boundary               |
+| Worker crash at side-effect boundary    | Duplicate work or incorrect state                             | Persist-before-act, leases/fencing, idempotent transitions, reconciliation; later resources use labels/adapters                          | Claim/restart clean-service integration tests passed   |
+
+Phase 5's BullMQ message contains only `{ contractVersion, kind, workItemId }`; strict validation rejects authority, repository, configuration, correlation, and secret fields. PostgreSQL determines the deployment and organization, fences every lease mutation with a unique token, owns attempt/dead-letter state, and supplies the stable idempotency key for the demonstrated atomic `queued` to `cloning` transition and work-item completion. Redis provides at-least-once wake-ups, not authority or exactly-once execution. Clean-service CI verifies this boundary; Phase 14 still owns broad failure injection across source, build, runtime, proxy, and cleanup boundaries.
 
 ## Repository and build policy
 
@@ -160,7 +162,7 @@ Build isolation remains weaker than a hardened remote builder because BuildKit a
 7. Audit create, update, delete, and access operations without recording the value.
 8. Support key rotation by version and re-encryption without changing the logical secret.
 
-Phase 4 implements steps 1–3, the no-plaintext API part of step 6, value-free write/delete audit events in step 7, and versioned active/historical keys for step 8. Runtime decryption/injection, exact/encoded runtime-output redaction, secret-access auditing, and automated re-encryption remain future work. Operators must retain historical keys until every referenced row is replaced.
+Phase 4 implements steps 1–3, the no-plaintext API part of step 6, value-free write/delete audit events in step 7, and versioned active/historical keys for step 8. Phase 5 additionally enforces and verifies that producer-approved Redis job payloads contain no secret or repository/configuration data. Runtime decryption/injection, exact/encoded runtime-output redaction, secret-access auditing, and automated re-encryption remain future work. Operators must retain historical keys until every referenced row is replaced.
 
 ## Security verification gates
 
@@ -173,7 +175,7 @@ Phase 4 implements steps 1–3, the no-plaintext API part of step 6, value-free 
 
 ## Residual risks
 
-Even after planned controls, the single Docker host, third-party dependencies, execution of user-supplied builds, locally managed keyring, and absent automated key re-encryption remain material risks. Phase 4 validates repository-shaped input but does not inspect remote source, so only trusted intended-public repositories should be configured. Production-readiness claims require an updated model, external review, isolation testing, incident processes, backups, managed keys, and operational evidence beyond the current milestone.
+Even after planned controls, the single Docker host, third-party dependencies, future execution of user-supplied builds, locally managed keyring, and absent automated key re-encryption remain material risks. Phase 5 makes queue duplication/restart behavior explicit but does not provide a deployment-start route, queue-readiness endpoint, or broad external-resource recovery. Repository-shaped input is not contacted or inspected, so only trusted intended-public repositories should be configured. Production-readiness claims require an updated model, external review, isolation testing, incident processes, backups, managed keys, and operational evidence beyond the current milestone.
 
 ## Review triggers
 

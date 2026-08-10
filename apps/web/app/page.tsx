@@ -1,11 +1,11 @@
 import Link from "next/link";
 
 const milestoneItems = [
-  "Organization-scoped project creation, editing, and archival",
-  "Canonical GitHub HTTPS repository and checkout-safe path validation",
-  "Bounded health-check and runtime resource configuration",
-  "Encrypted, write-only environment-variable management",
-  "Permission-aware controls with explicit async and empty states",
+  "Identifier-only, runtime-validated deployment wake-up jobs",
+  "PostgreSQL-authoritative attempts, leases, fencing, and dead letters",
+  "At-least-once BullMQ delivery with bounded retry and timeout policy",
+  "Worker heartbeats, reconciliation, and graceful draining",
+  "Atomic queued-to-cloning claims and work-item completion under a fenced lease",
 ];
 
 export default function HomePage() {
@@ -20,7 +20,7 @@ export default function HomePage() {
         </p>
         <div className="status" role="status">
           <span className="status-dot" aria-hidden="true" />
-          Project management milestone available
+          Queue and worker foundation verified on clean services
         </div>
         <div className="hero-actions">
           <Link className="primary-link" href="/projects">
@@ -34,7 +34,7 @@ export default function HomePage() {
 
       <section className="panel" aria-labelledby="milestone-title">
         <p className="section-label">Current milestone</p>
-        <h2 id="milestone-title">Projects can be configured without leaking secrets</h2>
+        <h2 id="milestone-title">Background claim foundation is verified</h2>
         <ul>
           {milestoneItems.map((item) => (
             <li key={item}>{item}</li>
@@ -44,10 +44,10 @@ export default function HomePage() {
 
       <section className="next" aria-labelledby="next-title">
         <p className="section-label">Next milestone</p>
-        <h2 id="next-title">Queue reliable background work</h2>
+        <h2 id="next-title">Prepare repository source safely</h2>
         <p>
-          The next phase adds typed deployment jobs, retry and timeout policy, dead-letter handling,
-          worker heartbeats, and restart-safe reconciliation entry points.
+          The next phase resolves exact public GitHub revisions, performs bounded checkouts, records
+          source metadata, and proves Dockerfile paths remain inside the repository.
         </p>
       </section>
     </main>

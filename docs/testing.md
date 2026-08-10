@@ -4,22 +4,22 @@
 
 LaunchRail tests observable outcomes and safety invariants across domain logic, persistence, queues, infrastructure adapters, and browser workflows. A green unit suite alone cannot prove that a deployment survives real process and service failures, so each layer has a distinct job.
 
-Phases 1 through 4 provide Vitest tests for health/configuration contracts, deployment transitions, project validation and encryption, role policy, password hashing, application ports, Fastify injection, a real worker socket, and web routes. A disposable PostgreSQL suite proves clean migrations, ownership constraints, transactional rollback, idempotency, immutable snapshots, failed-candidate safety, serialized promotion, session/organization authorization, and project archival/secret-storage behavior.
+Phases 1 through 5 provide Vitest tests for health/configuration contracts, deployment transitions, project validation and encryption, role policy, password hashing, Fastify/web boundaries, strict job contracts, durable work items/heartbeats, and BullMQ worker behavior. Unit tests plus disposable PostgreSQL and Redis suites collectively exercise clean migrations, ownership constraints, transactional rollback, idempotency, immutable snapshots, failed-candidate safety, serialized promotion, authorization, project archival/secret storage, duplicate wake-up handling, leases/fencing, retries/timeouts, dead letters, reconciliation, heartbeat freshness, and graceful draining. [GitHub Actions run 31408251857](https://github.com/Zamuel66666/LaunchRail/actions/runs/31408251857) verifies the Phase 5 clean-service gate.
 
 ## Test layers
 
-| Layer                | Main evidence                                                                 | Intended tools                                 |
-| -------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------- |
-| Domain unit          | Valid/invalid transitions, value objects, policy decisions, redaction rules   | Vitest                                         |
-| Application unit     | Use-case orchestration through deterministic fake ports                       | Vitest                                         |
-| Database integration | Constraints, transactions, locks, migrations, organization isolation          | Vitest + disposable PostgreSQL                 |
-| Queue integration    | Typed contracts, retry/backoff, timeout, duplicate jobs, dead-letter behavior | Vitest + disposable Redis/BullMQ               |
-| Adapter contract     | Git, BuildKit, Docker, Traefik, health and streaming behavior                 | Vitest + controlled local services             |
-| API integration      | Schemas, auth/authz, rate limits, webhooks, idempotency, OpenAPI              | Fastify injection + real database where needed |
-| Browser end to end   | Sign-in, projects, deployment progress/controls, errors, accessibility        | Playwright                                     |
-| Resilience           | Process/service interruption and reconciliation                               | Failure-injection harness                      |
-| Security             | Injection, isolation, signature, redaction, runtime restrictions              | Layer-appropriate regression suites            |
-| Benchmarks           | Repeatable latency, throughput, recovery, cache, and resources                | Versioned scripts and documented environment   |
+| Layer                | Main evidence                                                                | Intended tools                                 |
+| -------------------- | ---------------------------------------------------------------------------- | ---------------------------------------------- |
+| Domain unit          | Valid/invalid transitions, value objects, policy decisions, redaction rules  | Vitest                                         |
+| Application unit     | Use-case orchestration through deterministic fake ports                      | Vitest                                         |
+| Database integration | Constraints, transactions, locks, migrations, organization isolation         | Vitest + disposable PostgreSQL                 |
+| Queue and worker     | Contracts, retry/timeout, duplicate jobs, leases, recovery, bounded shutdown | Vitest fakes + disposable PostgreSQL/Redis     |
+| Adapter contract     | Git, BuildKit, Docker, Traefik, health and streaming behavior                | Vitest + controlled local services             |
+| API integration      | Schemas, auth/authz, rate limits, webhooks, idempotency, OpenAPI             | Fastify injection + real database where needed |
+| Browser end to end   | Sign-in, projects, deployment progress/controls, errors, accessibility       | Playwright                                     |
+| Resilience           | Process/service interruption and reconciliation                              | Failure-injection harness                      |
+| Security             | Injection, isolation, signature, redaction, runtime restrictions             | Layer-appropriate regression suites            |
+| Benchmarks           | Repeatable latency, throughput, recovery, cache, and resources               | Versioned scripts and documented environment   |
 
 ## Required scenario matrix
 
@@ -38,6 +38,8 @@ Phases 1 through 4 provide Vitest tests for health/configuration contracts, depl
 - Lost Redis queue state reconstructed from PostgreSQL.
 - Stale leases and labeled resource adoption without duplication.
 - Graceful shutdown stops claiming work and leaves recoverable state.
+
+Phase 5's clean-service suites cover this matrix for the identifier-only `deployment.claim` wake-up and its demonstrated `queued` to `cloning` transition. Termination around clone, build, container, health, route, and cleanup side effects remains part of those later adapters and the Phase 14 recovery milestone.
 
 ### Sources, builds, and runtime
 
@@ -90,7 +92,7 @@ The `examples/` directory will contain small versioned fixtures for healthy Node
 
 Each commit runs the smallest complete set that covers its behavior. Pull requests run the repository's full practical CI baseline. Nightly or explicitly invoked suites may hold resource-heavy Docker, resilience, security scanning, and benchmarks. Skipped tests must report the exact environmental blocker and must not be described as passed.
 
-The current baseline is `pnpm test` for package/web unit tests, `pnpm test:integration` for API and worker HTTP behavior, `pnpm test:database` against disposable PostgreSQL, and `pnpm smoke:health` after a production build. The service CI job applies migrations from an empty database before running persistence and authenticated identity/project API tests. Phase 4 completion additionally requires a production web build and browser verification of the `/projects` workflow. When a local Docker daemon is unavailable, the database suite must be reported as unverified locally and proven by the GitHub Actions service job.
+The current baseline is `pnpm test` for package/web unit tests, `pnpm test:integration` for API and worker HTTP behavior, `pnpm test:database` against disposable PostgreSQL, `pnpm test:queue` against disposable PostgreSQL and Redis, and `pnpm smoke:health` after a production build. The service CI job applies migrations from an empty database before running persistence, authenticated identity/project API, and queue/worker recovery tests. `pnpm smoke:health` uses health-only worker mode and is liveness evidence, not queue readiness. When local services are unavailable, their suites must be reported as unverified locally and proven by the GitHub Actions service job.
 
 ## Defect workflow
 

@@ -2,7 +2,7 @@
 
 ## Plain-language overview
 
-LaunchRail separates the quick work of accepting a deployment request from the slow and failure-prone work of cloning, building, starting, and checking an application. The API records intent and queues work; a dedicated worker performs that work and records every meaningful state change. A reverse proxy exposes only releases that LaunchRail has intentionally routed.
+LaunchRail separates the quick work of accepting a deployment request from the slow and failure-prone work of cloning, building, starting, and checking an application. The Phase 5 foundation durably records background work in PostgreSQL and uses BullMQ only to wake a dedicated worker. A future deployment-start API will create that intent; repository, build, runtime, health, and routing stages remain later phases.
 
 The first version is a modular monolith with a separate worker process. This keeps local operation and transactions understandable while preserving boundaries that can be extracted later if measured needs justify it.
 
@@ -70,6 +70,8 @@ The web application may initially be served separately during development. The A
 - Verifies and deduplicates GitHub webhook deliveries.
 - Never performs a container build within a request handler.
 
+The deployment-start HTTP boundary is not implemented in Phase 5. The persist-before-publish flow is exercised through the application/database/queue boundaries and their integration tests.
+
 ### Deployment worker
 
 - Claims typed deployment jobs from BullMQ.
@@ -78,17 +80,20 @@ The web application may initially be served separately during development. The A
 - Persists transitions and failure categories transactionally.
 - Emits heartbeat and recovery information and shuts down gracefully.
 
+Phase 5 implements the worker foundation and one demonstrated side effect: under a valid work-item lease, one PostgreSQL transaction advances an eligible `queued` deployment to `cloning` and completes the work item. It does not clone a repository or continue the lifecycle after that claim.
+
 ### PostgreSQL
 
-- Stores identity, configuration metadata, deployment state, event history, encrypted secrets, webhook deliveries, and audit events.
+- Stores identity, configuration metadata, deployment state, event history, encrypted secrets, webhook deliveries, audit events, durable deployment work items, leases, dead-letter metadata, and worker heartbeats.
 - Provides transaction boundaries for project writes/archival, secret replacement, deployment transitions, and active-release promotion.
 - Is the source of truth; Redis queue state is not the authoritative deployment state.
 
 ### Redis and BullMQ
 
-- Delivers background jobs, retry scheduling, cancellation signals, and short-lived fan-out notifications.
-- Uses stable job and idempotency keys derived from persisted deployment intent.
-- Provides at-least-once delivery; consumers must tolerate duplicates.
+- Delivers identifier-only wake-up jobs; PostgreSQL owns retry scheduling, while cancellation signals and fan-out notifications remain later work.
+- Uses stable job and idempotency keys derived from a persisted work-item ID.
+- Provides at-least-once delivery; consumers validate the contract, reload PostgreSQL, and tolerate duplicates.
+- Does not own attempts, leases, completion, or dead-letter truth; deleting Redis data cannot erase those PostgreSQL records.
 
 ### Docker BuildKit and Docker Engine
 
@@ -124,7 +129,7 @@ The API and worker share domain and application packages, not framework globals.
 | Audit         | actor/action/resource records                      | application logs                |
 | Observability | correlation and telemetry contracts                | domain state authority          |
 
-Dependencies point inward: infrastructure adapters depend on application ports, and application services depend on the domain model. The Phase 4 project adapter applies organization filters in PostgreSQL rather than relying on response filtering.
+Dependencies point inward: infrastructure adapters depend on application ports, and application services depend on the domain model. Project and Phase 5 job adapters apply ownership, lifecycle, lease, and fencing rules in PostgreSQL rather than relying on Redis or response filtering.
 
 ## Infrastructure ports
 
@@ -155,9 +160,8 @@ interface RouteManager {
   reconcile(expected: ReadonlyArray<ActiveRoute>): Promise<ReconcileResult>;
 }
 
-interface DeploymentQueue {
-  enqueue(job: DeploymentJob): Promise<EnqueueResult>;
-  cancel(deploymentId: string): Promise<void>;
+interface DeploymentClaimPublisher {
+  enqueue(job: DeploymentClaimJob): Promise<{ readonly jobId: string }>;
 }
 
 interface HealthChecker {
@@ -189,6 +193,8 @@ All organization-owned records carry an `organization_id`; authorization queries
 | Project              | Repository reference, selected branch, Dockerfile path, runtime and health configuration. |
 | Deployment           | Immutable source revision plus current state, attempt, failure category, and timestamps.  |
 | Deployment event     | Append-only transition and diagnostic history with monotonic ordering per deployment.     |
+| Deployment job       | Durable kind/version, due time, attempts, lease fence, safe failure, and terminal result. |
+| Worker heartbeat     | Operational worker version/status, heartbeat time, and active-job count.                  |
 | Build log            | Ordered, bounded log chunks with redaction applied before persistence or fan-out.         |
 | Runtime instance     | Container/image identifiers, lifecycle state, resource metadata, and cleanup status.      |
 | Active release       | One project-level pointer updated atomically only after health succeeds.                  |
@@ -215,13 +221,16 @@ Database constraints enforce unique memberships, unique active project names, ty
 3. The adapter replaces ciphertext and envelope metadata transactionally and records a value-free audit event.
 4. API reads expose only variable IDs, names, and timestamps to owner/admin users. Plaintext, ciphertext, nonce, tag, algorithm, and key version never cross the response boundary.
 
-### Start deployment
+### Start deployment (HTTP entry point planned)
 
 1. The API authorizes the actor and validates project configuration.
 2. In PostgreSQL, it creates an immutable deployment request and an initial `queued` event.
-3. After commit, it enqueues a job using the deployment ID as the stable key.
-4. A reconciliation path republishes persisted queued work if enqueueing fails.
-5. The worker locks/claims the deployment and advances it through valid transitions.
+3. The internal Phase 5 boundary creates a durable claim work item for an already-persisted `queued` deployment.
+4. After commit, it enqueues an identifier-only wake-up using the durable work-item ID as the stable key.
+5. A reconciliation path creates missing work items and republishes persisted due work if enqueueing fails.
+6. The worker leases the work item, reloads the deployment, and advances it through a valid transition.
+
+Phase 5 begins only after step 2: tests seed an already-persisted `queued` deployment, and the internal worker boundary implements steps 3–6. There is no Phase 5 use case, HTTP route, or web flow that creates a deployment request.
 
 ### Promote healthy release
 
@@ -255,10 +264,11 @@ packages/
   application/  use cases and persistence ports
   database/     Drizzle schema, migrations, and PostgreSQL adapters
   observability/ telemetry setup and conventions
+  queue/        BullMQ wake-up adapter and retry-backoff policy
 docs/           lifecycle, operations, decisions, and evidence
 ```
 
-Phases 1 through 4 implement the listed application entry points plus the `contracts`, `config`, `observability`, `domain`, `application`, and `database` packages. Database adapters persist deployment transitions/promotions, identity/session data, organization-scoped projects, AES-256-GCM environment-variable envelopes, and audit records. The Fastify boundary authenticates browser sessions and authorizes identity and project routes; the Next.js workspace exposes role-aware project and secret controls. Later phases connect deployment use cases to the queue/worker and add healthy and intentionally failing `examples/` applications alongside the adapters they test.
+Phases 1 through 5 implement the listed application entry points and shared packages. Database adapters persist deployment transitions/promotions, identity/session data, organization-scoped projects, AES-256-GCM environment-variable envelopes, durable deployment work items, leases/dead letters, worker heartbeats, and audit records. The BullMQ adapter sends strict identifier-only wake-ups, and the worker re-reads PostgreSQL before performing an idempotent `queued` to `cloning` claim. The Fastify boundary still exposes only identity and project routes; the Next.js workspace exposes role-aware project and secret controls. Later phases add deployment-start HTTP/UI, repository/build/runtime adapters, cancellation, and healthy/failing example applications.
 
 ## Architecture decisions
 
@@ -272,4 +282,4 @@ Accepted decisions are recorded in [docs/adr](docs/adr):
 
 ## Known limitations
 
-Phases 1 through 4 implement process boundaries, shared foundations, deployment-domain/persistence rules, local-password authentication, organization authorization, and project configuration/secret API and UI paths. The canonical GitHub URL is syntactically validated but not contacted: repository existence/private access, revision resolution, cloning, and symlink containment remain Phase 6. Project settings and secrets are not yet injected into queue jobs or runtimes; automated key re-encryption, password recovery/second factors, queue, build, runtime, routing, and full telemetry adapters remain later phases. Single-host Docker remains a large trust and failure boundary; nothing in this architecture makes LaunchRail production-ready or safe for hostile public multi-tenancy.
+Phases 1 through 5 implement process boundaries, shared foundations, deployment-domain/persistence rules, local-password authentication, organization authorization, project configuration/secret API and UI paths, and a PostgreSQL-authoritative BullMQ worker foundation. The canonical GitHub URL is syntactically validated but not contacted: repository existence/private access, revision resolution, cloning, and symlink containment remain Phase 6. There is no deployment-start HTTP/UI path, and project settings or secrets are intentionally absent from Redis and not injected into runtimes. Build, runtime, routing, activation/control, webhooks, full telemetry, broad failure recovery, automated key re-encryption, and password recovery/second factors remain later phases. Process-health endpoints are not queue readiness. Single-host Docker remains a large trust and failure boundary; nothing in this architecture makes LaunchRail production-ready or safe for hostile public multi-tenancy.

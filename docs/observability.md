@@ -4,7 +4,7 @@
 
 When a deployment is slow or fails, a user should see which stage failed and what they can do. An operator should be able to follow the same deployment across the browser request, queue job, worker steps, Docker resources, health checks, and route update without searching unrelated text logs.
 
-Phase 1 establishes structured Pino logging for API and worker processes, a shared redaction list for common credential fields, and service-specific health endpoints. Correlation IDs, metrics, traces, dashboards, and dependency readiness remain planned.
+Phase 1 establishes structured Pino logging, shared credential redaction, and process-health endpoints. Phase 5 adds bounded completion, retry, dead-letter, fencing, reconciliation, infrastructure, heartbeat-failure, and shutdown control-plane events. End-to-end correlation, metrics, traces, dashboards, dependency-readiness endpoints, and successful enqueue/claim events remain planned.
 
 ## Correlation model
 
@@ -17,11 +17,11 @@ Every applicable signal carries stable, bounded identifiers:
 - `runtime_instance_id` for a managed container record.
 - `webhook_delivery_id` as a hashed/opaque value when needed for correlation.
 
-Trace context propagates through typed BullMQ job metadata. User-supplied repository names, URLs, commit messages, log content, and environment values are not metric labels.
+The Phase 5 BullMQ payload contains only its contract version, `deployment.claim` kind, and opaque PostgreSQL work-item ID. Organization, deployment, and future trace context are reloaded from authoritative storage rather than copied into Redis. User-supplied repository names, URLs, commit messages, log content, and environment values are not metric labels.
 
 ## Structured logs
 
-API and worker logs will be JSON in production-like modes and readable locally. A log event includes timestamp, severity, service, event name, correlation identifiers, safe outcome/failure category, and structured attributes. Exceptions are normalized and redacted before export.
+API and worker logs are JSON in production-like modes and readable locally. Phase 5 worker events use stable names and opaque work-item/worker identifiers; completion, retry, and dead-letter records include the durable attempt where applicable. Safe retry codes/messages live in PostgreSQL, while logs use fixed operator-safe messages and never interpolate thrown exception details. Future phases add successful enqueue/claim events and full cross-component correlation.
 
 Required event families include:
 
@@ -61,9 +61,9 @@ Queue propagation creates linked asynchronous traces rather than pretending the 
 
 ## Health and readiness
 
-- API liveness reports only process health; readiness checks required dependencies within bounded time.
-- Worker liveness reports process health; worker readiness includes queue/database access and shutdown/claim state.
-- Heartbeats are persisted or exposed so the UI can distinguish “work failed” from “worker unavailable.”
+- API liveness reports only process health; a future readiness endpoint will check required dependencies within bounded time.
+- Worker `/health` and `pnpm smoke:health` report process liveness only. Health-only smoke mode intentionally does not connect to PostgreSQL or Redis.
+- Phase 5 persists worker status/heartbeat/active-job records for operational inspection and later operator presentation. Lease expiry, not the worker-heartbeat row, drives work recovery; no HTTP queue-readiness contract or UI exists.
 - Docker, BuildKit, and proxy dependency state appears in operator diagnostics without leaking configuration secrets.
 
 ## Dashboards and alerts
@@ -85,10 +85,11 @@ One shared redaction package will sanitize control-plane logs, deployment events
 ## Delivery stages
 
 1. **Available:** establish JSON logging, baseline credential redaction, and process health conventions in the repository foundation.
-2. Add correlation IDs and instrument API/queue boundaries before deployment adapters expand.
-3. Add stage metrics and traces with each lifecycle implementation.
-4. Add health endpoints, heartbeat, dashboards, and documented queries.
-5. Run canary-secret and cardinality reviews before marking observability available.
+2. **Available:** safe completion/retry/dead-letter/fencing/reconciliation/shutdown events and durable worker heartbeat state are verified for Phase 5.
+3. Add end-to-end correlation IDs and instrument API/queue boundaries when the deployment-start API is introduced.
+4. Add stage metrics and traces with each lifecycle implementation.
+5. Add dependency-readiness endpoints, dashboards, and documented queries.
+6. Run canary-secret and cardinality reviews before marking observability available.
 
 ## Evidence required
 

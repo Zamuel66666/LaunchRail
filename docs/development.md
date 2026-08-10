@@ -2,7 +2,7 @@
 
 ## Current repository state
 
-Phases 1 through 4 provide a runnable TypeScript workspace, web/API/worker processes, shared foundations, deployment-domain/PostgreSQL transition persistence, authenticated organization routes, and a project workspace backed by validated project APIs and encrypted environment-variable storage. Phase 5 adds the queue and worker foundation.
+Phases 1 through 5 provide the currently accepted runnable TypeScript workspace, web/API/worker processes, deployment-domain/PostgreSQL transition persistence, authenticated organization/project routes, encrypted environment-variable storage, and a clean-service-verified PostgreSQL-authoritative BullMQ worker foundation. Phase 6 adds repository preparation. No deployment-start use case, HTTP route, or web flow exists yet.
 
 ## Prerequisites
 
@@ -51,7 +51,7 @@ Each health response uses the shared contract:
 }
 ```
 
-The timestamp varies. These endpoints prove process liveness only; dependency readiness is planned with persistence and queue integration.
+The timestamp varies. These endpoints prove process liveness only. The worker's durable heartbeat and queue integration do not turn `/health` or the health smoke test into a queue/database readiness check.
 
 ## Stopping and cleanup
 
@@ -79,6 +79,17 @@ The volume-deleting command is not wrapped in the normal shutdown script so data
 | `LOG_LEVEL`                                | API/worker structured log level | `info`                  |
 | `API_HOST`, `API_PORT`                     | API health listener             | `127.0.0.1:4000`        |
 | `WORKER_HEALTH_HOST`, `WORKER_HEALTH_PORT` | Worker health listener          | `127.0.0.1:4001`        |
+| `WORKER_MODE`                              | Full worker or health-only      | `run`                   |
+| `WORKER_QUEUE_NAME`, `WORKER_QUEUE_PREFIX` | Bounded BullMQ identifiers      | See `.env.example`      |
+| `WORKER_CONCURRENCY`                       | Concurrent claim handlers       | `2`                     |
+| `WORKER_MAX_ATTEMPTS`                      | Durable attempt ceiling         | `5`                     |
+| `WORKER_JOB_TIMEOUT_MS`                    | Per-claim execution bound       | `300000`                |
+| `WORKER_BACKOFF_BASE_MS`, `*_CAP_MS`       | Deterministic retry bounds      | `1000`, `60000`         |
+| `WORKER_LEASE_MS`                          | PostgreSQL claim lease          | `60000`                 |
+| `WORKER_HEARTBEAT_INTERVAL_MS`             | Job/worker heartbeat interval   | `10000`                 |
+| `WORKER_RECONCILIATION_INTERVAL_MS`        | Recovery scan interval          | `15000`                 |
+| `WORKER_RECONCILIATION_BATCH_SIZE`         | Maximum rows per recovery scan  | `100`                   |
+| `WORKER_SHUTDOWN_GRACE_MS`                 | Active-work drain bound         | `30000`                 |
 | `WEB_HOST`, `WEB_PORT`                     | Next.js listener                | `127.0.0.1:3000`        |
 | `NEXT_PUBLIC_API_BASE_URL`                 | Browser-facing API base URL     | `http://localhost:4000` |
 | `DATABASE_URL`                             | PostgreSQL connection URL       | Local Compose service   |
@@ -98,14 +109,15 @@ Configuration parsing reports every invalid field without echoing supplied value
 ```text
 apps/api                  Fastify identity/project boundary and health endpoint
 apps/web                  Next.js sign-in/project interface and web health endpoint
-apps/worker               Worker process and health server
+apps/worker               BullMQ claim worker, recovery loops, and health server
 packages/config           Runtime-validated process configuration
 packages/contracts        Shared transport and health contracts
 packages/observability    Redacted structured logger conventions
 scripts                   Repeatable application smoke checks
 packages/domain           Deployment transitions and safe project value rules
 packages/application      Deployment/project use cases and persistence ports
-packages/database         Migrations plus identity, project, secret, and deployment adapters
+packages/database         Identity/project/deployment plus durable job/heartbeat adapters
+packages/queue            BullMQ identifier-only wake-up adapter
 ```
 
 The dependency direction is `database -> application -> domain`; package builds run in topological order.
@@ -121,17 +133,18 @@ pnpm lint
 pnpm typecheck
 pnpm test
 pnpm test:database
+pnpm test:queue
 pnpm test:integration
 pnpm build
 pnpm smoke:health
 docker compose --env-file .env.example config --quiet
 ```
 
-`pnpm smoke:health` starts built applications on temporary loopback ports, synthesizes an ephemeral keyring only when the environment lacks one, validates each service/status payload, prints logs on failure, and shuts the processes down. It does not require PostgreSQL or Redis because health is intentionally liveness-only.
+`pnpm smoke:health` starts built applications on temporary loopback ports, synthesizes an ephemeral keyring only when the environment lacks one, forces `WORKER_MODE=health-only`, validates each service/status payload, prints logs on failure, and shuts the processes down. It intentionally does not prove queue/database readiness.
 
-`pnpm test:database` requires `DATABASE_URL` and a PostgreSQL database that may be truncated by the suite. GitHub Actions starts a disposable database, applies migrations from empty state, runs the database integration suite, verifies Redis, and removes the service volumes.
+`pnpm test:database` requires `DATABASE_URL` and a PostgreSQL database that may be truncated by the suite. `pnpm test:queue` requires both `DATABASE_URL` and `REDIS_URL`; both targets must be disposable. GitHub Actions starts both services, applies migrations from empty state, runs the real database and queue/worker integration suites, and removes the service volumes.
 
-See [persistence.md](persistence.md) for the schema, migration, transaction, and clean-database workflow; [authentication.md](authentication.md) for bootstrap/session behavior; and [project-management.md](project-management.md) for project routes, bounds, encryption, archival, and key rotation.
+See [persistence.md](persistence.md) for the schema, migration, transaction, and clean-database workflow; [authentication.md](authentication.md) for bootstrap/session behavior; [project-management.md](project-management.md) for project routes, bounds, encryption, archival, and key rotation; and [queue-worker.md](queue-worker.md) for job contracts, durable retry/recovery state, operation, and shutdown.
 
 ## Session workflow
 
@@ -157,7 +170,7 @@ Update runtime request/response schemas, generated OpenAPI output, authorization
 
 ## Worker and infrastructure changes
 
-Document retry, timeout, idempotency, cancellation, cleanup, and crash behavior. Tests should use fake ports for domain/application behavior and real disposable services for adapter contracts. Docker integration commands must operate only on resources labeled for their isolated test run.
+Document retry, timeout, idempotency, cancellation, cleanup, and crash behavior. Tests should use fake ports for domain/application behavior and real disposable services for adapter contracts. Phase 5 queue tests require both PostgreSQL and Redis because Redis delivery alone cannot prove authoritative recovery. Docker integration commands must operate only on resources labeled for their isolated test run.
 
 ## User-interface changes
 

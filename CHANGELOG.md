@@ -40,14 +40,22 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 - Project archival that purges encrypted variables, preserves terminal deployment history, and rejects active or in-flight projects.
 - Responsive project workspace with organization selection, accessible state handling, role-aware controls, optimistic-conflict feedback, and archive confirmation.
 - Structured logger redaction for secret values, passwords, authorization/cookie data, and secret-keyring fields.
+- Strict `deployment.claim` version 1 runtime contract containing only an opaque durable work-item ID, with deterministic colon-free BullMQ and transition keys.
+- PostgreSQL-authoritative deployment work items with attempts, due times, exclusive expiring leases, fencing tokens, safe retry/dead-letter details, and constrained lifecycle states.
+- Durable worker heartbeat records covering startup, readiness, bounded draining, and stopped state.
+- BullMQ at-least-once wake-up delivery with PostgreSQL-managed deterministic capped exponential backoff, bounded job timeouts, reconciliation of missing/due/expired work, and graceful shutdown.
+- Idempotent worker claims that advance eligible deployments from `queued` to `cloning` once even when Redis delivery is duplicated or the worker restarts.
+- Unit tests plus disposable PostgreSQL/Redis integration suites for contract validation, duplicate consumption, retry exhaustion, timeout, lease fencing, dead letters, reconciliation, heartbeat freshness, graceful shutdown, and restart recovery.
 
 ### Current limitations
 
 - Authentication is local-password only and does not yet include password recovery, invitations, MFA, SSO, or session administration.
 - Project configuration does not yet verify GitHub existence/access, resolve revisions, authenticate private repositories, clone source, or prove Dockerfile containment after symlink resolution.
 - Project configuration and encrypted variables are not yet injected into deployment jobs or application runtimes, and key re-encryption is manual/not yet automated.
-- The runnable product does not yet contain queue processing, builds, deployments, log streaming, preview URLs, or rollback controls.
-- Application health endpoints currently report process liveness rather than dependency readiness.
+- No deployment-start HTTP endpoint or deployment UI exists yet; the Phase 5 consumer is an internal worker foundation.
+- Repository access, cloning, builds, application runtimes, activation, log streaming, preview URLs, deployment controls, webhooks, and full telemetry are not implemented.
+- Application health endpoints and the health smoke test report process liveness rather than queue/database readiness; durable heartbeats are operational records, not an HTTP readiness claim.
+- The current production dependency audit reports 11 high and 7 moderate advisories in existing Next.js/Fastify dependency paths; dependency remediation remains required before production use.
 - The Phase 4 migration intentionally rejects databases containing legacy environment-variable rows because those rows have no AES-GCM authentication tag; back up and re-enter those values before migration.
 - No release has been tagged.
 

@@ -13,18 +13,15 @@ The roadmap reports verified repository state, not aspirations as completed feat
 - **Phase 2 — Domain model and persistence:** organization-owned records, generated migrations, immutable deployment snapshots, centrally validated state transitions, transactional events, idempotency, and atomic active-release promotion.
 - **Phase 3 — Authentication and authorization:** bootstrapped owners, password verification, secure opaque sessions, organization roles, hardened requests, audited membership changes, and sign-in UI.
 - **Phase 4 — Project management:** validated organization-scoped project configuration, encrypted environment variables, optimistic archival, audited APIs, and a permission-aware project UI.
-
-### In progress
-
-- No phase is currently in progress.
+- **Phase 5 — Queue and worker foundation:** strict identifier-only wake-ups, PostgreSQL-authoritative attempts/leases/dead letters, restart reconciliation, operational heartbeats, and bounded graceful draining.
 
 ### Planned next
 
-- **Phase 5 — Queue and worker foundation:** typed deployment jobs, idempotency, retries, dead letters, heartbeats, reconciliation entry points, and graceful shutdown.
+- **Phase 6 — Repository preparation:** public GitHub revision resolution, bounded checkout, source metadata, and Dockerfile containment validation.
 
 ### Planned later
 
-- Phases 6–16 below.
+- Phases 7–16 below.
 
 ### Not currently planned
 
@@ -128,15 +125,22 @@ Exit evidence: domain/cipher tests exercise malicious inputs, authenticated-encr
 
 ### Phase 5 — Queue and worker foundation
 
-**Status:** Planned next
+**Status:** Available
 
-Add typed BullMQ contracts, idempotency, retry/timeout policies, dead-letter handling, heartbeat, reconciliation entry points, and graceful shutdown.
+Delivered:
 
-Exit gate: duplicate jobs and worker restarts preserve authoritative state and do not duplicate demonstrated side effects.
+- Strict runtime-validated `deployment.claim` version 1 contract containing only an opaque PostgreSQL work-item ID, plus deterministic BullMQ and transition idempotency keys.
+- PostgreSQL work items with constrained statuses, attempts, due times, exclusive expiring leases, fencing tokens, safe failure details, dead-letter timestamps, and worker heartbeats.
+- BullMQ used as an at-least-once wake-up channel while workers re-read PostgreSQL ownership and state before acting.
+- Deterministic capped exponential backoff, bounded job execution, durable retry exhaustion, and PostgreSQL-authoritative dead-letter handling.
+- Reconciliation for missing queued work, due work absent from Redis, and expired leases, without claiming exactly-once delivery.
+- An atomic, lease-fenced `queued` to `cloning` transition plus work-item completion, periodic operational heartbeat, and bounded graceful shutdown that stops new claims before draining active work.
+
+Exit evidence: [GitHub Actions run 31408251857](https://github.com/Zamuel66666/LaunchRail/actions/runs/31408251857) passed the strict-contract and worker unit checks, clean PostgreSQL migrations and transaction tests, and the disposable PostgreSQL/Redis suite for duplicate delivery, retries, timeout, fencing, dead letters, missing/expired work, operational heartbeats, graceful draining, and restart behavior. Duplicate jobs preserve authoritative state and append the demonstrated claim transition once.
 
 ### Phase 6 — Repository preparation
 
-**Status:** Planned
+**Status:** Planned next
 
 Add the Git provider/cloner ports, public GitHub adapter, exact revision resolution, bounded cloning, metadata storage, and Dockerfile validation.
 

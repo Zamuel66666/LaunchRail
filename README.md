@@ -2,7 +2,7 @@
 
 **A self-hosted platform that turns a GitHub repository into a health-checked application deployment with live logs, preview URLs, release history, and safe rollback.**
 
-> Phase 4 is complete: signed-in teams can safely configure organization projects, edit bounded runtime settings, and manage encrypted environment variables from a permission-aware project workspace.
+> **Phase 5 is Available.** Clean PostgreSQL/Redis CI verifies typed identifier-only jobs, durable leases and attempts, bounded retries, dead letters, operational heartbeats, reconciliation, and graceful shutdown.
 
 ## What LaunchRail does
 
@@ -68,16 +68,16 @@ LaunchRail will use a modular monolith for the web/API boundary and a separate w
 - AES-256-GCM environment-variable storage with fresh nonces, authentication tags, a versioned keyring, and organization/project/name-bound authenticated context.
 - Write-only secret values: owner/admin users receive names and timestamps, while plaintext is never returned by project APIs.
 - Responsive `/projects` workspace with role-aware create, edit, archive, and environment-variable controls.
-
-### In progress
-
-- No implementation milestone is currently in progress.
+- Strict `deployment.claim` wake-ups carrying only a contract version, supported kind, and opaque PostgreSQL work-item ID.
+- Durable PostgreSQL attempts, due times, leases, fencing, dead-letter state, and operational worker heartbeats are implemented.
+- The worker uses at-least-once BullMQ wake-ups, PostgreSQL-managed retry/reconciliation, and an atomic leased `queued` to `cloning` transition plus work-item completion.
+- Clean disposable PostgreSQL/Redis acceptance, code-quality, build, and health checks are verified by [GitHub Actions run 31408251857](https://github.com/Zamuel66666/LaunchRail/actions/runs/31408251857).
 
 ### Planned next
 
-- Typed BullMQ deployment contracts and stable idempotency keys.
-- Retry, timeout, dead-letter, heartbeat, reconciliation, and graceful-shutdown policy.
-- Restart-safe worker behavior with PostgreSQL remaining authoritative.
+- Public GitHub repository and exact revision resolution behind explicit source-provider ports.
+- Bounded checkout with metadata persistence and path/symlink containment.
+- Dockerfile existence and containment validation before any build is attempted.
 
 ### Not currently planned
 
@@ -127,11 +127,12 @@ See the [development guide](docs/development.md) for verification, configuration
 - [Persistence model and transaction rules](docs/persistence.md)
 - [Authentication and authorization](docs/authentication.md)
 - [Project management and secret rotation](docs/project-management.md)
+- [Queue and worker operations](docs/queue-worker.md)
 - [Architecture decisions](docs/adr/)
 
 ## Current limitations
 
-LaunchRail is not production-ready. Authentication remains local-password only without password reset, invitations, MFA, SSO, or session administration. Project configuration does not yet verify that a GitHub repository, branch, or Dockerfile exists; private-repository authentication, revision resolution, cloning, and checkout/symlink containment arrive in Phase 6. Saved configuration and secrets are not yet injected into jobs or workloads, and automated key re-encryption is not implemented. There is no queue consumer, build pipeline, application runtime, preview routing, log streaming, or rollback control. Health endpoints still report process liveness only.
+LaunchRail is not production-ready. Authentication remains local-password only without password reset, invitations, MFA, SSO, or session administration. There is no deployment-start HTTP endpoint or deployment UI yet. Project configuration does not verify that a GitHub repository, branch, or Dockerfile exists; private-repository authentication, revision resolution, cloning, and checkout/symlink containment arrive in Phase 6. Saved configuration and secrets are not placed in Redis or injected into workloads, and automated key re-encryption is not implemented. The verified worker foundation currently demonstrates only an idempotent `queued` to `cloning` claim. Repository access, builds, application runtimes, preview routing, activation, log streaming, deployment controls, webhooks, and full telemetry remain later phases. Application health endpoints and `pnpm smoke:health` prove process liveness only, not queue/database readiness. The current production dependency audit is also non-green (11 high and 7 moderate advisories in existing Next.js/Fastify dependency paths), so dependency remediation is required before any production claim.
 
 ## License
 

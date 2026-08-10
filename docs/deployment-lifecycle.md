@@ -6,7 +6,7 @@ A deployment is a recorded attempt to turn one exact source revision into a runn
 
 If a candidate fails, the previously healthy release stays active. Every step is recorded so a user can see what happened, and a restarted worker reconstructs work from PostgreSQL rather than assuming an in-memory job completed.
 
-Phase 2 implements this state model, ordinary transactional transitions, and healthy active-release promotion in PostgreSQL. Queue delivery, container orchestration, route reconciliation, cancellation side effects, and rollback execution remain later-phase behavior.
+Phase 2 implements this state model, ordinary transactional transitions, and healthy active-release promotion in PostgreSQL. Phase 5 adds durable background work, leases, retry/dead-letter state, heartbeat, BullMQ wake-ups, reconciliation, and one demonstrated idempotent `queued` to `cloning` claim. Repository processing, container orchestration, route reconciliation, cancellation side effects, and rollback execution remain later-phase behavior.
 
 ## Terms
 
@@ -17,6 +17,8 @@ Phase 2 implements this state model, ordinary transactional transitions, and hea
 - **Runtime instance:** the container created for a deployment; instances have their own cleanup status.
 - **Transition:** a validated change from one deployment state to another with an appended event.
 - **Attempt:** one worker execution of the same persisted deployment, not a new deployment record.
+- **Work item:** PostgreSQL's durable record that a deployment step is pending, running, waiting to retry, completed, or dead-lettered.
+- **Lease:** an expiring exclusive claim fenced by a unique token; stale workers cannot heartbeat, complete, or fail work after ownership changes.
 
 ## State groups
 
@@ -158,23 +160,23 @@ The current active release moves to `rolling_back` while this preparation is con
 
 - Retrying a failed deployment creates a new deployment record linked to the original; immutable source/configuration may be copied explicitly.
 - Retrying a transient worker step for the same deployment increments an attempt counter and reuses stable side-effect keys.
-- Retries use capped exponential backoff with jitter and a configurable maximum.
-- Exhausted work records a terminal failure and dead-letter metadata visible to operators.
+- Phase 5 claim retries use deterministic capped exponential backoff with stable hash-derived 75–100% jitter, configurable base/cap, a maximum attempt count, and an execution timeout. PostgreSQL records the next due time.
+- Exhausted work records safe failure details and dead-letter metadata in PostgreSQL. BullMQ failure state is not authoritative.
 - “Retry” never mutates a historical failure into a success.
 
 ## Worker restart and recovery
 
-PostgreSQL, not the BullMQ job, is authoritative. A heartbeat/reconciliation process identifies stale nonterminal deployments. Based on the persisted state and observed resources, it can re-enqueue an idempotent step, adopt a matching resource, finish cleanup, or record a structured unrecoverable failure.
+PostgreSQL, not the BullMQ job, is authoritative. Phase 5 lease reconciliation identifies queued deployments without work items, due work absent from BullMQ, and expired claim leases. It creates or republishes identifier-only wake-ups, or schedules/dead-letters an expired attempt according to the persisted attempt count. Worker-heartbeat rows are operational records and do not authorize recovery. Later phases extend the same rule to observed build, runtime, and route resources.
 
 Examples:
 
-- `queued` without a BullMQ job is re-enqueued.
-- `building` with no live build and an expired lease is retried within policy.
-- `deploying` with a matching labeled container adopts that runtime instead of starting a duplicate.
-- `health_checking` resumes checks against the recorded candidate.
-- Applied proxy routes that disagree with active-release intent are reconciled and audited.
+- `queued` without a durable claim work item receives one.
+- Due `pending` or `retry_wait` work missing from BullMQ is republished with the same stable job ID.
+- A `running` claim with an expired lease is retried or dead-lettered within the durable policy.
+- Duplicate wake-ups re-read the same work item and cannot append a second `queued` to `cloning` transition.
+- Future build/runtime/health/route reconciliation will adopt or repair labeled resources rather than duplicate them.
 
-No restart silently marks work complete.
+No restart silently marks work complete, and Phase 5 does not claim exactly-once delivery.
 
 ## Failure categories
 
@@ -206,4 +208,6 @@ Before this model can be marked available, tests must prove:
 
 ## Current limitations
 
-This design assumes one Docker host and one active route per project. Route switching is not a distributed transaction with PostgreSQL; correctness depends on idempotent adapters, observed-state recording, compensation, and reconciliation. Those behaviors remain planned until their integration and failure-injection tests exist.
+Phase 5 verifies queue/worker recovery only for the `queued` to `cloning` claim. There is no deployment-start HTTP/UI, repository access, clone, build, runtime, health, route, cancellation, stop, or rollback execution. Phase 14's broad interruption and orphan-resource recovery matrix remains planned. The eventual runtime design assumes one Docker host and one active route per project; route switching will not be a distributed transaction with PostgreSQL and must be proven through idempotent adapters, observed-state recording, compensation, and reconciliation.
+
+See [queue and worker operations](queue-worker.md) for the implemented contract, durable state, retry policy, reconciliation, and shutdown procedure.

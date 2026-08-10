@@ -33,6 +33,23 @@ function deferred(): { readonly promise: Promise<void>; readonly resolve: () => 
   return { promise, resolve };
 }
 
+function findDatabaseError(
+  error: unknown,
+): { readonly code: unknown; readonly message: unknown } | undefined {
+  let candidate: unknown = error;
+  for (
+    let depth = 0;
+    depth < 4 && candidate !== null && typeof candidate === "object";
+    depth += 1
+  ) {
+    if ("code" in candidate && "message" in candidate) {
+      return { code: candidate.code, message: candidate.message };
+    }
+    candidate = "cause" in candidate ? candidate.cause : undefined;
+  }
+  return undefined;
+}
+
 describeWithDatabase("PostgresDeploymentJobStore", () => {
   if (databaseUrl === undefined) {
     return;
@@ -1009,12 +1026,19 @@ describeWithDatabase("PostgresDeploymentJobStore", () => {
     expect(storedDeployment).toMatchObject({ eventSequence: 2, state: "building" });
     expect(storedSource).toMatchObject({ ...metadata, preparedAt: expect.any(Date) });
     expect(storedJob).toMatchObject({ completedAt: expect.any(Date), status: "completed" });
-    await expect(
-      client.db
+    let mutationError: unknown;
+    try {
+      await client.db
         .update(schema.deploymentSourcePreparations)
         .set({ fileCount: 13 })
-        .where(eq(schema.deploymentSourcePreparations.deploymentId, deployment.deploymentId)),
-    ).rejects.toThrow(/immutable/);
+        .where(eq(schema.deploymentSourcePreparations.deploymentId, deployment.deploymentId));
+    } catch (error) {
+      mutationError = error;
+    }
+    expect(findDatabaseError(mutationError)).toEqual({
+      code: "23514",
+      message: "prepared deployment source metadata is immutable",
+    });
   });
 
   it("rolls back source metadata and transition when the final lease fence expires", async () => {

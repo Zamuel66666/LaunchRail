@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { computeDeploymentClaimBackoffMs } from "../src/index.js";
+import { computeDeploymentJobBackoffMs } from "../src/index.js";
 
 const workItemOne = "11111111-1111-4111-8111-111111111111";
 const workItemTwo = "22222222-2222-4222-8222-222222222222";
 
-describe("computeDeploymentClaimBackoffMs", () => {
+describe("computeDeploymentJobBackoffMs", () => {
   it("returns the same delay for the same work item and attempt", () => {
     const options = {
       attempt: 3,
@@ -14,12 +14,12 @@ describe("computeDeploymentClaimBackoffMs", () => {
       workItemId: workItemOne,
     } as const;
 
-    expect(computeDeploymentClaimBackoffMs(options)).toBe(computeDeploymentClaimBackoffMs(options));
+    expect(computeDeploymentJobBackoffMs(options)).toBe(computeDeploymentJobBackoffMs(options));
   });
 
   it("grows exponentially before reaching the cap", () => {
     const delays = [1, 2, 3, 4].map((attempt) =>
-      computeDeploymentClaimBackoffMs({
+      computeDeploymentJobBackoffMs({
         attempt,
         baseDelayMs: 1_000,
         maxDelayMs: 60_000,
@@ -35,7 +35,7 @@ describe("computeDeploymentClaimBackoffMs", () => {
   it("never exceeds the configured cap", () => {
     for (const attempt of [8, 16, 64, 1_000]) {
       expect(
-        computeDeploymentClaimBackoffMs({
+        computeDeploymentJobBackoffMs({
           attempt,
           baseDelayMs: 1_000,
           maxDelayMs: 5_000,
@@ -46,19 +46,19 @@ describe("computeDeploymentClaimBackoffMs", () => {
   });
 
   it("uses the work item and attempt as the jitter seed", () => {
-    const first = computeDeploymentClaimBackoffMs({
+    const first = computeDeploymentJobBackoffMs({
       attempt: 5,
       baseDelayMs: 10_000,
       maxDelayMs: 1_000_000,
       workItemId: workItemOne,
     });
-    const second = computeDeploymentClaimBackoffMs({
+    const second = computeDeploymentJobBackoffMs({
       attempt: 5,
       baseDelayMs: 10_000,
       maxDelayMs: 1_000_000,
       workItemId: workItemTwo,
     });
-    const nextAttempt = computeDeploymentClaimBackoffMs({
+    const nextAttempt = computeDeploymentJobBackoffMs({
       attempt: 6,
       baseDelayMs: 10_000,
       maxDelayMs: 1_000_000,
@@ -76,6 +76,6 @@ describe("computeDeploymentClaimBackoffMs", () => {
     ["delay order", { attempt: 1, baseDelayMs: 2, maxDelayMs: 1, workItemId: workItemOne }],
     ["work item", { attempt: 1, baseDelayMs: 1, maxDelayMs: 1, workItemId: "not-a-uuid" }],
   ])("rejects invalid %s input", (_description, options) => {
-    expect(() => computeDeploymentClaimBackoffMs(options)).toThrow();
+    expect(() => computeDeploymentJobBackoffMs(options)).toThrow();
   });
 });

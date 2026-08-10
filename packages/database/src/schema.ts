@@ -268,6 +268,11 @@ export const deployments = pgTable(
   },
   (table) => [
     unique("deployments_id_organization_unique").on(table.id, table.organizationId),
+    unique("deployments_id_organization_source_revision_unique").on(
+      table.id,
+      table.organizationId,
+      table.sourceRevision,
+    ),
     unique("deployments_id_project_organization_unique").on(
       table.id,
       table.projectId,
@@ -522,6 +527,76 @@ export const deploymentCommands = pgTable(
   ],
 );
 
+export const deploymentSourcePreparations = pgTable(
+  "deployment_source_preparations",
+  {
+    deploymentId: uuid("deployment_id").primaryKey(),
+    organizationId: uuid("organization_id").notNull(),
+    checkoutId: text("checkout_id").notNull(),
+    resolvedRevision: text("resolved_revision").notNull(),
+    treeRevision: text("tree_revision").notNull(),
+    fileCount: integer("file_count").notNull(),
+    totalBytes: bigint("total_bytes", { mode: "number" }).notNull(),
+    dockerfilePath: text("dockerfile_path").notNull(),
+    dockerfileResolvedPath: text("dockerfile_resolved_path").notNull(),
+    dockerfileSha256: text("dockerfile_sha256").notNull(),
+    preparedAt: timestamp("prepared_at", { mode: "date", withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.deploymentId, table.organizationId, table.resolvedRevision],
+      foreignColumns: [deployments.id, deployments.organizationId, deployments.sourceRevision],
+      name: "deployment_source_preparations_deployment_organization_fk",
+    }).onDelete("cascade"),
+    unique("deployment_source_preparations_checkout_unique").on(table.checkoutId),
+    check(
+      "deployment_source_preparations_checkout_id_format",
+      sql`${table.checkoutId} ~ '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$'`,
+    ),
+    check(
+      "deployment_source_preparations_resolved_revision_hash",
+      sql`${table.resolvedRevision} ~ '^[0-9a-f]{40}([0-9a-f]{24})?$'`,
+    ),
+    check(
+      "deployment_source_preparations_tree_revision_hash",
+      sql`${table.treeRevision} ~ '^[0-9a-f]{40}([0-9a-f]{24})?$'`,
+    ),
+    check(
+      "deployment_source_preparations_file_count_bounds",
+      sql`${table.fileCount} between 1 and 1000000`,
+    ),
+    check(
+      "deployment_source_preparations_total_bytes_bounds",
+      sql`${table.totalBytes} between 1 and 1000000000000`,
+    ),
+    check(
+      "deployment_source_preparations_dockerfile_path_bounds",
+      sql`length(${table.dockerfilePath}) between 1 and 256
+        and ${table.dockerfilePath} ~ '^[A-Za-z0-9._/-]+$'
+        and ${table.dockerfilePath} !~ '[[:cntrl:]]'
+        and position(chr(92) in ${table.dockerfilePath}) = 0
+        and ${table.dockerfilePath} !~ '^/'
+        and ${table.dockerfilePath} !~ '(^|/)\\.\\.?(/|$)'
+        and ${table.dockerfilePath} !~ '//'`,
+    ),
+    check(
+      "deployment_source_preparations_dockerfile_sha256_format",
+      sql`${table.dockerfileSha256} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      "deployment_source_preparations_dockerfile_resolved_path_bounds",
+      sql`octet_length(${table.dockerfileResolvedPath}) between 1 and 1024
+        and ${table.dockerfileResolvedPath} !~ '[[:cntrl:]]'
+        and position(chr(92) in ${table.dockerfileResolvedPath}) = 0
+        and ${table.dockerfileResolvedPath} !~ '^/'
+        and ${table.dockerfileResolvedPath} !~ '(^|/)\\.\\.?(/|$)'
+        and ${table.dockerfileResolvedPath} !~ '//'`,
+    ),
+  ],
+);
+
 export const deploymentJobs = pgTable(
   "deployment_jobs",
   {
@@ -556,7 +631,10 @@ export const deploymentJobs = pgTable(
     unique("deployment_jobs_lease_token_unique").on(table.leaseToken),
     index("deployment_jobs_dispatch_index").on(table.status, table.availableAt),
     index("deployment_jobs_expired_lease_index").on(table.status, table.leaseExpiresAt),
-    check("deployment_jobs_kind", sql`${table.kind} = 'deployment.claim'`),
+    check(
+      "deployment_jobs_kind",
+      sql`${table.kind} in ('deployment.claim', 'deployment.prepare_source')`,
+    ),
     check("deployment_jobs_contract_version", sql`${table.contractVersion} = 1`),
     check(
       "deployment_jobs_attempt_bounds",
@@ -566,7 +644,7 @@ export const deploymentJobs = pgTable(
       "deployment_jobs_attempt_matches_status",
       sql`(${table.status} = 'pending' and ${table.attemptCount} = 0)
         or (${table.status} = 'retry_wait' and ${table.attemptCount} > 0 and ${table.attemptCount} < ${table.maxAttempts})
-        or (${table.status} = 'dead_lettered' and ${table.attemptCount} = ${table.maxAttempts})
+        or (${table.status} = 'dead_lettered' and ${table.attemptCount} > 0 and ${table.attemptCount} <= ${table.maxAttempts})
         or (${table.status} = 'running' and ${table.attemptCount} > 0)
         or ${table.status} = 'completed'`,
     ),

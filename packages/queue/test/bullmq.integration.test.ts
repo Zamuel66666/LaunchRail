@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 
-import { createDeploymentClaimJobId, type DeploymentClaimJob } from "@launchrail/contracts";
+import {
+  createDeploymentClaimJobId,
+  type DeploymentClaimJob,
+  type DeploymentJob,
+  type DeploymentPrepareSourceJob,
+} from "@launchrail/contracts";
 import { Queue } from "bullmq";
 import { Redis } from "ioredis";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -8,7 +13,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   BullMqDeploymentQueueConsumer,
   BullMqDeploymentQueuePublisher,
-  InvalidDeploymentClaimJobError,
+  InvalidDeploymentJobError,
   type QueueInfrastructureEvent,
 } from "../src/index.js";
 
@@ -40,7 +45,7 @@ interface RawQueueResource {
   readonly queue: Queue<unknown, unknown, string>;
 }
 
-describeWithRedis("BullMQ deployment claim queue", () => {
+describeWithRedis("BullMQ deployment job queue", () => {
   let prefix: string;
   let queueName: string;
   let publishers: BullMqDeploymentQueuePublisher[];
@@ -152,7 +157,7 @@ describeWithRedis("BullMQ deployment claim queue", () => {
 
   it("validates and consumes one typed payload with an AbortSignal", async () => {
     const publisher = createPublisher();
-    let received: DeploymentClaimJob | undefined;
+    let received: DeploymentJob | undefined;
     let receivedSignal: AbortSignal | undefined;
     const consumer = createConsumer(async (payload, signal) => {
       received = payload;
@@ -205,9 +210,32 @@ describeWithRedis("BullMQ deployment claim queue", () => {
     await waitFor(async () => (await publisher.getState(payload.workItemId)) === "absent");
   });
 
+  it("publishes and consumes a kind-bound source-preparation wake-up", async () => {
+    const publisher = createPublisher();
+    let received: DeploymentJob | undefined;
+    const consumer = createConsumer(async (payload) => {
+      received = payload;
+    });
+    consumer.start();
+    await Promise.all([publisher.waitUntilReady(), consumer.waitUntilReady()]);
+    const payload = {
+      contractVersion: 1,
+      kind: "deployment.prepare_source",
+      workItemId: randomUUID(),
+    } satisfies DeploymentPrepareSourceJob;
+
+    await publisher.enqueue(payload);
+    await waitFor(() => received !== undefined);
+    expect(received).toEqual(payload);
+    await waitFor(
+      async () =>
+        (await publisher.getState(payload.workItemId, "deployment.prepare_source")) === "absent",
+    );
+  });
+
   it("replaces a retained malformed terminal wake-up with a valid stable-ID delivery", async () => {
     const publisher = createPublisher();
-    const received: DeploymentClaimJob[] = [];
+    const received: DeploymentJob[] = [];
     const consumer = createConsumer(async (payload) => {
       received.push(payload);
     });
@@ -265,7 +293,7 @@ describeWithRedis("BullMQ deployment claim queue", () => {
     } catch (error) {
       publisherError = error;
     }
-    expect(publisherError).toBeInstanceOf(InvalidDeploymentClaimJobError);
+    expect(publisherError).toBeInstanceOf(InvalidDeploymentJobError);
     expect(String(publisherError)).not.toContain(canary);
 
     const { queue } = createRawQueue();
@@ -288,22 +316,38 @@ describeWithRedis("BullMQ deployment claim queue", () => {
       },
       { jobId: `unknown-${randomUUID()}` },
     );
+    const mismatched = await queue.add(
+      "deployment.claim",
+      {
+        contractVersion: 1,
+        kind: "deployment.prepare_source",
+        workItemId: randomUUID(),
+      },
+      { jobId: `mismatched-${randomUUID()}` },
+    );
 
     await waitFor(async () => (await malformed.getState()) === "failed");
     await waitFor(async () => (await unknown.getState()) === "failed");
+    await waitFor(async () => (await mismatched.getState()) === "failed");
 
     const failedMalformed = await queue.getJob(malformed.id as string);
     const failedUnknown = await queue.getJob(unknown.id as string);
+    const failedMismatched = await queue.getJob(mismatched.id as string);
     const safeOutput = JSON.stringify({
       infrastructureEvents,
       malformedFailure: failedMalformed?.failedReason,
       malformedStack: failedMalformed?.stacktrace,
       unknownFailure: failedUnknown?.failedReason,
       unknownStack: failedUnknown?.stacktrace,
+      mismatchedFailure: failedMismatched?.failedReason,
+      mismatchedStack: failedMismatched?.stacktrace,
     });
     expect(invocationCount).toBe(0);
-    expect(failedMalformed?.failedReason).toBe("Invalid deployment claim job payload");
+    expect(failedMalformed?.failedReason).toBe("Invalid deployment job payload");
     expect(failedUnknown?.failedReason).toBe("Unsupported deployment queue job");
+    expect(failedMismatched?.failedReason).toBe(
+      "Deployment queue name and payload kind do not match",
+    );
     expect(safeOutput).not.toContain(canary);
   });
 

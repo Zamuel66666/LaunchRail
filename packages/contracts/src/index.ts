@@ -1,9 +1,18 @@
 export {
   createDeploymentClaimJobId,
   createDeploymentClaimTransitionIdempotencyKey,
+  createDeploymentJobId,
+  createDeploymentSourceFailureIdempotencyKey,
+  createDeploymentSourceTransitionIdempotencyKey,
   deploymentClaimJobSchema,
+  deploymentJobSchema,
+  deploymentPrepareSourceJobSchema,
   parseDeploymentClaimJob,
+  parseDeploymentJob,
+  parseDeploymentPrepareSourceJob,
   type DeploymentClaimJob,
+  type DeploymentJob,
+  type DeploymentPrepareSourceJob,
 } from "./deployment-jobs.js";
 
 export const launchRailServices = ["api", "web", "worker"] as const;

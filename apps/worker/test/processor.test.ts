@@ -17,6 +17,7 @@ const now = new Date("2026-08-10T12:00:00.000Z");
 const lease: DeploymentJobLease = {
   attemptCount: 1,
   deploymentId,
+  kind: "deployment.claim",
   leaseExpiresAt: new Date(now.getTime() + 60_000),
   leaseToken: "44444444-4444-4444-8444-444444444444",
   organizationId,
@@ -47,6 +48,8 @@ function createStore(overrides: Partial<DeploymentJobStore> = {}): DeploymentJob
         version: 2,
       },
     })),
+    completeSourcePreparation: vi.fn(async () => ({ kind: "not_found" as const })),
+    ensureMissing: vi.fn(async () => []),
     ensureMissingClaims: vi.fn(async () => []),
     ensurePendingClaim: vi.fn(async () => ({ kind: "deployment_not_found" as const })),
     fail: vi.fn(async () => ({
@@ -54,12 +57,14 @@ function createStore(overrides: Partial<DeploymentJobStore> = {}): DeploymentJob
       availableAt: now,
       kind: "retry_scheduled" as const,
     })),
+    failSourcePreparation: vi.fn(async () => ({ kind: "not_found" as const })),
     heartbeat: vi.fn(async () => ({
       kind: "extended" as const,
       leaseExpiresAt: lease.leaseExpiresAt,
     })),
     listDispatchable: vi.fn(async () => []),
     listWorkerHeartbeats: vi.fn(async () => []),
+    loadSourcePreparation: vi.fn(async () => ({ kind: "not_found" as const })),
     recordWorkerHeartbeat: vi.fn(async () => ({ kind: "version_mismatch" as const })),
     recoverExpired: vi.fn(async () => []),
     ...overrides,
@@ -101,6 +106,12 @@ describe("DeploymentClaimProcessor", () => {
     const processor = createProcessor(store);
 
     await expect(processor.process(job, new AbortController().signal)).resolves.toBe("completed");
+    expect(store.claim).toHaveBeenCalledWith({
+      expectedKind: "deployment.claim",
+      leaseDurationMs: 60_000,
+      workerId: "worker-test",
+      workItemId,
+    });
     expect(completeClaimTransition).toHaveBeenCalledWith({
       leaseToken: lease.leaseToken,
       workItemId,

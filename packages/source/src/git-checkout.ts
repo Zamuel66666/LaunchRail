@@ -28,6 +28,7 @@ import {
 
 import {
   GitCommandExecutionError,
+  GitCommandOutputLimitError,
   type GitCommandExecutor,
   SpawnGitCommandExecutor,
 } from "./git-process.js";
@@ -238,6 +239,9 @@ export class HardenedGitRepositoryCheckout implements RepositoryCheckout {
       }
       if (error instanceof SourcePreparationError) {
         throw error;
+      }
+      if (error instanceof GitCommandOutputLimitError) {
+        throw invalidSource("source_limit_exceeded", "Repository exceeds source safety limits");
       }
       if (error instanceof GitCommandExecutionError) {
         throw safeCheckoutFailure();

@@ -15,12 +15,16 @@ function createHeartbeatStore(statuses: string[]): DeploymentJobStore {
   return {
     claim: vi.fn(async () => ({ kind: "not_found" as const })),
     completeClaimTransition: vi.fn(async () => ({ kind: "not_found" as const })),
+    completeSourcePreparation: vi.fn(async () => ({ kind: "not_found" as const })),
+    ensureMissing: vi.fn(async () => []),
     ensureMissingClaims: vi.fn(async () => []),
     ensurePendingClaim: vi.fn(async () => ({ kind: "deployment_not_found" as const })),
     fail: vi.fn(async () => ({ kind: "not_found" as const })),
+    failSourcePreparation: vi.fn(async () => ({ kind: "not_found" as const })),
     heartbeat: vi.fn(async () => ({ kind: "not_found" as const })),
     listDispatchable: vi.fn(async () => []),
     listWorkerHeartbeats: vi.fn(async () => []),
+    loadSourcePreparation: vi.fn(async () => ({ kind: "not_found" as const })),
     recordWorkerHeartbeat: vi.fn(async (command: RecordWorkerHeartbeatCommand) => {
       statuses.push(command.status);
       return {

@@ -171,6 +171,7 @@ describe("configuration", () => {
     ["filesystem source root", { WORKER_SOURCE_ROOT: "/" }],
     ["resolve timeout order", { WORKER_SOURCE_RESOLVE_TIMEOUT_MS: "300001" }],
     ["clone timeout order", { WORKER_SOURCE_CLONE_TIMEOUT_MS: "300001" }],
+    ["excessive persisted source path", { WORKER_SOURCE_MAX_PATH_BYTES: "1025" }],
     [
       "source file bound order",
       { WORKER_SOURCE_MAX_BYTES: "1024", WORKER_SOURCE_MAX_FILE_BYTES: "2048" },

@@ -13,6 +13,7 @@ import {
   type GitCommandExecutor,
   type GitCommandRequest,
 } from "../src/index.js";
+import { GitCommandOutputLimitError } from "../src/git-process.js";
 
 const commitSha = "a".repeat(40);
 const treeSha = "b".repeat(40);
@@ -173,7 +174,7 @@ describe("HardenedGitRepositoryCheckout", () => {
   it("accepts an internal Dockerfile symlink and records the resolved contained path", async () => {
     const root = await testRoot();
     const dockerfile = "FROM scratch\n";
-    const target = "container/Dockerfile";
+    const target = "container/Δockerfile";
     const executor = new FixtureExecutor(async (directory) => {
       await mkdir(join(directory, "container"));
       await writeFile(join(directory, target), dockerfile);
@@ -401,6 +402,26 @@ describe("HardenedGitRepositoryCheckout", () => {
       limits: { ...sourceCheckoutDefaultLimits, maxGitDirectoryBytes: 5 },
       rootDirectory: root,
     });
+
+    await expect(
+      checkout.prepare({
+        checkoutKey: "deployment_123",
+        dockerfilePath: "Dockerfile",
+        resolvedRevision: revision([]),
+        signal: new AbortController().signal,
+      }),
+    ).rejects.toMatchObject({ code: "source_limit_exceeded", retryable: false });
+    expect(await readdir(root)).toEqual([]);
+  });
+
+  it("classifies Git output flooding as a permanent source limit violation", async () => {
+    const root = await testRoot();
+    const executor: GitCommandExecutor = {
+      execute: async () => {
+        throw new GitCommandOutputLimitError();
+      },
+    };
+    const checkout = new HardenedGitRepositoryCheckout({ executor, rootDirectory: root });
 
     await expect(
       checkout.prepare({

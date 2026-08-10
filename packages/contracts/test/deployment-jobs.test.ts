@@ -3,9 +3,15 @@ import { describe, expect, it } from "vitest";
 import {
   createDeploymentClaimJobId,
   createDeploymentClaimTransitionIdempotencyKey,
+  createDeploymentJobId,
+  createDeploymentSourceFailureIdempotencyKey,
+  createDeploymentSourceTransitionIdempotencyKey,
   deploymentClaimJobSchema,
   parseDeploymentClaimJob,
+  parseDeploymentJob,
+  parseDeploymentPrepareSourceJob,
   type DeploymentClaimJob,
+  type DeploymentPrepareSourceJob,
 } from "../src/index.js";
 
 const workItemId = "3b953ca5-a02b-446f-ad13-04bf6896e010";
@@ -81,5 +87,31 @@ describe("deployment claim job contract", () => {
   it("rejects unsafe deployment identifiers before deriving keys", () => {
     expect(() => createDeploymentClaimJobId("unsafe:deployment")).toThrow();
     expect(() => createDeploymentClaimTransitionIdempotencyKey("unsafe:deployment")).toThrow();
+  });
+});
+
+describe("deployment source-preparation job contract", () => {
+  const sourceJob = {
+    contractVersion: 1,
+    kind: "deployment.prepare_source",
+    workItemId,
+  } satisfies DeploymentPrepareSourceJob;
+
+  it("accepts only the versioned identifier-only source wake-up", () => {
+    expect(parseDeploymentJob(sourceJob)).toEqual(sourceJob);
+    expect(parseDeploymentPrepareSourceJob(sourceJob)).toEqual(sourceJob);
+    expect(() => parseDeploymentJob({ ...sourceJob, revision: "a".repeat(40) })).toThrow();
+    expect(() => parseDeploymentPrepareSourceJob(validJob)).toThrow();
+  });
+
+  it("derives kind-separated stable queue and transition identifiers", () => {
+    expect(createDeploymentJobId(sourceJob)).toBe(`deployment-prepare-source-v1-${workItemId}`);
+    expect(createDeploymentJobId(sourceJob)).not.toBe(createDeploymentJobId(validJob));
+    expect(createDeploymentSourceTransitionIdempotencyKey(workItemId)).toBe(
+      `worker-source-ready-v1-${workItemId}`,
+    );
+    expect(createDeploymentSourceFailureIdempotencyKey(workItemId)).toBe(
+      `worker-source-failure-v1-${workItemId}`,
+    );
   });
 });

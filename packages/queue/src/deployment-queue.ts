@@ -1,13 +1,13 @@
 import {
-  createDeploymentClaimJobId,
-  parseDeploymentClaimJob,
-  type DeploymentClaimJob,
+  createDeploymentJobId,
+  parseDeploymentJob,
+  type DeploymentJob,
 } from "@launchrail/contracts";
 import { Queue, UnrecoverableError, Worker } from "bullmq";
 import { Redis } from "ioredis";
 
-export const deploymentClaimQueueName = "launchrail-deployments";
-export const deploymentClaimQueuePrefix = "launchrail";
+export const deploymentQueueName = "launchrail-deployments";
+export const deploymentQueuePrefix = "launchrail";
 
 type SafeQueueComponent = "consumer" | "publisher";
 
@@ -28,7 +28,7 @@ export interface DeploymentQueuePublisherOptions extends QueueLocationOptions {
 
 export interface DeploymentQueueConsumerOptions extends QueueLocationOptions {
   readonly concurrency?: number;
-  readonly handler: DeploymentClaimHandler;
+  readonly handler: DeploymentJobHandler;
   readonly onInfrastructureEvent?: (event: QueueInfrastructureEvent) => void;
 }
 
@@ -47,15 +47,12 @@ export type DeploymentQueueJobState =
   | "waiting"
   | "waiting-children";
 
-export type DeploymentClaimHandler = (
-  payload: DeploymentClaimJob,
-  signal: AbortSignal,
-) => Promise<void>;
+export type DeploymentJobHandler = (payload: DeploymentJob, signal: AbortSignal) => Promise<void>;
 
-export class InvalidDeploymentClaimJobError extends Error {
+export class InvalidDeploymentJobError extends Error {
   public constructor() {
-    super("Invalid deployment claim job payload");
-    this.name = "InvalidDeploymentClaimJobError";
+    super("Invalid deployment job payload");
+    this.name = "InvalidDeploymentJobError";
   }
 }
 
@@ -91,8 +88,8 @@ function resolveLocation(options: QueueLocationOptions): ResolvedQueueLocation {
   }
 
   return {
-    prefix: requireQueueIdentifier("prefix", options.prefix ?? deploymentClaimQueuePrefix),
-    queueName: requireQueueIdentifier("queueName", options.queueName ?? deploymentClaimQueueName),
+    prefix: requireQueueIdentifier("prefix", options.prefix ?? deploymentQueuePrefix),
+    queueName: requireQueueIdentifier("queueName", options.queueName ?? deploymentQueueName),
     redisUrl: options.redisUrl,
   };
 }
@@ -145,35 +142,32 @@ async function closeOwnedConnection(connection: Redis): Promise<void> {
   }
 }
 
-function parseQueuePayload(input: unknown): DeploymentClaimJob {
+function parseQueuePayload(input: unknown): DeploymentJob {
   try {
-    return parseDeploymentClaimJob(input);
+    return parseDeploymentJob(input);
   } catch {
-    throw new InvalidDeploymentClaimJobError();
+    throw new InvalidDeploymentJobError();
   }
 }
 
 export class BullMqDeploymentQueuePublisher {
   private readonly connection: Redis;
-  private readonly queue: Queue<DeploymentClaimJob, void, DeploymentClaimJob["kind"]>;
+  private readonly queue: Queue<DeploymentJob, void, DeploymentJob["kind"]>;
   private closePromise: Promise<void> | undefined;
 
   public constructor(options: DeploymentQueuePublisherOptions) {
     const location = resolveLocation(options);
     const notify = safeInfrastructureNotifier("publisher", options.onInfrastructureEvent);
     this.connection = createProducerConnection(location.redisUrl, notify);
-    this.queue = new Queue<DeploymentClaimJob, void, DeploymentClaimJob["kind"]>(
-      location.queueName,
-      {
-        connection: this.connection,
-        defaultJobOptions: {
-          attempts: 1,
-          removeOnComplete: true,
-          removeOnFail: true,
-        },
-        prefix: location.prefix,
+    this.queue = new Queue<DeploymentJob, void, DeploymentJob["kind"]>(location.queueName, {
+      connection: this.connection,
+      defaultJobOptions: {
+        attempts: 1,
+        removeOnComplete: true,
+        removeOnFail: true,
       },
-    );
+      prefix: location.prefix,
+    });
     this.queue.on("error", () => notify("queue_error"));
   }
 
@@ -183,7 +177,7 @@ export class BullMqDeploymentQueuePublisher {
 
   public async enqueue(input: unknown): Promise<DeploymentQueueEnqueueResult> {
     const payload = parseQueuePayload(input);
-    const jobId = createDeploymentClaimJobId(payload.workItemId);
+    const jobId = createDeploymentJobId(payload);
     await this.waitUntilReady();
     await this.removeTerminalWakeup(jobId);
     await this.queue.add(payload.kind, payload, { jobId });
@@ -215,18 +209,24 @@ export class BullMqDeploymentQueuePublisher {
     }
   }
 
-  public async getState(workItemId: string): Promise<DeploymentQueueJobState> {
+  public async getState(
+    workItemId: string,
+    kind: DeploymentJob["kind"] = "deployment.claim",
+  ): Promise<DeploymentQueueJobState> {
     await this.waitUntilReady();
-    const job = await this.queue.getJob(createDeploymentClaimJobId(workItemId));
+    const job = await this.queue.getJob(createDeploymentJobId({ kind, workItemId }));
     if (job === undefined) {
       return "absent";
     }
     return job.getState();
   }
 
-  public async remove(workItemId: string): Promise<boolean> {
+  public async remove(
+    workItemId: string,
+    kind: DeploymentJob["kind"] = "deployment.claim",
+  ): Promise<boolean> {
     await this.waitUntilReady();
-    const job = await this.queue.getJob(createDeploymentClaimJobId(workItemId));
+    const job = await this.queue.getJob(createDeploymentJobId({ kind, workItemId }));
     if (job === undefined) {
       return false;
     }
@@ -281,7 +281,7 @@ export class BullMqDeploymentQueueConsumer {
     this.worker.on("error", () => notify("queue_error"));
   }
 
-  /** Starts claims after the application has registered its durable worker identity. */
+  /** Starts work after the application has registered its durable worker identity. */
   public start(): void {
     if (this.closePromise !== undefined) {
       throw new Error("Cannot start a closed deployment queue consumer");
@@ -294,17 +294,20 @@ export class BullMqDeploymentQueueConsumer {
     name: string,
     input: unknown,
     signal: AbortSignal | undefined,
-    handler: DeploymentClaimHandler,
+    handler: DeploymentJobHandler,
   ): Promise<void> {
-    if (name !== "deployment.claim") {
+    if (name !== "deployment.claim" && name !== "deployment.prepare_source") {
       throw new UnrecoverableError("Unsupported deployment queue job");
     }
 
-    let payload: DeploymentClaimJob;
+    let payload: DeploymentJob;
     try {
-      payload = parseDeploymentClaimJob(input);
+      payload = parseDeploymentJob(input);
     } catch {
-      throw new UnrecoverableError("Invalid deployment claim job payload");
+      throw new UnrecoverableError("Invalid deployment job payload");
+    }
+    if (payload.kind !== name) {
+      throw new UnrecoverableError("Deployment queue name and payload kind do not match");
     }
 
     const effectiveSignal = signal ?? new AbortController().signal;
@@ -313,8 +316,8 @@ export class BullMqDeploymentQueueConsumer {
     } catch {
       throw new Error(
         effectiveSignal.aborted
-          ? "Deployment claim processing aborted"
-          : "Deployment claim handler failed",
+          ? "Deployment job processing aborted"
+          : "Deployment job handler failed",
       );
     }
   }
@@ -323,12 +326,12 @@ export class BullMqDeploymentQueueConsumer {
     await this.worker.waitUntilReady();
   }
 
-  /** Stops new claims after BullMQ's fetched and active work reaches a safe pause point. */
+  /** Stops new work after BullMQ's fetched and active jobs reach a safe pause point. */
   public async pause(): Promise<void> {
     await this.worker.pause();
   }
 
-  /** Pauses new claims and waits for the handlers already running in this consumer. */
+  /** Pauses new work and waits for handlers already running in this consumer. */
   public async drain(): Promise<void> {
     await this.pause();
     while (this.activeRuns.size > 0) {

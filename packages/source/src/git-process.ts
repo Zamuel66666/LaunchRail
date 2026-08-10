@@ -24,7 +24,7 @@ export class GitCommandExecutionError extends Error {
   }
 }
 
-class GitCommandOutputLimitError extends Error {
+export class GitCommandOutputLimitError extends Error {
   public constructor() {
     super("Git command output exceeded its safety limit");
     this.name = "GitCommandOutputLimitError";

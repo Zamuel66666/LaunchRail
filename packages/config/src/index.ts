@@ -110,7 +110,7 @@ const workerSchema = sharedServiceSchema.extend({
   WORKER_SOURCE_MAX_DEPTH: positiveIntegerSchema.max(256).default(64),
   WORKER_SOURCE_MAX_FILE_BYTES: positiveIntegerSchema.max(1_073_741_824).default(16_777_216),
   WORKER_SOURCE_MAX_FILES: positiveIntegerSchema.max(1_000_000).default(20_000),
-  WORKER_SOURCE_MAX_PATH_BYTES: positiveIntegerSchema.max(16_384).default(1_024),
+  WORKER_SOURCE_MAX_PATH_BYTES: positiveIntegerSchema.max(1_024).default(1_024),
   WORKER_SOURCE_RESOLVE_RESPONSE_BYTES: positiveIntegerSchema.max(16_777_216).default(4_194_304),
   WORKER_SOURCE_RESOLVE_TIMEOUT_MS: positiveIntegerSchema.max(300_000).default(10_000),
   WORKER_SOURCE_ROOT: workerSourceRootSchema.default(defaultWorkerSourceRoot),

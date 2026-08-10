@@ -66,6 +66,8 @@ describeWithDatabase("PostgresDeploymentJobStore", () => {
     const organizationId = options.organizationId ?? randomUUID();
     const projectId = options.projectId ?? randomUUID();
     const deploymentId = randomUUID();
+    const repositoryName = `repository-${projectId.slice(0, 8)}`;
+    const sourceRevision = randomUUID().replaceAll("-", "").padEnd(40, "0");
 
     if (options.organizationId === undefined) {
       await client.db.insert(schema.organizations).values({
@@ -80,7 +82,7 @@ describeWithDatabase("PostgresDeploymentJobStore", () => {
         id: projectId,
         name: `Project ${projectId.slice(0, 6)}`,
         organizationId,
-        repositoryName: `repository-${projectId.slice(0, 8)}`,
+        repositoryName,
         repositoryOwner: "launchrail-test",
         runtimeConfig: {
           cpuMillicores: 500,
@@ -96,11 +98,18 @@ describeWithDatabase("PostgresDeploymentJobStore", () => {
       id: deploymentId,
       organizationId,
       projectId,
-      sourceRevision: randomUUID().replaceAll("-", "").padEnd(40, "0"),
-      sourceSnapshot: { branch: "main" },
+      sourceRevision,
+      sourceSnapshot: {
+        contractVersion: 1,
+        dockerfilePath: "Dockerfile",
+        repositoryName,
+        repositoryOwner: "launchrail-test",
+        repositoryProvider: "github",
+        requestedRevision: "main",
+      },
       state: options.state ?? "queued",
     });
-    return { deploymentId, organizationId, projectId };
+    return { deploymentId, organizationId, projectId, sourceRevision };
   }
 
   async function ensureClaim(
@@ -118,6 +127,33 @@ describeWithDatabase("PostgresDeploymentJobStore", () => {
       throw new Error(`Expected a deployment job, received ${result.kind}`);
     }
     return result.job;
+  }
+
+  async function enterCloning(
+    deployment: { readonly deploymentId: string; readonly organizationId: string },
+    maxAttempts = 3,
+  ) {
+    const claimJob = await ensureClaim(deployment, maxAttempts);
+    const claimed = await claim(claimJob.id);
+    if (claimed.kind !== "claimed") {
+      throw new Error(`Expected claim work lease, received ${claimed.kind}`);
+    }
+    const completed = await store.completeClaimTransition({
+      leaseToken: claimed.lease.leaseToken,
+      workItemId: claimJob.id,
+    });
+    if (completed.kind !== "completed") {
+      throw new Error(`Expected claim completion, received ${completed.kind}`);
+    }
+    const sourceJobs = await client.db
+      .select()
+      .from(schema.deploymentJobs)
+      .where(eq(schema.deploymentJobs.deploymentId, deployment.deploymentId));
+    const sourceJob = sourceJobs.find(({ kind }) => kind === "deployment.prepare_source");
+    if (sourceJob === undefined) {
+      throw new Error("Expected source-preparation work");
+    }
+    return sourceJob;
   }
 
   async function databaseNow(): Promise<Date> {
@@ -144,11 +180,13 @@ describeWithDatabase("PostgresDeploymentJobStore", () => {
   async function claim(
     workItemId: string,
     options: {
+      readonly expectedKind?: "deployment.claim" | "deployment.prepare_source";
       readonly leaseDurationMs?: number;
       readonly workerId?: string;
     } = {},
   ) {
     return store.claim({
+      expectedKind: options.expectedKind ?? "deployment.claim",
       leaseDurationMs: options.leaseDurationMs ?? 30_000,
       workItemId,
       workerId: options.workerId ?? "worker-a",
@@ -429,6 +467,11 @@ describeWithDatabase("PostgresDeploymentJobStore", () => {
       .select()
       .from(schema.deploymentJobs)
       .where(eq(schema.deploymentJobs.id, job.id));
+    const sourceJobs = await client.db
+      .select()
+      .from(schema.deploymentJobs)
+      .where(eq(schema.deploymentJobs.deploymentId, deployment.deploymentId));
+    const sourceJob = sourceJobs.find(({ kind }) => kind === "deployment.prepare_source");
     expect(storedDeployment).toMatchObject({ eventSequence: 1, state: "cloning", version: 2 });
     expect(storedJob).toMatchObject({
       completedAt: expect.any(Date),
@@ -440,6 +483,12 @@ describeWithDatabase("PostgresDeploymentJobStore", () => {
       leaseToken: null,
       status: "completed",
       workerId: null,
+    });
+    expect(sourceJob).toMatchObject({
+      attemptCount: 0,
+      kind: "deployment.prepare_source",
+      maxAttempts: 3,
+      status: "pending",
     });
 
     const [events, commands, audits] = await Promise.all([
@@ -842,6 +891,312 @@ describeWithDatabase("PostgresDeploymentJobStore", () => {
       });
     }
     expect(storedTerminalJobs.find(({ id }) => id === pendingJob.id)?.attemptCount).toBe(0);
+  });
+
+  it("binds source work to its queue kind and loads immutable preparation input", async () => {
+    const deployment = await seedDeployment();
+    const sourceJob = await enterCloning(deployment);
+
+    await expect(claim(sourceJob.id)).resolves.toEqual({
+      actualKind: "deployment.prepare_source",
+      kind: "kind_mismatch",
+    });
+    const [stillPending] = await client.db
+      .select()
+      .from(schema.deploymentJobs)
+      .where(eq(schema.deploymentJobs.id, sourceJob.id));
+    expect(stillPending).toMatchObject({ attemptCount: 0, status: "pending" });
+
+    const claimed = await claim(sourceJob.id, { expectedKind: "deployment.prepare_source" });
+    if (claimed.kind !== "claimed") {
+      throw new Error(`Expected source work lease, received ${claimed.kind}`);
+    }
+    expect(claimed.lease.kind).toBe("deployment.prepare_source");
+    await expect(
+      store.loadSourcePreparation({
+        leaseToken: claimed.lease.leaseToken,
+        workItemId: sourceJob.id,
+      }),
+    ).resolves.toEqual({
+      kind: "loaded",
+      source: {
+        deploymentId: deployment.deploymentId,
+        dockerfilePath: "Dockerfile",
+        organizationId: deployment.organizationId,
+        repositoryName: `repository-${deployment.projectId.slice(0, 8)}`,
+        repositoryOwner: "launchrail-test",
+        repositoryProvider: "github",
+        requestedRevision: "main",
+        resolvedRevision: deployment.sourceRevision,
+        workItemId: sourceJob.id,
+      },
+    });
+  });
+
+  it("refuses to lease source work before the deployment reaches cloning", async () => {
+    const deployment = await seedDeployment();
+    const [sourceJob] = await client.db
+      .insert(schema.deploymentJobs)
+      .values({
+        deploymentId: deployment.deploymentId,
+        kind: "deployment.prepare_source",
+        maxAttempts: 3,
+        organizationId: deployment.organizationId,
+      })
+      .returning();
+    if (sourceJob === undefined) {
+      throw new Error("Expected source job insert");
+    }
+
+    await expect(
+      claim(sourceJob.id, { expectedKind: "deployment.prepare_source" }),
+    ).resolves.toEqual({ kind: "state_mismatch", state: "queued" });
+    const [stored] = await client.db
+      .select()
+      .from(schema.deploymentJobs)
+      .where(eq(schema.deploymentJobs.id, sourceJob.id));
+    expect(stored).toMatchObject({ attemptCount: 0, status: "pending" });
+  });
+
+  it("lease-fences portable source metadata with the cloning-to-building transition", async () => {
+    const deployment = await seedDeployment();
+    const sourceJob = await enterCloning(deployment);
+    const claimed = await claim(sourceJob.id, { expectedKind: "deployment.prepare_source" });
+    if (claimed.kind !== "claimed") {
+      throw new Error(`Expected source work lease, received ${claimed.kind}`);
+    }
+    const metadata = {
+      checkoutId: deployment.deploymentId,
+      dockerfilePath: "Dockerfile",
+      dockerfileResolvedPath: "deploy/Δockerfile",
+      dockerfileSha256: "d".repeat(64),
+      fileCount: 12,
+      resolvedRevision: deployment.sourceRevision,
+      totalBytes: 4_096,
+      treeRevision: "e".repeat(40),
+    } as const;
+
+    await expect(
+      store.completeSourcePreparation({
+        leaseToken: claimed.lease.leaseToken,
+        metadata: { ...metadata, resolvedRevision: "f".repeat(40) },
+        workItemId: sourceJob.id,
+      }),
+    ).resolves.toEqual({ kind: "source_mismatch" });
+
+    const completed = await store.completeSourcePreparation({
+      leaseToken: claimed.lease.leaseToken,
+      metadata,
+      workItemId: sourceJob.id,
+    });
+    expect(completed).toMatchObject({
+      kind: "completed",
+      source: metadata,
+      transition: { from: "cloning", to: "building" },
+    });
+    const [storedDeployment] = await client.db
+      .select()
+      .from(schema.deployments)
+      .where(eq(schema.deployments.id, deployment.deploymentId));
+    const [storedSource] = await client.db
+      .select()
+      .from(schema.deploymentSourcePreparations)
+      .where(eq(schema.deploymentSourcePreparations.deploymentId, deployment.deploymentId));
+    const [storedJob] = await client.db
+      .select()
+      .from(schema.deploymentJobs)
+      .where(eq(schema.deploymentJobs.id, sourceJob.id));
+    expect(storedDeployment).toMatchObject({ eventSequence: 2, state: "building" });
+    expect(storedSource).toMatchObject({ ...metadata, preparedAt: expect.any(Date) });
+    expect(storedJob).toMatchObject({ completedAt: expect.any(Date), status: "completed" });
+    await expect(
+      client.db
+        .update(schema.deploymentSourcePreparations)
+        .set({ fileCount: 13 })
+        .where(eq(schema.deploymentSourcePreparations.deploymentId, deployment.deploymentId)),
+    ).rejects.toThrow(/immutable/);
+  });
+
+  it("rolls back source metadata and transition when the final lease fence expires", async () => {
+    const deployment = await seedDeployment();
+    const sourceJob = await enterCloning(deployment);
+    const claimed = await claim(sourceJob.id, {
+      expectedKind: "deployment.prepare_source",
+      leaseDurationMs: 250,
+    });
+    if (claimed.kind !== "claimed") {
+      throw new Error(`Expected source work lease, received ${claimed.kind}`);
+    }
+    const leaseValidated = deferred();
+    const releaseCompletion = deferred();
+    const synchronizedStore = new PostgresDeploymentJobStore(client.db, {
+      afterInitialSourceLeaseValidation: async () => {
+        leaseValidated.resolve();
+        await releaseCompletion.promise;
+      },
+    });
+    const completion = synchronizedStore.completeSourcePreparation({
+      leaseToken: claimed.lease.leaseToken,
+      metadata: {
+        checkoutId: deployment.deploymentId,
+        dockerfilePath: "Dockerfile",
+        dockerfileResolvedPath: "Dockerfile",
+        dockerfileSha256: "d".repeat(64),
+        fileCount: 2,
+        resolvedRevision: deployment.sourceRevision,
+        totalBytes: 512,
+        treeRevision: "e".repeat(40),
+      },
+      workItemId: sourceJob.id,
+    });
+    await leaseValidated.promise;
+    await waitForDatabaseTime(claimed.lease.leaseExpiresAt);
+    releaseCompletion.resolve();
+
+    await expect(completion).resolves.toEqual({ kind: "lease_expired" });
+    const [storedDeployment] = await client.db
+      .select()
+      .from(schema.deployments)
+      .where(eq(schema.deployments.id, deployment.deploymentId));
+    const [storedJob] = await client.db
+      .select()
+      .from(schema.deploymentJobs)
+      .where(eq(schema.deploymentJobs.id, sourceJob.id));
+    expect(storedDeployment).toMatchObject({ eventSequence: 1, state: "cloning", version: 2 });
+    expect(storedJob).toMatchObject({
+      completedAt: null,
+      leaseToken: claimed.lease.leaseToken,
+      status: "running",
+    });
+    await expect(client.db.select().from(schema.deploymentSourcePreparations)).resolves.toEqual([]);
+    await expect(
+      client.db
+        .select()
+        .from(schema.deploymentEvents)
+        .where(eq(schema.deploymentEvents.deploymentId, deployment.deploymentId)),
+    ).resolves.toHaveLength(1);
+  });
+
+  it("terminally records permanent source failures without fabricating attempts", async () => {
+    const deployment = await seedDeployment();
+    const sourceJob = await enterCloning(deployment, 4);
+    const claimed = await claim(sourceJob.id, { expectedKind: "deployment.prepare_source" });
+    if (claimed.kind !== "claimed") {
+      throw new Error(`Expected source work lease, received ${claimed.kind}`);
+    }
+
+    await expect(
+      store.failSourcePreparation({
+        failure: {
+          category: "dockerfile_missing",
+          message: "The configured Dockerfile was not found in the prepared checkout",
+        },
+        leaseToken: claimed.lease.leaseToken,
+        retryable: false,
+        retryDelayMs: 0,
+        workItemId: sourceJob.id,
+      }),
+    ).resolves.toMatchObject({
+      attemptCount: 1,
+      kind: "dead_lettered",
+      transition: { from: "cloning", to: "build_failed" },
+    });
+    const [storedJob] = await client.db
+      .select()
+      .from(schema.deploymentJobs)
+      .where(eq(schema.deploymentJobs.id, sourceJob.id));
+    const [storedDeployment] = await client.db
+      .select()
+      .from(schema.deployments)
+      .where(eq(schema.deployments.id, deployment.deploymentId));
+    expect(storedJob).toMatchObject({ attemptCount: 1, maxAttempts: 4, status: "dead_lettered" });
+    expect(storedDeployment).toMatchObject({
+      failureCategory: "dockerfile_missing",
+      state: "build_failed",
+    });
+  });
+
+  it("retries transient source failures and fails an exhausted expired lease atomically", async () => {
+    const deployment = await seedDeployment();
+    const sourceJob = await enterCloning(deployment, 2);
+    const first = await claim(sourceJob.id, { expectedKind: "deployment.prepare_source" });
+    if (first.kind !== "claimed") {
+      throw new Error(`Expected source work lease, received ${first.kind}`);
+    }
+    await expect(
+      store.failSourcePreparation({
+        failure: {
+          category: "source_unavailable",
+          message: "The public repository was temporarily unavailable",
+        },
+        leaseToken: first.lease.leaseToken,
+        retryable: true,
+        retryDelayMs: 1,
+        workItemId: sourceJob.id,
+      }),
+    ).resolves.toMatchObject({ attemptCount: 1, kind: "retry_scheduled" });
+    await makeAvailable(sourceJob.id);
+    const second = await claim(sourceJob.id, { expectedKind: "deployment.prepare_source" });
+    if (second.kind !== "claimed") {
+      throw new Error(`Expected second source work lease, received ${second.kind}`);
+    }
+    await expireLease(sourceJob.id);
+
+    await expect(store.recoverExpired({ limit: 10 })).resolves.toContainEqual({
+      id: sourceJob.id,
+      status: "dead_lettered",
+    });
+    const [storedJob] = await client.db
+      .select()
+      .from(schema.deploymentJobs)
+      .where(eq(schema.deploymentJobs.id, sourceJob.id));
+    const [storedDeployment] = await client.db
+      .select()
+      .from(schema.deployments)
+      .where(eq(schema.deployments.id, deployment.deploymentId));
+    expect(storedJob).toMatchObject({ attemptCount: 2, status: "dead_lettered" });
+    expect(storedDeployment).toMatchObject({
+      failureCategory: "infrastructure_unavailable",
+      state: "build_failed",
+    });
+  });
+
+  it("terminally fails an exhausted source lease when a duplicate wake-up wins recovery", async () => {
+    const deployment = await seedDeployment();
+    const sourceJob = await enterCloning(deployment, 1);
+    const first = await claim(sourceJob.id, { expectedKind: "deployment.prepare_source" });
+    if (first.kind !== "claimed") {
+      throw new Error(`Expected source work lease, received ${first.kind}`);
+    }
+    await expireLease(sourceJob.id);
+
+    await expect(
+      claim(sourceJob.id, { expectedKind: "deployment.prepare_source" }),
+    ).resolves.toEqual({ kind: "dead_lettered" });
+    const [storedDeployment] = await client.db
+      .select()
+      .from(schema.deployments)
+      .where(eq(schema.deployments.id, deployment.deploymentId));
+    expect(storedDeployment).toMatchObject({
+      failureCategory: "infrastructure_unavailable",
+      state: "build_failed",
+    });
+  });
+
+  it("reconciles missing source work only for deployments already cloning", async () => {
+    const cloning = await seedDeployment({ state: "cloning" });
+    const queued = await seedDeployment();
+    const created = await store.ensureMissing({ limit: 10, maxAttempts: 3 });
+    expect(created).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          deploymentId: cloning.deploymentId,
+          kind: "deployment.prepare_source",
+        }),
+        expect.objectContaining({ deploymentId: queued.deploymentId, kind: "deployment.claim" }),
+      ]),
+    );
+    expect(created).toHaveLength(2);
   });
 
   it("persists worker lifecycle, freshness, and terminal status without reopening instances", async () => {

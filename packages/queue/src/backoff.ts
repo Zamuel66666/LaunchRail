@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 
 import { createDeploymentClaimJobId } from "@launchrail/contracts";
 
-export interface DeploymentClaimBackoffOptions {
+export interface DeploymentJobBackoffOptions {
   readonly attempt: number;
   readonly baseDelayMs: number;
   readonly maxDelayMs: number;
@@ -24,12 +24,12 @@ function requirePositiveSafeInteger(name: string, value: number): void {
  * The stable work-item/attempt seed lets PostgreSQL reconciliation calculate
  * the same delay as BullMQ without persisting random queue-only state.
  */
-export function computeDeploymentClaimBackoffMs({
+export function computeDeploymentJobBackoffMs({
   attempt,
   baseDelayMs,
   maxDelayMs,
   workItemId,
-}: DeploymentClaimBackoffOptions): number {
+}: DeploymentJobBackoffOptions): number {
   requirePositiveSafeInteger("attempt", attempt);
   requirePositiveSafeInteger("baseDelayMs", baseDelayMs);
   requirePositiveSafeInteger("maxDelayMs", maxDelayMs);

@@ -1,13 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
+import type { RepositoryCheckout, RepositoryProvider } from "@launchrail/application";
 import { loadWorkerConfig } from "@launchrail/config";
 import { createDatabaseClient, PostgresDeploymentJobStore, schema } from "@launchrail/database";
 import { Queue } from "bullmq";
 import { sql } from "drizzle-orm";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Redis } from "ioredis";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createDeploymentWorkerComponents } from "../src/composition.js";
 import type { WorkerEventLogger } from "../src/processor.js";
@@ -112,15 +113,23 @@ describeWithServices("deployment worker restart recovery", () => {
         readOnlyRootFilesystem: true,
       },
     });
+    const sourceRevision = randomUUID().replaceAll("-", "").padEnd(40, "0");
     await client.db.insert(schema.deployments).values({
       configurationSnapshot: { environment: [] },
       id: deploymentId,
       organizationId,
       projectId,
-      sourceRevision: randomUUID().replaceAll("-", "").padEnd(40, "0"),
-      sourceSnapshot: { branch: "main" },
+      sourceRevision,
+      sourceSnapshot: {
+        contractVersion: 1,
+        dockerfilePath: "Dockerfile",
+        repositoryName: "queue-recovery",
+        repositoryOwner: "launchrail-test",
+        repositoryProvider: "github",
+        requestedRevision: "main",
+      },
     });
-    return { deploymentId, organizationId };
+    return { deploymentId, organizationId, sourceRevision };
   }
 
   it("reconstructs a missing wake-up after a pre-commit crash without duplicate side effects", async () => {
@@ -138,6 +147,7 @@ describeWithServices("deployment worker restart recovery", () => {
     const workItemId = ensured.job.id;
 
     const firstClaim = await store.claim({
+      expectedKind: "deployment.claim",
       leaseDurationMs: 100,
       workerId: "worker-before-crash",
       workItemId,
@@ -183,10 +193,40 @@ describeWithServices("deployment worker restart recovery", () => {
       prefix: config.WORKER_QUEUE_PREFIX,
       queueName: config.WORKER_QUEUE_NAME,
     });
+    const resolveRevision = vi.fn<RepositoryProvider["resolveRevision"]>(async (command) => ({
+      canonicalRepositoryUrl: "https://github.com/launchrail-test/queue-recovery",
+      commitSha: seeded.sourceRevision,
+      entries: [],
+      owner: "launchrail-test",
+      provider: "github",
+      repository: "queue-recovery",
+      requestedRevision: command.revision,
+      treeSha: "e".repeat(40),
+    }));
+    const prepare = vi.fn<RepositoryCheckout["prepare"]>(async (command) => ({
+      adopted: false,
+      checkoutKey: command.checkoutKey,
+      commitSha: seeded.sourceRevision,
+      directory: `/fixture/${command.checkoutKey}`,
+      dockerfile: {
+        relativePath: command.dockerfilePath,
+        resolvedRelativePath: "container/Dockerfile",
+        sha256: "d".repeat(64),
+        size: 13,
+      },
+      fileCount: 1,
+      totalBytes: 13,
+      treeSha: "e".repeat(40),
+    }));
     const components = createDeploymentWorkerComponents({
       config,
       database: client.db,
       logger,
+      repositoryCheckout: {
+        prepare,
+        remove: async () => undefined,
+      },
+      repositoryProvider: { resolveRevision },
       version: "test-version",
       workerId: "worker-after-crash",
     });
@@ -195,23 +235,41 @@ describeWithServices("deployment worker restart recovery", () => {
     // Redis has never seen this job. Startup reconciliation must rebuild the wake-up from PG.
     await components.runtime.start();
     await waitFor(async () => {
-      const job = await client.db.query.deploymentJobs.findFirst({
-        where: (jobs, { eq }) => eq(jobs.id, workItemId),
+      const deployment = await client.db.query.deployments.findFirst({
+        where: (deployments, { eq }) => eq(deployments.id, seeded.deploymentId),
       });
-      return job?.status === "completed";
+      return deployment?.state === "building";
     });
 
-    // A fresh duplicate delivery after completion must also be harmless and removable.
+    const completedJobs = await client.db.query.deploymentJobs.findMany({
+      where: (jobs, { eq }) => eq(jobs.deploymentId, seeded.deploymentId),
+    });
+    const sourceJob = completedJobs.find(({ kind }) => kind === "deployment.prepare_source");
+    if (sourceJob === undefined) {
+      throw new Error("Expected a durable source preparation job");
+    }
+
+    // Fresh duplicate deliveries after both effects must remain harmless and removable.
     await components.publisher.enqueue({
       contractVersion: 1,
       kind: "deployment.claim",
       workItemId,
     });
+    await components.publisher.enqueue({
+      contractVersion: 1,
+      kind: "deployment.prepare_source",
+      workItemId: sourceJob.id,
+    });
     await waitFor(async () => (await components.publisher.getState(workItemId)) === "absent");
+    await waitFor(
+      async () =>
+        (await components.publisher.getState(sourceJob.id, "deployment.prepare_source")) ===
+        "absent",
+    );
     await components.runtime.stop();
 
-    const job = await client.db.query.deploymentJobs.findFirst({
-      where: (jobs, { eq }) => eq(jobs.id, workItemId),
+    const jobs = await client.db.query.deploymentJobs.findMany({
+      where: (jobs, { eq }) => eq(jobs.deploymentId, seeded.deploymentId),
     });
     const deployment = await client.db.query.deployments.findFirst({
       where: (deployments, { eq }) => eq(deployments.id, seeded.deploymentId),
@@ -228,12 +286,46 @@ describeWithServices("deployment worker restart recovery", () => {
     const heartbeats = await client.db.query.workerHeartbeats.findMany({
       where: (workers, { eq }) => eq(workers.workerId, "worker-after-crash"),
     });
+    const preparedSources = await client.db.query.deploymentSourcePreparations.findMany({
+      where: (sources, { eq }) => eq(sources.deploymentId, seeded.deploymentId),
+    });
 
-    expect(job).toMatchObject({ attemptCount: 2, status: "completed" });
-    expect(deployment).toMatchObject({ attempt: 2, eventSequence: 1, state: "cloning" });
-    expect(events).toHaveLength(1);
-    expect(commands).toHaveLength(1);
-    expect(audits).toHaveLength(1);
+    expect(jobs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          attemptCount: 2,
+          id: workItemId,
+          kind: "deployment.claim",
+          status: "completed",
+        }),
+        expect.objectContaining({
+          attemptCount: 1,
+          id: sourceJob.id,
+          kind: "deployment.prepare_source",
+          status: "completed",
+        }),
+      ]),
+    );
+    expect(jobs).toHaveLength(2);
+    expect(deployment).toMatchObject({ attempt: 3, eventSequence: 2, state: "building" });
+    expect(preparedSources).toEqual([
+      expect.objectContaining({
+        checkoutId: seeded.deploymentId,
+        dockerfilePath: "Dockerfile",
+        dockerfileResolvedPath: "container/Dockerfile",
+        resolvedRevision: seeded.sourceRevision,
+        treeRevision: "e".repeat(40),
+      }),
+    ]);
+    expect(events).toHaveLength(2);
+    expect(commands).toHaveLength(2);
+    expect(audits).toHaveLength(2);
+    expect(resolveRevision).toHaveBeenCalledOnce();
+    expect(resolveRevision.mock.calls[0]?.[0]).toMatchObject({
+      repository: { owner: "launchrail-test", repository: "queue-recovery" },
+      revision: seeded.sourceRevision,
+    });
+    expect(prepare).toHaveBeenCalledOnce();
     expect(heartbeats).toHaveLength(1);
     expect(heartbeats[0]).toMatchObject({ activeJobCount: 0, status: "stopped" });
   });

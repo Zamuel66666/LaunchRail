@@ -1,6 +1,6 @@
 import type { DeploymentJobLease, DeploymentJobStore } from "@launchrail/application";
 import type { DeploymentClaimJob } from "@launchrail/contracts";
-import { computeDeploymentClaimBackoffMs } from "@launchrail/queue";
+import { computeDeploymentJobBackoffMs } from "@launchrail/queue";
 
 export interface WorkerEventLogger {
   error(bindings: Readonly<Record<string, unknown>>, message: string): void;
@@ -8,7 +8,7 @@ export interface WorkerEventLogger {
   warn(bindings: Readonly<Record<string, unknown>>, message: string): void;
 }
 
-export type DeploymentClaimProcessingOutcome =
+export type DeploymentJobProcessingOutcome =
   | "completed"
   | "dead_lettered"
   | "infrastructure_unavailable"
@@ -159,7 +159,7 @@ export class DeploymentClaimProcessor {
   public async process(
     job: DeploymentClaimJob,
     shutdownSignal: AbortSignal,
-  ): Promise<DeploymentClaimProcessingOutcome> {
+  ): Promise<DeploymentJobProcessingOutcome> {
     if (shutdownSignal.aborted) {
       return "interrupted";
     }
@@ -168,6 +168,7 @@ export class DeploymentClaimProcessor {
     const attemptSignal = AbortSignal.any([shutdownSignal, timeoutSignal]);
     let claimSettled = false;
     const claimOperation = this.store.claim({
+      expectedKind: job.kind,
       leaseDurationMs: this.leaseDurationMs,
       workerId: this.workerId,
       workItemId: job.workItemId,
@@ -289,7 +290,7 @@ export class DeploymentClaimProcessor {
         return "interrupted";
       }
 
-      const delayMs = computeDeploymentClaimBackoffMs({
+      const delayMs = computeDeploymentJobBackoffMs({
         attempt: lease.attemptCount,
         baseDelayMs: this.backoffBaseMs,
         maxDelayMs: this.backoffCapMs,

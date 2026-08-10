@@ -1,4 +1,4 @@
-import type { DeploymentState } from "@launchrail/domain";
+import type { DeploymentFailureCategory, DeploymentState } from "@launchrail/domain";
 
 import type { DeploymentTransitionResult } from "./deployments.js";
 
@@ -12,7 +12,7 @@ export const deploymentJobStatuses = [
 
 export type DeploymentJobStatus = (typeof deploymentJobStatuses)[number];
 
-export const deploymentJobKinds = ["deployment.claim"] as const;
+export const deploymentJobKinds = ["deployment.claim", "deployment.prepare_source"] as const;
 
 export type DeploymentJobKind = (typeof deploymentJobKinds)[number];
 
@@ -59,6 +59,11 @@ export interface EnsureMissingDeploymentClaimJobsCommand {
   readonly maxAttempts: number;
 }
 
+export interface EnsureMissingDeploymentJobsCommand {
+  readonly limit: number;
+  readonly maxAttempts: number;
+}
+
 export interface ListDispatchableDeploymentJobsQuery {
   readonly limit: number;
 }
@@ -70,6 +75,7 @@ export interface DispatchableDeploymentJob {
 }
 
 export interface ClaimDeploymentJobCommand {
+  readonly expectedKind: DeploymentJobKind;
   readonly leaseDurationMs: number;
   readonly workItemId: string;
   readonly workerId: string;
@@ -78,6 +84,7 @@ export interface ClaimDeploymentJobCommand {
 export interface DeploymentJobLease {
   readonly attemptCount: number;
   readonly deploymentId: string;
+  readonly kind: DeploymentJobKind;
   readonly leaseExpiresAt: Date;
   readonly leaseToken: string;
   readonly organizationId: string;
@@ -87,7 +94,9 @@ export interface DeploymentJobLease {
 export type ClaimDeploymentJobResult =
   | { readonly kind: "claimed"; readonly lease: DeploymentJobLease }
   | { readonly kind: "busy"; readonly leaseExpiresAt: Date }
+  | { readonly actualKind: DeploymentJobKind; readonly kind: "kind_mismatch" }
   | { readonly availableAt: Date; readonly kind: "not_due" }
+  | { readonly kind: "state_mismatch"; readonly state: DeploymentState }
   | { readonly kind: "completed" | "dead_lettered" | "not_found" };
 
 export interface HeartbeatDeploymentJobCommand {
@@ -97,6 +106,7 @@ export interface HeartbeatDeploymentJobCommand {
 }
 
 export type LeaseMutationFailure =
+  | { readonly actualKind: DeploymentJobKind; readonly kind: "kind_mismatch" }
   | { readonly kind: "lease_expired" }
   | { readonly kind: "lease_mismatch" }
   | { readonly kind: "not_found" }
@@ -112,6 +122,93 @@ export interface CompleteDeploymentClaimTransitionCommand {
 
 export type CompleteDeploymentClaimTransitionResult =
   | { readonly kind: "completed"; readonly transition: DeploymentTransitionResult }
+  | LeaseMutationFailure;
+
+export interface DeploymentSourcePreparationInput {
+  readonly deploymentId: string;
+  readonly dockerfilePath: string;
+  readonly organizationId: string;
+  readonly repositoryName: string;
+  readonly repositoryOwner: string;
+  readonly repositoryProvider: "github";
+  readonly requestedRevision: string;
+  readonly resolvedRevision: string;
+  readonly workItemId: string;
+}
+
+export interface LoadDeploymentSourcePreparationCommand {
+  readonly leaseToken: string;
+  readonly workItemId: string;
+}
+
+export type LoadDeploymentSourcePreparationResult =
+  | { readonly kind: "loaded"; readonly source: DeploymentSourcePreparationInput }
+  | { readonly kind: "invalid_source_snapshot" }
+  | LeaseMutationFailure;
+
+export interface PreparedDeploymentSourceMetadata {
+  readonly checkoutId: string;
+  readonly dockerfilePath: string;
+  readonly dockerfileResolvedPath: string;
+  readonly dockerfileSha256: string;
+  readonly fileCount: number;
+  readonly resolvedRevision: string;
+  readonly totalBytes: number;
+  readonly treeRevision: string;
+}
+
+export interface PreparedDeploymentSourceSummary extends PreparedDeploymentSourceMetadata {
+  readonly deploymentId: string;
+  readonly organizationId: string;
+  readonly preparedAt: Date;
+}
+
+export interface CompleteDeploymentSourcePreparationCommand {
+  readonly leaseToken: string;
+  readonly metadata: PreparedDeploymentSourceMetadata;
+  readonly workItemId: string;
+}
+
+export type CompleteDeploymentSourcePreparationResult =
+  | {
+      readonly kind: "completed";
+      readonly source: PreparedDeploymentSourceSummary;
+      readonly transition: DeploymentTransitionResult;
+    }
+  | { readonly kind: "source_mismatch" }
+  | LeaseMutationFailure;
+
+export type SourcePreparationFailureCategory = Extract<
+  DeploymentFailureCategory,
+  | "clone_timeout"
+  | "dockerfile_missing"
+  | "infrastructure_unavailable"
+  | "source_invalid"
+  | "source_unavailable"
+>;
+
+export interface FailDeploymentSourcePreparationCommand {
+  readonly failure: {
+    readonly category: SourcePreparationFailureCategory;
+    readonly message: string;
+  };
+  readonly leaseToken: string;
+  readonly retryable: boolean;
+  readonly retryDelayMs: number;
+  readonly workItemId: string;
+}
+
+export type FailDeploymentSourcePreparationResult =
+  | {
+      readonly attemptCount: number;
+      readonly availableAt: Date;
+      readonly kind: "retry_scheduled";
+    }
+  | {
+      readonly attemptCount: number;
+      readonly kind: "dead_lettered";
+      readonly transition: DeploymentTransitionResult;
+    }
   | LeaseMutationFailure;
 
 export interface FailDeploymentJobCommand {
@@ -178,6 +275,12 @@ export interface DeploymentJobStore {
   completeClaimTransition(
     command: CompleteDeploymentClaimTransitionCommand,
   ): Promise<CompleteDeploymentClaimTransitionResult>;
+  completeSourcePreparation(
+    command: CompleteDeploymentSourcePreparationCommand,
+  ): Promise<CompleteDeploymentSourcePreparationResult>;
+  ensureMissing(
+    command: EnsureMissingDeploymentJobsCommand,
+  ): Promise<readonly DeploymentJobSummary[]>;
   ensureMissingClaims(
     command: EnsureMissingDeploymentClaimJobsCommand,
   ): Promise<readonly DeploymentJobSummary[]>;
@@ -185,6 +288,9 @@ export interface DeploymentJobStore {
     command: EnsureDeploymentClaimJobCommand,
   ): Promise<EnsureDeploymentClaimJobResult>;
   fail(command: FailDeploymentJobCommand): Promise<FailDeploymentJobResult>;
+  failSourcePreparation(
+    command: FailDeploymentSourcePreparationCommand,
+  ): Promise<FailDeploymentSourcePreparationResult>;
   heartbeat(command: HeartbeatDeploymentJobCommand): Promise<HeartbeatDeploymentJobResult>;
   listDispatchable(
     query: ListDispatchableDeploymentJobsQuery,
@@ -198,4 +304,7 @@ export interface DeploymentJobStore {
   recoverExpired(
     command: RecoverExpiredDeploymentJobsCommand,
   ): Promise<readonly RecoveredDeploymentJob[]>;
+  loadSourcePreparation(
+    command: LoadDeploymentSourcePreparationCommand,
+  ): Promise<LoadDeploymentSourcePreparationResult>;
 }

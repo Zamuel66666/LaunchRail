@@ -1,11 +1,11 @@
-export { computeDeploymentClaimBackoffMs, type DeploymentClaimBackoffOptions } from "./backoff.js";
+export { computeDeploymentJobBackoffMs, type DeploymentJobBackoffOptions } from "./backoff.js";
 export {
   BullMqDeploymentQueueConsumer,
   BullMqDeploymentQueuePublisher,
-  InvalidDeploymentClaimJobError,
-  deploymentClaimQueueName,
-  deploymentClaimQueuePrefix,
-  type DeploymentClaimHandler,
+  InvalidDeploymentJobError,
+  deploymentQueueName,
+  deploymentQueuePrefix,
+  type DeploymentJobHandler,
   type DeploymentQueueConsumerOptions,
   type DeploymentQueueEnqueueResult,
   type DeploymentQueueJobState,

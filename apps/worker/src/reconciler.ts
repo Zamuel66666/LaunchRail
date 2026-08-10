@@ -1,17 +1,17 @@
 import type { DeploymentJobStore } from "@launchrail/application";
-import { parseDeploymentClaimJob, type DeploymentClaimJob } from "@launchrail/contracts";
+import { parseDeploymentJob, type DeploymentJob } from "@launchrail/contracts";
 
 import type { WorkerEventLogger } from "./processor.js";
 
-export interface DeploymentClaimPublisher {
-  enqueue(job: DeploymentClaimJob): Promise<Readonly<{ jobId: string }>>;
+export interface DeploymentJobPublisher {
+  enqueue(job: DeploymentJob): Promise<Readonly<{ jobId: string }>>;
 }
 
 export interface DeploymentJobReconcilerOptions {
   readonly batchSize: number;
   readonly logger: WorkerEventLogger;
   readonly maxAttempts: number;
-  readonly publisher: DeploymentClaimPublisher;
+  readonly publisher: DeploymentJobPublisher;
   readonly store: DeploymentJobStore;
 }
 
@@ -28,7 +28,7 @@ export class DeploymentJobReconciler {
   private inFlight: Promise<DeploymentJobReconciliationResult> | undefined;
   private readonly logger: WorkerEventLogger;
   private readonly maxAttempts: number;
-  private readonly publisher: DeploymentClaimPublisher;
+  private readonly publisher: DeploymentJobPublisher;
   private readonly store: DeploymentJobStore;
 
   public constructor({
@@ -58,7 +58,7 @@ export class DeploymentJobReconciler {
 
   private async reconcile(): Promise<DeploymentJobReconciliationResult> {
     const recovered = await this.store.recoverExpired({ limit: this.batchSize });
-    const ensured = await this.store.ensureMissingClaims({
+    const ensured = await this.store.ensureMissing({
       limit: this.batchSize,
       maxAttempts: this.maxAttempts,
     });
@@ -69,7 +69,7 @@ export class DeploymentJobReconciler {
     for (const job of dispatchable) {
       try {
         await this.publisher.enqueue(
-          parseDeploymentClaimJob({
+          parseDeploymentJob({
             contractVersion: job.contractVersion,
             kind: job.kind,
             workItemId: job.id,

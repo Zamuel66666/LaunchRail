@@ -5,6 +5,7 @@ import { DeploymentJobReconciler } from "../src/reconciler.js";
 import type { WorkerEventLogger } from "../src/processor.js";
 
 const workItemId = "11111111-1111-4111-8111-111111111111";
+const sourceWorkItemId = "44444444-4444-4444-8444-444444444444";
 
 const logger: WorkerEventLogger = {
   error: vi.fn(),
@@ -16,12 +17,16 @@ function createStore(overrides: Partial<DeploymentJobStore> = {}): DeploymentJob
   return {
     claim: vi.fn(async () => ({ kind: "not_found" as const })),
     completeClaimTransition: vi.fn(async () => ({ kind: "not_found" as const })),
+    completeSourcePreparation: vi.fn(async () => ({ kind: "not_found" as const })),
+    ensureMissing: vi.fn(async () => []),
     ensureMissingClaims: vi.fn(async () => []),
     ensurePendingClaim: vi.fn(async () => ({ kind: "deployment_not_found" as const })),
     fail: vi.fn(async () => ({ kind: "not_found" as const })),
+    failSourcePreparation: vi.fn(async () => ({ kind: "not_found" as const })),
     heartbeat: vi.fn(async () => ({ kind: "not_found" as const })),
     listDispatchable: vi.fn(async () => []),
     listWorkerHeartbeats: vi.fn(async () => []),
+    loadSourcePreparation: vi.fn(async () => ({ kind: "not_found" as const })),
     recordWorkerHeartbeat: vi.fn(async () => ({ kind: "version_mismatch" as const })),
     recoverExpired: vi.fn(async () => []),
     ...overrides,
@@ -31,9 +36,14 @@ function createStore(overrides: Partial<DeploymentJobStore> = {}): DeploymentJob
 describe("DeploymentJobReconciler", () => {
   it("recovers leases, creates missing work, and dispatches due identifiers", async () => {
     const store = createStore({
-      ensureMissingClaims: vi.fn(async () => [{ id: workItemId }] as never),
+      ensureMissing: vi.fn(async () => [{ id: workItemId }] as never),
       listDispatchable: vi.fn(async () => [
         { contractVersion: 1, id: workItemId, kind: "deployment.claim" as const },
+        {
+          contractVersion: 1,
+          id: sourceWorkItemId,
+          kind: "deployment.prepare_source" as const,
+        },
       ]),
       recoverExpired: vi.fn(async () => [
         {
@@ -58,7 +68,7 @@ describe("DeploymentJobReconciler", () => {
     await expect(reconciler.runOnce()).resolves.toEqual({
       deadLettered: 1,
       dispatchFailed: 0,
-      dispatched: 1,
+      dispatched: 2,
       ensured: 1,
       recovered: 2,
     });
@@ -66,6 +76,11 @@ describe("DeploymentJobReconciler", () => {
       contractVersion: 1,
       kind: "deployment.claim",
       workItemId,
+    });
+    expect(enqueue).toHaveBeenCalledWith({
+      contractVersion: 1,
+      kind: "deployment.prepare_source",
+      workItemId: sourceWorkItemId,
     });
   });
 

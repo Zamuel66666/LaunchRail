@@ -1,6 +1,6 @@
 import type { DeploymentJobStore, WorkerHeartbeatStatus } from "@launchrail/application";
 
-import type { DeploymentClaimProcessor, WorkerEventLogger } from "./processor.js";
+import type { WorkerEventLogger } from "./processor.js";
 import type { DeploymentJobReconciler } from "./reconciler.js";
 
 export interface DeploymentQueueConsumerLifecycle {
@@ -17,11 +17,16 @@ export interface DeploymentQueuePublisherLifecycle {
   waitUntilReady(): Promise<void>;
 }
 
+export interface DeploymentProcessorLifecycle {
+  getActiveJobCount(): number;
+  waitForIdle(): Promise<void>;
+}
+
 export interface DeploymentWorkerRuntimeOptions {
   readonly consumer: DeploymentQueueConsumerLifecycle;
   readonly heartbeatIntervalMs: number;
   readonly logger: WorkerEventLogger;
-  readonly processor: DeploymentClaimProcessor;
+  readonly processor: DeploymentProcessorLifecycle;
   readonly publisher: DeploymentQueuePublisherLifecycle;
   readonly reconciliationIntervalMs: number;
   readonly reconciler: DeploymentJobReconciler;
@@ -68,7 +73,7 @@ export class DeploymentWorkerRuntime {
   private heartbeatWrites = Promise.resolve();
   private readonly heartbeatIntervalMs: number;
   private readonly logger: WorkerEventLogger;
-  private readonly processor: DeploymentClaimProcessor;
+  private readonly processor: DeploymentProcessorLifecycle;
   private readonly publisher: DeploymentQueuePublisherLifecycle;
   private periodicHeartbeat: Promise<void> | undefined;
   private periodicReconciliation: Promise<unknown> | undefined;

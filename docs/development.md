@@ -2,14 +2,14 @@
 
 ## Current repository state
 
-Phases 1 through 5 provide the currently accepted runnable TypeScript workspace, web/API/worker processes, deployment-domain/PostgreSQL transition persistence, authenticated organization/project routes, encrypted environment-variable storage, and a clean-service-verified PostgreSQL-authoritative BullMQ worker foundation. Phase 6 adds repository preparation. No deployment-start use case, HTTP route, or web flow exists yet.
+Phases 1 through 6 provide the currently accepted runnable TypeScript workspace, web/API/worker processes, deployment-domain/PostgreSQL transition persistence, authenticated organization/project routes, encrypted environment-variable storage, PostgreSQL-authoritative BullMQ work, and hardened public GitHub source preparation through `building`. No deployment-start use case, HTTP route, web flow, or image build exists yet.
 
 ## Prerequisites
 
 - Node.js 22.22 or newer (the exact development version is in `.nvmrc`).
 - Corepack with pnpm 11.9.0.
 - Docker Engine and Docker Compose for PostgreSQL and Redis.
-- Git.
+- Linux with Git available at `/usr/bin/git` for the production source adapter.
 
 The workspace pins application dependencies in `pnpm-lock.yaml`. Do not replace a frozen install with an unreviewed lockfile update in CI or setup instructions.
 
@@ -73,54 +73,60 @@ The volume-deleting command is not wrapped in the normal shutdown script so data
 
 `.env.example` is the safe local template. The API and worker load the root `.env` through Node's `--env-file-if-exists` option. The smoke test uses `.env` when present and falls back to `.env.example`.
 
-| Variable                                   | Purpose                         | Local default           |
-| ------------------------------------------ | ------------------------------- | ----------------------- |
-| `NODE_ENV`                                 | Runtime policy                  | `development`           |
-| `LOG_LEVEL`                                | API/worker structured log level | `info`                  |
-| `API_HOST`, `API_PORT`                     | API health listener             | `127.0.0.1:4000`        |
-| `WORKER_HEALTH_HOST`, `WORKER_HEALTH_PORT` | Worker health listener          | `127.0.0.1:4001`        |
-| `WORKER_MODE`                              | Full worker or health-only      | `run`                   |
-| `WORKER_QUEUE_NAME`, `WORKER_QUEUE_PREFIX` | Bounded BullMQ identifiers      | See `.env.example`      |
-| `WORKER_CONCURRENCY`                       | Concurrent claim handlers       | `2`                     |
-| `WORKER_MAX_ATTEMPTS`                      | Durable attempt ceiling         | `5`                     |
-| `WORKER_JOB_TIMEOUT_MS`                    | Per-claim execution bound       | `300000`                |
-| `WORKER_BACKOFF_BASE_MS`, `*_CAP_MS`       | Deterministic retry bounds      | `1000`, `60000`         |
-| `WORKER_LEASE_MS`                          | PostgreSQL claim lease          | `60000`                 |
-| `WORKER_HEARTBEAT_INTERVAL_MS`             | Job/worker heartbeat interval   | `10000`                 |
-| `WORKER_RECONCILIATION_INTERVAL_MS`        | Recovery scan interval          | `15000`                 |
-| `WORKER_RECONCILIATION_BATCH_SIZE`         | Maximum rows per recovery scan  | `100`                   |
-| `WORKER_SHUTDOWN_GRACE_MS`                 | Active-work drain bound         | `30000`                 |
-| `WEB_HOST`, `WEB_PORT`                     | Next.js listener                | `127.0.0.1:3000`        |
-| `NEXT_PUBLIC_API_BASE_URL`                 | Browser-facing API base URL     | `http://localhost:4000` |
-| `DATABASE_URL`                             | PostgreSQL connection URL       | Local Compose service   |
-| `REDIS_URL`                                | Redis connection URL            | Local Compose service   |
-| `WEB_ORIGIN`                               | Allowed browser request origin  | `http://localhost:3000` |
-| `SESSION_*`                                | Cookie and session lifetimes    | See `.env.example`      |
-| `SIGN_IN_RATE_LIMIT_MAX`                   | Sign-in attempts/client/minute  | `5`                     |
-| `LAUNCHRAIL_SECRET_KEYRING`                | Versioned AES-256 project keys  | No default              |
-| `LAUNCHRAIL_ACTIVE_SECRET_KEY_VERSION`     | Key version for new writes      | No default              |
-| `LAUNCHRAIL_BOOTSTRAP_*`                   | One-time initial owner fields   | No active default       |
-| `POSTGRES_*`, `REDIS_PORT`                 | Compose service configuration   | See `.env.example`      |
+| Variable                                   | Purpose                         | Local default             |
+| ------------------------------------------ | ------------------------------- | ------------------------- |
+| `NODE_ENV`                                 | Runtime policy                  | `development`             |
+| `LOG_LEVEL`                                | API/worker structured log level | `info`                    |
+| `API_HOST`, `API_PORT`                     | API health listener             | `127.0.0.1:4000`          |
+| `WORKER_HEALTH_HOST`, `WORKER_HEALTH_PORT` | Worker health listener          | `127.0.0.1:4001`          |
+| `WORKER_MODE`                              | Full worker or health-only      | `run`                     |
+| `WORKER_QUEUE_NAME`, `WORKER_QUEUE_PREFIX` | Bounded BullMQ identifiers      | See `.env.example`        |
+| `WORKER_CONCURRENCY`                       | Concurrent job handlers         | `2`                       |
+| `WORKER_MAX_ATTEMPTS`                      | Durable attempt ceiling         | `5`                       |
+| `WORKER_JOB_TIMEOUT_MS`                    | Per-job execution bound         | `300000`                  |
+| `WORKER_BACKOFF_BASE_MS`, `*_CAP_MS`       | Deterministic retry bounds      | `1000`, `60000`           |
+| `WORKER_LEASE_MS`                          | PostgreSQL job lease            | `60000`                   |
+| `WORKER_HEARTBEAT_INTERVAL_MS`             | Job/worker heartbeat interval   | `10000`                   |
+| `WORKER_RECONCILIATION_INTERVAL_MS`        | Recovery scan interval          | `15000`                   |
+| `WORKER_RECONCILIATION_BATCH_SIZE`         | Maximum rows per recovery scan  | `100`                     |
+| `WORKER_SHUTDOWN_GRACE_MS`                 | Active-work drain bound         | `30000`                   |
+| `WORKER_SOURCE_ROOT`                       | Private retained checkout root  | `/tmp/launchrail-sources` |
+| `WORKER_SOURCE_RESOLVE_*`                  | GitHub response/deadline bounds | See `.env.example`        |
+| `WORKER_SOURCE_CLONE_TIMEOUT_MS`           | Source preparation deadline     | `120000`                  |
+| `WORKER_SOURCE_GIT_*`                      | Git directory/output bounds     | See `.env.example`        |
+| `WORKER_SOURCE_MAX_*`                      | Checkout file/byte/path bounds  | See `.env.example`        |
+| `WEB_HOST`, `WEB_PORT`                     | Next.js listener                | `127.0.0.1:3000`          |
+| `NEXT_PUBLIC_API_BASE_URL`                 | Browser-facing API base URL     | `http://localhost:4000`   |
+| `DATABASE_URL`                             | PostgreSQL connection URL       | Local Compose service     |
+| `REDIS_URL`                                | Redis connection URL            | Local Compose service     |
+| `WEB_ORIGIN`                               | Allowed browser request origin  | `http://localhost:3000`   |
+| `SESSION_*`                                | Cookie and session lifetimes    | See `.env.example`        |
+| `SIGN_IN_RATE_LIMIT_MAX`                   | Sign-in attempts/client/minute  | `5`                       |
+| `LAUNCHRAIL_SECRET_KEYRING`                | Versioned AES-256 project keys  | No default                |
+| `LAUNCHRAIL_ACTIVE_SECRET_KEY_VERSION`     | Key version for new writes      | No default                |
+| `LAUNCHRAIL_BOOTSTRAP_*`                   | One-time initial owner fields   | No active default         |
+| `POSTGRES_*`, `REDIS_PORT`                 | Compose service configuration   | See `.env.example`        |
 
-Configuration parsing reports every invalid field without echoing supplied values. Production mode rejects the documented development database password and an insecure browser origin. The API has no encryption-key default: its comma-separated keyring accepts one to eight unique positive versions with exact 32-byte base64url keys, and the selected active version must exist. Never commit `.env`; retain historical keys during manual rotation until every affected value has been replaced. GitHub and webhook credentials will likewise have no insecure production defaults when introduced.
+Configuration parsing reports every invalid field without echoing supplied values. Production mode rejects the documented development database password and an insecure browser origin. Source sub-timeouts cannot exceed the job timeout, the individual-file ceiling cannot exceed the checkout ceiling, and the source root must be absolute, normalized, non-root, private, and owned by the worker user. The API has no encryption-key default: its comma-separated keyring accepts one to eight unique positive versions with exact 32-byte base64url keys, and the selected active version must exist. Never commit `.env`; retain historical keys during manual rotation until every affected value has been replaced. The public GitHub adapter deliberately uses no credentials; future webhook/private-source credentials must have no insecure defaults.
 
 ## Workspace layout
 
 ```text
 apps/api                  Fastify identity/project boundary and health endpoint
 apps/web                  Next.js sign-in/project interface and web health endpoint
-apps/worker               BullMQ claim worker, recovery loops, and health server
+apps/worker               BullMQ claim/source worker, recovery loops, and health server
 packages/config           Runtime-validated process configuration
 packages/contracts        Shared transport and health contracts
 packages/observability    Redacted structured logger conventions
 scripts                   Repeatable application smoke checks
 packages/domain           Deployment transitions and safe project value rules
-packages/application      Deployment/project use cases and persistence ports
-packages/database         Identity/project/deployment plus durable job/heartbeat adapters
+packages/application      Deployment/project/source use cases and persistence ports
+packages/database         Identity/project/deployment plus durable job/source/heartbeat adapters
 packages/queue            BullMQ identifier-only wake-up adapter
+packages/source           Public GitHub resolver and hardened exact-SHA Git checkout
 ```
 
-The dependency direction is `database -> application -> domain`; package builds run in topological order.
+Infrastructure packages depend on application/domain contracts rather than the reverse; package builds run in topological order.
 
 ## Quality commands
 
@@ -137,6 +143,7 @@ pnpm test:queue
 pnpm test:integration
 pnpm build
 pnpm smoke:health
+pnpm audit --prod
 docker compose --env-file .env.example config --quiet
 ```
 
@@ -144,7 +151,7 @@ docker compose --env-file .env.example config --quiet
 
 `pnpm test:database` requires `DATABASE_URL` and a PostgreSQL database that may be truncated by the suite. `pnpm test:queue` requires both `DATABASE_URL` and `REDIS_URL`; both targets must be disposable. GitHub Actions starts both services, applies migrations from empty state, runs the real database and queue/worker integration suites, and removes the service volumes.
 
-See [persistence.md](persistence.md) for the schema, migration, transaction, and clean-database workflow; [authentication.md](authentication.md) for bootstrap/session behavior; [project-management.md](project-management.md) for project routes, bounds, encryption, archival, and key rotation; and [queue-worker.md](queue-worker.md) for job contracts, durable retry/recovery state, operation, and shutdown.
+See [persistence.md](persistence.md) for the schema, migration, transaction, and clean-database workflow; [authentication.md](authentication.md) for bootstrap/session behavior; [project-management.md](project-management.md) for project routes, bounds, encryption, archival, and key rotation; [queue-worker.md](queue-worker.md) for job contracts, durable retry/recovery state, operation, and shutdown; and [repository-preparation.md](repository-preparation.md) for provider, checkout, filesystem, persistence, and security boundaries.
 
 ## Session workflow
 
@@ -170,7 +177,7 @@ Update runtime request/response schemas, generated OpenAPI output, authorization
 
 ## Worker and infrastructure changes
 
-Document retry, timeout, idempotency, cancellation, cleanup, and crash behavior. Tests should use fake ports for domain/application behavior and real disposable services for adapter contracts. Phase 5 queue tests require both PostgreSQL and Redis because Redis delivery alone cannot prove authoritative recovery. Docker integration commands must operate only on resources labeled for their isolated test run.
+Document retry, timeout, idempotency, cancellation, cleanup, and crash behavior. Tests should use fake ports for domain/application behavior and controlled local fixtures or real disposable services for adapter contracts. Queue tests require both PostgreSQL and Redis because Redis delivery alone cannot prove authoritative recovery; source tests use fake HTTP and local real-Git repositories rather than external GitHub. Docker integration commands must operate only on resources labeled for their isolated test run.
 
 ## User-interface changes
 

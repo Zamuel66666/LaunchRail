@@ -4,7 +4,7 @@
 
 LaunchRail tests observable outcomes and safety invariants across domain logic, persistence, queues, infrastructure adapters, and browser workflows. A green unit suite alone cannot prove that a deployment survives real process and service failures, so each layer has a distinct job.
 
-Phases 1 through 5 provide Vitest tests for health/configuration contracts, deployment transitions, project validation and encryption, role policy, password hashing, Fastify/web boundaries, strict job contracts, durable work items/heartbeats, and BullMQ worker behavior. Unit tests plus disposable PostgreSQL and Redis suites collectively exercise clean migrations, ownership constraints, transactional rollback, idempotency, immutable snapshots, failed-candidate safety, serialized promotion, authorization, project archival/secret storage, duplicate wake-up handling, leases/fencing, retries/timeouts, dead letters, reconciliation, heartbeat freshness, and graceful draining. [GitHub Actions run 31408251857](https://github.com/Zamuel66666/LaunchRail/actions/runs/31408251857) verifies the Phase 5 clean-service gate.
+Phases 1 through 6 provide Vitest tests for health/configuration contracts, deployment transitions, project validation/encryption, role policy, password hashing, Fastify/web boundaries, strict job contracts, durable work/heartbeats, BullMQ worker behavior, public GitHub resolution, and hardened Git checkout. Unit tests plus disposable PostgreSQL/Redis and local real-Git fixtures collectively exercise clean migrations, ownership constraints, transactional rollback, idempotency, immutable snapshots/source output, failed-candidate safety, serialized promotion, authorization, project archival/secret storage, duplicate wake-ups, leases/fencing, retries/timeouts/dead letters, reconciliation, source integrity/limits/containment, checkout adoption, heartbeat freshness, and graceful draining. [GitHub Actions run 31414001234](https://github.com/Zamuel66666/LaunchRail/actions/runs/31414001234) verifies the Phase 6 clean-service gate.
 
 ## Test layers
 
@@ -14,7 +14,7 @@ Phases 1 through 5 provide Vitest tests for health/configuration contracts, depl
 | Application unit     | Use-case orchestration through deterministic fake ports                      | Vitest                                         |
 | Database integration | Constraints, transactions, locks, migrations, organization isolation         | Vitest + disposable PostgreSQL                 |
 | Queue and worker     | Contracts, retry/timeout, duplicate jobs, leases, recovery, bounded shutdown | Vitest fakes + disposable PostgreSQL/Redis     |
-| Adapter contract     | Git, BuildKit, Docker, Traefik, health and streaming behavior                | Vitest + controlled local services             |
+| Adapter contract     | GitHub/Git, BuildKit, Docker, Traefik, health and streaming behavior         | Vitest + controlled local services/fixtures    |
 | API integration      | Schemas, auth/authz, rate limits, webhooks, idempotency, OpenAPI             | Fastify injection + real database where needed |
 | Browser end to end   | Sign-in, projects, deployment progress/controls, errors, accessibility       | Playwright                                     |
 | Resilience           | Process/service interruption and reconciliation                              | Failure-injection harness                      |
@@ -39,12 +39,14 @@ Phases 1 through 5 provide Vitest tests for health/configuration contracts, depl
 - Stale leases and labeled resource adoption without duplication.
 - Graceful shutdown stops claiming work and leaves recoverable state.
 
-Phase 5's clean-service suites cover this matrix for the identifier-only `deployment.claim` wake-up and its demonstrated `queued` to `cloning` transition. Termination around clone, build, container, health, route, and cleanup side effects remains part of those later adapters and the Phase 14 recovery milestone.
+Phase 6's clean-service suites cover both identifier-only job kinds, transitions from `queued` through prepared source to `building`, source failure, restart after the claim side effect, and revalidated checkout adoption. Broad hard-crash staging/orphan cleanup and termination around build, container, health, route, and cleanup side effects remain part of later adapters and the Phase 14 recovery milestone.
 
 ### Sources, builds, and runtime
 
-- Healthy Node.js and Python examples.
-- Missing/unsafe Dockerfile, invalid revision, oversized/slow clone, and clone timeout.
+- Fixed GitHub origins, omitted credentials, rejected redirects/private repositories, bounded bodies/trees, malformed responses, and provider timeout/failure classification.
+- Exact commit/tree/blob identity, branch movement after resolution, hostile ambient Git configuration, argv injection, output/process-tree/disk limits, and cleanup.
+- Missing/unsafe/empty Dockerfile; invalid revision; extra/missing/special/LFS paths; symlink escapes/cycles; file/byte/path/depth bounds; and tampered/concurrent checkout adoption.
+- Healthy Node.js and Python build examples remain Phase 7 fixtures.
 - Successful, failing, cached, slow, cancelled, and timed-out builds.
 - Starts, logs, stops, cleanup, resource limits, non-root policy, and orphan reconciliation.
 - Delayed startup, unhealthy application, health timeout, and malformed response.
@@ -90,9 +92,9 @@ The `examples/` directory will contain small versioned fixtures for healthy Node
 
 ## Quality-gate policy
 
-Each commit runs the smallest complete set that covers its behavior. Pull requests run the repository's full practical CI baseline. Nightly or explicitly invoked suites may hold resource-heavy Docker, resilience, security scanning, and benchmarks. Skipped tests must report the exact environmental blocker and must not be described as passed.
+Each commit runs the smallest complete set that covers its behavior. Published changes run the repository's full practical GitHub Actions baseline. Nightly or explicitly invoked suites may hold resource-heavy Docker, resilience, security scanning, and benchmarks. Skipped tests must report the exact environmental blocker and must not be described as passed.
 
-The current baseline is `pnpm test` for package/web unit tests, `pnpm test:integration` for API and worker HTTP behavior, `pnpm test:database` against disposable PostgreSQL, `pnpm test:queue` against disposable PostgreSQL and Redis, and `pnpm smoke:health` after a production build. The service CI job applies migrations from an empty database before running persistence, authenticated identity/project API, and queue/worker recovery tests. `pnpm smoke:health` uses health-only worker mode and is liveness evidence, not queue readiness. When local services are unavailable, their suites must be reported as unverified locally and proven by the GitHub Actions service job.
+The current baseline is `pnpm test` for package/web unit tests (including fake-HTTP and local real-Git source fixtures), `pnpm test:integration` for API and worker HTTP behavior, `pnpm test:database` against disposable PostgreSQL, `pnpm test:queue` against disposable PostgreSQL and Redis, and `pnpm smoke:health` after a production build. The service CI job applies migrations from an empty database before running persistence, authenticated identity/project API, and queue/worker recovery tests. `pnpm smoke:health` uses health-only worker mode and is liveness evidence, not queue readiness. When local services are unavailable, their suites must be reported as unverified locally and proven by the GitHub Actions service job.
 
 ## Defect workflow
 

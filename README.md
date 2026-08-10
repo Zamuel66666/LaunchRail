@@ -2,7 +2,7 @@
 
 **A self-hosted platform that turns a GitHub repository into a health-checked application deployment with live logs, preview URLs, release history, and safe rollback.**
 
-> **Phase 5 is Available.** Clean PostgreSQL/Redis CI verifies typed identifier-only jobs, durable leases and attempts, bounded retries, dead letters, operational heartbeats, reconciliation, and graceful shutdown.
+> **Phase 6 is Available.** Clean CI verifies public GitHub revision integrity, isolated exact-SHA checkout, bounded source inspection, Dockerfile containment, immutable preparation metadata, and restart-safe worker handoff through `building`.
 
 ## What LaunchRail does
 
@@ -26,6 +26,7 @@ flowchart LR
     User["User"] --> Web["Next.js web app"]
     Web --> API["Fastify API"]
     GitHub["GitHub"] --> API
+    GitHub --> Worker
     API --> DB[("PostgreSQL")]
     API --> Queue["Redis and BullMQ"]
     Queue --> Worker["Deployment worker"]
@@ -68,16 +69,20 @@ LaunchRail will use a modular monolith for the web/API boundary and a separate w
 - AES-256-GCM environment-variable storage with fresh nonces, authentication tags, a versioned keyring, and organization/project/name-bound authenticated context.
 - Write-only secret values: owner/admin users receive names and timestamps, while plaintext is never returned by project APIs.
 - Responsive `/projects` workspace with role-aware create, edit, archive, and environment-variable controls.
-- Strict `deployment.claim` wake-ups carrying only a contract version, supported kind, and opaque PostgreSQL work-item ID.
+- Strict `deployment.claim` and `deployment.prepare_source` wake-ups carrying only a contract version, supported kind, and opaque PostgreSQL work-item ID.
 - Durable PostgreSQL attempts, due times, leases, fencing, dead-letter state, and operational worker heartbeats are implemented.
-- The worker uses at-least-once BullMQ wake-ups, PostgreSQL-managed retry/reconciliation, and an atomic leased `queued` to `cloning` transition plus work-item completion.
-- Clean disposable PostgreSQL/Redis acceptance, code-quality, build, and health checks are verified by [GitHub Actions run 31408251857](https://github.com/Zamuel66666/LaunchRail/actions/runs/31408251857).
+- The worker uses at-least-once BullMQ wake-ups, PostgreSQL-managed retry/reconciliation, and lease-fenced transactions for both the `queued` to `cloning` claim and `cloning` to `building` source handoff.
+- Fixed-origin, public-only GitHub resolution verifies repository visibility, requested revision, exact commit/tree identity, and bounded tree metadata without redirects or ambient credentials.
+- Hardened Git checkout uses no shell, isolates configuration and credentials, fetches the verified SHA, bounds time/output/disk use, and cancels the complete process group.
+- Post-checkout inspection verifies Git blob identities, enforces file/byte/path/depth limits, rejects unsupported files/LFS/unsafe symlinks, and stores a contained Dockerfile path and digest.
+- Immutable portable source-preparation metadata and revalidated checkout adoption make duplicate delivery and worker restart safe without storing absolute host paths.
+- Clean disposable PostgreSQL/Redis acceptance, source fixtures, code-quality, build, and health checks are verified by [GitHub Actions run 31414001234](https://github.com/Zamuel66666/LaunchRail/actions/runs/31414001234).
 
 ### Planned next
 
-- Public GitHub repository and exact revision resolution behind explicit source-provider ports.
-- Bounded checkout with metadata persistence and path/symlink containment.
-- Dockerfile existence and containment validation before any build is attempted.
+- Build the prepared checkout through a constrained BuildKit adapter.
+- Persist immutable image identity and bounded, redacted live build logs.
+- Prove build success, rejection, failure, timeout, cancellation, cache behavior, and cleanup with included fixture applications.
 
 ### Not currently planned
 
@@ -128,11 +133,12 @@ See the [development guide](docs/development.md) for verification, configuration
 - [Authentication and authorization](docs/authentication.md)
 - [Project management and secret rotation](docs/project-management.md)
 - [Queue and worker operations](docs/queue-worker.md)
+- [Repository preparation and source security](docs/repository-preparation.md)
 - [Architecture decisions](docs/adr/)
 
 ## Current limitations
 
-LaunchRail is not production-ready. Authentication remains local-password only without password reset, invitations, MFA, SSO, or session administration. There is no deployment-start HTTP endpoint or deployment UI yet. Project configuration does not verify that a GitHub repository, branch, or Dockerfile exists; private-repository authentication, revision resolution, cloning, and checkout/symlink containment arrive in Phase 6. Saved configuration and secrets are not placed in Redis or injected into workloads, and automated key re-encryption is not implemented. The verified worker foundation currently demonstrates only an idempotent `queued` to `cloning` claim. Repository access, builds, application runtimes, preview routing, activation, log streaming, deployment controls, webhooks, and full telemetry remain later phases. Application health endpoints and `pnpm smoke:health` prove process liveness only, not queue/database readiness. The current production dependency audit is also non-green (11 high and 7 moderate advisories in existing Next.js/Fastify dependency paths), so dependency remediation is required before any production claim.
+LaunchRail is not production-ready. Authentication remains local-password only without password reset, invitations, MFA, SSO, or session administration. There is no deployment-start HTTP endpoint or deployment UI yet, so the resolver bridge and source worker operate only for an already-persisted immutable deployment. Source preparation supports unauthenticated public GitHub repositories only; private repositories, Git LFS, submodules, and external-network smoke tests are intentionally unsupported. Checkouts remain on the trusted local worker host for Phase 7 and broad hard-crash orphan cleanup remains Phase 14 work. Saved secrets are not placed in Redis or injected into workloads, and automated key re-encryption is not implemented. Image builds, application runtimes, preview routing, activation, live log streaming, deployment controls, webhooks, and full telemetry remain later phases. Source limits reduce risk but do not make a single-host local worker safe for hostile public multi-tenancy; the filesystem monitor is polling-based rather than a kernel quota. Application health endpoints and `pnpm smoke:health` prove process liveness only, not queue/database readiness.
 
 ## License
 

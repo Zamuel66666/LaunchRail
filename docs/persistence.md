@@ -2,19 +2,20 @@
 
 ## Purpose
 
-PostgreSQL is LaunchRail's authoritative record of tenant ownership, project configuration, deployment intent, and background-work status. Phase 2 introduced the schema/deployment transaction boundary; Phase 4 added safe project mutation and authenticated environment-variable envelopes; Phase 5 adds durable job attempts, due times, leases/fencing, dead letters, and worker heartbeats. Redis, workers, containers, and routes remain downstream effects; none may silently replace persisted truth.
+PostgreSQL is LaunchRail's authoritative record of tenant ownership, project configuration, deployment intent, background-work status, and portable source-preparation results. Phase 2 introduced the schema/deployment transaction boundary; Phase 4 added safe project mutation and authenticated environment-variable envelopes; Phase 5 added durable job attempts, leases/dead letters, and worker heartbeats; Phase 6 adds immutable source preparation and a second durable handoff. Redis, worker filesystems, containers, and routes remain downstream effects; none may silently replace persisted truth.
 
 ## Package boundaries
 
 - `packages/domain` owns deployment states/transitions and normalized project/variable rules.
-- `packages/application` exposes deployment, project, job, and heartbeat use cases through narrow ports.
-- `packages/database` owns Drizzle schema/migrations, PostgreSQL adapters, durable work-item/heartbeat state, and the AES-256-GCM cipher implementation.
+- `packages/application` exposes deployment, project, job, heartbeat, repository-provider, and checkout use cases through narrow ports.
+- `packages/database` owns Drizzle schema/migrations, PostgreSQL adapters, durable work-item/heartbeat/source-preparation state, and the AES-256-GCM cipher implementation.
+- `packages/source` implements the public GitHub provider and hardened Git checkout without becoming deployment authority.
 
 This direction keeps Fastify, BullMQ, Docker, and Drizzle out of the domain rules.
 
 ## Stored entities
 
-The schema includes users, organizations, memberships, projects, deployments, deployment events, build logs, runtime instances, active releases, encrypted environment-variable metadata, webhook deliveries, audit events, idempotent deployment commands, durable deployment jobs, and worker heartbeats.
+The schema includes users, organizations, memberships, projects, deployments, deployment events, build logs, runtime instances, active releases, encrypted environment-variable metadata, webhook deliveries, audit events, idempotent deployment commands, durable deployment jobs, immutable deployment source preparations, and worker heartbeats.
 
 Organization-owned relationships use composite foreign keys so a valid identifier from one organization cannot be attached to a record in another. The active-release table has one row per project and a composite constraint proving that its deployment belongs to the same project and organization.
 
@@ -45,11 +46,13 @@ Archive also locks and version-checks the project. It rejects any active release
 
 ## Durable background work
 
-Each Phase 5 deployment work item belongs to one organization-owned deployment and records one supported contract version/kind, a constrained status, attempts, next due time, optional exclusive lease, safe failure details, completion/dead-letter time, and timestamps. The unique deployment/kind constraint makes creation idempotent. A running row must carry a worker ID, heartbeat, expiry, and unique lease token; every heartbeat, completion, and failure mutation must present that token, and the store refuses stale, expired, or replaced ownership.
+Each deployment work item belongs to one organization-owned deployment and records one supported contract version/kind, a constrained status, attempts, next due time, optional exclusive lease, safe failure details, completion/dead-letter time, and timestamps. The unique deployment/kind constraint makes creation idempotent. A running row must carry a worker ID, heartbeat, expiry, and unique lease token; every heartbeat, load, completion, and failure mutation must present that token, and the store refuses stale, expired, or replaced ownership.
 
-BullMQ carries only the contract version, supported kind, and work-item UUID; it carries no deployment authority, configuration, or secrets. Claim reloads the joined deployment and organization from PostgreSQL, increments the durable attempt, creates a new fencing token, and sets a bounded lease. PostgreSQL's live clock—not a caller timestamp—decides due status, lease ownership/expiry, retry availability, recovery, and heartbeat freshness. Under that lease, one PostgreSQL transaction applies or replays the stable-idempotency `queued` to `cloning` transition and marks the work item complete; neither write can commit without the other. Safe failure either records a deterministic next due time or dead-letters the row when attempts are exhausted. Redis state never changes those facts directly.
+BullMQ carries only the contract version, supported kind, and work-item UUID; it carries no deployment authority, repository configuration, or secrets. Claim reloads the joined deployment and organization from PostgreSQL, increments the durable attempt, creates a fencing token, and sets a bounded lease. PostgreSQL's live clock—not a caller timestamp—decides due status, lease ownership/expiry, retry availability, recovery, and heartbeat freshness.
 
-Reconciliation creates missing work for eligible queued deployments, republishes due work absent from Redis, and recovers expired running leases into retry or dead-letter state. Worker heartbeats persist `starting`, `ready`, `draining`, and `stopped` status plus active-job count; they are operational records, not a replacement for an HTTP readiness endpoint.
+The claim-completion transaction applies or replays stable-idempotency `queued` to `cloning`, inserts the unique source work item, and completes the claim. The source-completion transaction validates the exact immutable revision/path, inserts or compares one portable preparation row, applies or replays `cloning` to `building`, and completes source work. Its one-to-one row stores no host path: only checkout ID, exact commit/tree, file/byte totals, configured/resolved Dockerfile paths, digest, and preparation time. Composite ownership/revision keys, bounds checks, and an update-blocking trigger protect it. Permanent/exhausted source failure instead records stable safe details, applies `cloning` to `build_failed`, and dead-letters the real attempt atomically. A final lease-expiry fence rolls all associated writes back together. Redis state never changes those facts directly.
+
+Reconciliation creates missing claim work for eligible `queued` deployments and missing source work for eligible `cloning` deployments, republishes due work absent from Redis, and recovers expired running leases into retry/dead-letter or source terminal failure. Worker heartbeats persist `starting`, `ready`, `draining`, and `stopped` status plus active-job count; they are operational records, not a replacement for an HTTP readiness endpoint.
 
 ## Migrations and tests
 
@@ -78,6 +81,6 @@ The Phase 4 migration upgrades the Phase 2 `{}` runtime placeholder to bounded d
 
 ## Current limitations
 
-Identity and project adapters are connected to authenticated HTTP handlers; there is still no deployment-start HTTP/UI path. The Phase 5 worker connects only the `queued` to `cloning` claim and does not access repository source. Encrypted values are stored safely but are absent from Redis and are not decrypted/injected for a runtime; key-version re-encryption is not automated. Stream notification, source/build/runtime orchestration, rollback, cancellation cleanup, route reconciliation, and broad interruption recovery require later phases even though their legal deployment-state pairs are centralized.
+Identity and project adapters are connected to authenticated HTTP handlers; there is still no deployment-start HTTP/UI path. Phase 6 connects `queued` through public source preparation to `building`, but it does not create a deployment or build an image. Successful checkout files remain worker-local while PostgreSQL stores only portable verified metadata. Encrypted values are absent from Redis and are not decrypted/injected for a runtime; key-version re-encryption is not automated. Stream notification, build/runtime orchestration, rollback, cancellation cleanup, route reconciliation, and broad interruption/orphan recovery require later phases even though their legal deployment-state pairs are centralized.
 
-See [queue and worker operations](queue-worker.md) for the Redis boundary, retry formula, reconciliation loop, and shutdown behavior.
+See [queue and worker operations](queue-worker.md) for the Redis boundary, retry formula, reconciliation loop, and shutdown behavior, and [repository preparation](repository-preparation.md) for immutable source input/output and checkout adoption.

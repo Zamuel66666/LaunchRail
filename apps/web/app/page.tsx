@@ -1,11 +1,11 @@
 import Link from "next/link";
 
 const milestoneItems = [
-  "Identifier-only, runtime-validated deployment wake-up jobs",
-  "PostgreSQL-authoritative attempts, leases, fencing, and dead letters",
-  "At-least-once BullMQ delivery with bounded retry and timeout policy",
-  "Worker heartbeats, reconciliation, and graceful draining",
-  "Atomic queued-to-cloning claims and work-item completion under a fenced lease",
+  "Public GitHub references resolved and verified as exact commit and tree identities",
+  "Shell-free, exact-SHA Git checkout isolated from ambient credentials and configuration",
+  "Bounded source manifests with blob integrity, symlink containment, and LFS rejection",
+  "Contained Dockerfile validation with portable immutable preparation metadata",
+  "Restart-safe source jobs verified on disposable PostgreSQL and Redis services",
 ];
 
 export default function HomePage() {
@@ -20,7 +20,7 @@ export default function HomePage() {
         </p>
         <div className="status" role="status">
           <span className="status-dot" aria-hidden="true" />
-          Queue and worker foundation verified on clean services
+          Repository preparation verified on clean services
         </div>
         <div className="hero-actions">
           <Link className="primary-link" href="/projects">
@@ -34,7 +34,7 @@ export default function HomePage() {
 
       <section className="panel" aria-labelledby="milestone-title">
         <p className="section-label">Current milestone</p>
-        <h2 id="milestone-title">Background claim foundation is verified</h2>
+        <h2 id="milestone-title">Exact-source preparation is verified</h2>
         <ul>
           {milestoneItems.map((item) => (
             <li key={item}>{item}</li>
@@ -44,10 +44,11 @@ export default function HomePage() {
 
       <section className="next" aria-labelledby="next-title">
         <p className="section-label">Next milestone</p>
-        <h2 id="next-title">Prepare repository source safely</h2>
+        <h2 id="next-title">Build prepared source safely</h2>
         <p>
-          The next phase resolves exact public GitHub revisions, performs bounded checkouts, records
-          source metadata, and proves Dockerfile paths remain inside the repository.
+          The next phase sends the verified checkout to a constrained BuildKit adapter, records an
+          immutable image identity, streams bounded redacted logs, and proves failure, timeout,
+          cancellation, cache, and cleanup behavior.
         </p>
       </section>
     </main>

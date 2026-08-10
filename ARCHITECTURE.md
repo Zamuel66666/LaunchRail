@@ -2,7 +2,7 @@
 
 ## Plain-language overview
 
-LaunchRail separates the quick work of accepting a deployment request from the slow and failure-prone work of cloning, building, starting, and checking an application. The Phase 5 foundation durably records background work in PostgreSQL and uses BullMQ only to wake a dedicated worker. A future deployment-start API will create that intent; repository, build, runtime, health, and routing stages remain later phases.
+LaunchRail separates the quick work of accepting a deployment request from the slow and failure-prone work of preparing source, building, starting, and checking an application. The Phase 6 foundation durably records background work in PostgreSQL, uses BullMQ only to wake a dedicated worker, verifies an immutable public GitHub revision, and prepares a bounded checkout before any build. A future deployment-start API will create that intent; build, runtime, health, and routing stages remain later phases.
 
 The first version is a modular monolith with a separate worker process. This keeps local operation and transactions understandable while preserving boundaries that can be extracted later if measured needs justify it.
 
@@ -37,6 +37,7 @@ flowchart LR
     API --> Redis[("Redis")]
     API --> Stream["SSE log and event stream"]
     Redis --> Worker["BullMQ worker"]
+    GitHub --> Worker
     Worker --> Postgres
     Worker --> BuildKit["Docker BuildKit"]
     Worker --> Docker["Docker Engine"]
@@ -70,27 +71,27 @@ The web application may initially be served separately during development. The A
 - Verifies and deduplicates GitHub webhook deliveries.
 - Never performs a container build within a request handler.
 
-The deployment-start HTTP boundary is not implemented in Phase 5. The persist-before-publish flow is exercised through the application/database/queue boundaries and their integration tests.
+The deployment-start HTTP boundary is not implemented in Phase 6. The persist-before-publish flow and source-persistence bridge are exercised through the application/database/queue/source boundaries and their integration tests.
 
 ### Deployment worker
 
 - Claims typed deployment jobs from BullMQ.
 - Runs idempotent orchestration steps with bounded retries and timeouts.
-- Uses infrastructure ports for clone, build, runtime, routing, health, and logs.
+- Uses infrastructure ports for repository resolution/checkout and future build, runtime, routing, health, and log work.
 - Persists transitions and failure categories transactionally.
 - Emits heartbeat and recovery information and shuts down gracefully.
 
-Phase 5 implements the worker foundation and one demonstrated side effect: under a valid work-item lease, one PostgreSQL transaction advances an eligible `queued` deployment to `cloning` and completes the work item. It does not clone a repository or continue the lifecycle after that claim.
+Phase 6 implements two durable steps. The claim transaction advances an eligible `queued` deployment to `cloning`, completes that work item, and creates source work. The source processor reloads immutable input, verifies and checks out the exact public GitHub commit, then a second lease-fenced transaction stores portable source metadata, advances `cloning` to `building`, and completes source work. Build execution does not begin yet.
 
 ### PostgreSQL
 
-- Stores identity, configuration metadata, deployment state, event history, encrypted secrets, webhook deliveries, audit events, durable deployment work items, leases, dead-letter metadata, and worker heartbeats.
+- Stores identity, configuration metadata, deployment state, event history, encrypted secrets, webhook deliveries, audit events, durable deployment work items, leases, dead-letter metadata, worker heartbeats, and immutable source-preparation metadata.
 - Provides transaction boundaries for project writes/archival, secret replacement, deployment transitions, and active-release promotion.
 - Is the source of truth; Redis queue state is not the authoritative deployment state.
 
 ### Redis and BullMQ
 
-- Delivers identifier-only wake-up jobs; PostgreSQL owns retry scheduling, while cancellation signals and fan-out notifications remain later work.
+- Delivers identifier-only claim and source-preparation wake-up jobs; PostgreSQL owns retry scheduling, while cancellation signals and fan-out notifications remain later work.
 - Uses stable job and idempotency keys derived from a persisted work-item ID.
 - Provides at-least-once delivery; consumers validate the contract, reload PostgreSQL, and tolerate duplicates.
 - Does not own attempts, leases, completion, or dead-letter truth; deleting Redis data cannot erase those PostgreSQL records.
@@ -129,19 +130,20 @@ The API and worker share domain and application packages, not framework globals.
 | Audit         | actor/action/resource records                      | application logs                |
 | Observability | correlation and telemetry contracts                | domain state authority          |
 
-Dependencies point inward: infrastructure adapters depend on application ports, and application services depend on the domain model. Project and Phase 5 job adapters apply ownership, lifecycle, lease, and fencing rules in PostgreSQL rather than relying on Redis or response filtering.
+Dependencies point inward: infrastructure adapters depend on application ports, and application services depend on the domain model. Project and Phase 6 job/source adapters apply ownership, lifecycle, lease, fencing, and integrity rules in PostgreSQL and controlled source workspaces rather than relying on Redis or response filtering.
 
 ## Infrastructure ports
 
-The initial contracts will be small and capability-oriented:
+Implemented and planned contracts remain small and capability-oriented:
 
 ```ts
-interface GitRepositoryProvider {
-  resolveRevision(repository: RepositoryRef, revision: string): Promise<ResolvedRevision>;
+interface RepositoryProvider {
+  resolveRevision(command: ResolveRepositoryRevisionCommand): Promise<ResolvedRepositoryRevision>;
 }
 
-interface RepositoryCloner {
-  clone(request: CloneRequest, sink: LogSink, signal: AbortSignal): Promise<Checkout>;
+interface RepositoryCheckout {
+  prepare(command: CheckoutRepositoryCommand): Promise<PreparedRepositoryCheckout>;
+  remove(checkoutKey: string): Promise<void>;
 }
 
 interface ImageBuilder {
@@ -160,8 +162,8 @@ interface RouteManager {
   reconcile(expected: ReadonlyArray<ActiveRoute>): Promise<ReconcileResult>;
 }
 
-interface DeploymentClaimPublisher {
-  enqueue(job: DeploymentClaimJob): Promise<{ readonly jobId: string }>;
+interface DeploymentQueuePublisher {
+  enqueue(job: DeploymentJob): Promise<{ readonly jobId: string }>;
 }
 
 interface HealthChecker {
@@ -184,23 +186,24 @@ GitHub webhook processing is split into signature verification, delivery storage
 
 All organization-owned records carry an `organization_id`; authorization queries must include it rather than filtering only after retrieval.
 
-| Entity               | Purpose and key invariants                                                                |
-| -------------------- | ----------------------------------------------------------------------------------------- |
-| User                 | Human identity; authentication details are stored separately from profile data.           |
-| Organization         | Tenant boundary and owner of projects, secrets, deployments, and audit events.            |
-| Membership           | Unique user/organization pair with an explicit role.                                      |
-| Session              | Hashed opaque token metadata, expiry, and revocation state.                               |
-| Project              | Repository reference, selected branch, Dockerfile path, runtime and health configuration. |
-| Deployment           | Immutable source revision plus current state, attempt, failure category, and timestamps.  |
-| Deployment event     | Append-only transition and diagnostic history with monotonic ordering per deployment.     |
-| Deployment job       | Durable kind/version, due time, attempts, lease fence, safe failure, and terminal result. |
-| Worker heartbeat     | Operational worker version/status, heartbeat time, and active-job count.                  |
-| Build log            | Ordered, bounded log chunks with redaction applied before persistence or fan-out.         |
-| Runtime instance     | Container/image identifiers, lifecycle state, resource metadata, and cleanup status.      |
-| Active release       | One project-level pointer updated atomically only after health succeeds.                  |
-| Environment variable | Name, scope, encrypted value, key version, and redacted metadata.                         |
-| Webhook delivery     | Unique provider delivery ID, verification result, processing result, and received time.   |
-| Audit event          | Immutable actor, action, target, organization, outcome, and correlation metadata.         |
+| Entity               | Purpose and key invariants                                                                                           |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| User                 | Human identity; authentication details are stored separately from profile data.                                      |
+| Organization         | Tenant boundary and owner of projects, secrets, deployments, and audit events.                                       |
+| Membership           | Unique user/organization pair with an explicit role.                                                                 |
+| Session              | Hashed opaque token metadata, expiry, and revocation state.                                                          |
+| Project              | Repository reference, selected branch, Dockerfile path, runtime and health configuration.                            |
+| Deployment           | Immutable resolved source revision plus current state, attempt, failure category, and timestamps.                    |
+| Deployment event     | Append-only transition and diagnostic history with monotonic ordering per deployment.                                |
+| Deployment job       | Durable kind/version, due time, attempts, lease fence, safe failure, and terminal result.                            |
+| Source preparation   | Immutable portable checkout identity, exact commit/tree, manifest totals, and configured/resolved Dockerfile digest. |
+| Worker heartbeat     | Operational worker version/status, heartbeat time, and active-job count.                                             |
+| Build log            | Ordered, bounded log chunks with redaction applied before persistence or fan-out.                                    |
+| Runtime instance     | Container/image identifiers, lifecycle state, resource metadata, and cleanup status.                                 |
+| Active release       | One project-level pointer updated atomically only after health succeeds.                                             |
+| Environment variable | Name, scope, encrypted value, key version, and redacted metadata.                                                    |
+| Webhook delivery     | Unique provider delivery ID, verification result, processing result, and received time.                              |
+| Audit event          | Immutable actor, action, target, organization, outcome, and correlation metadata.                                    |
 
 Database constraints enforce unique memberships, unique active project names, typed project bounds, unique webhook deliveries, one active release per project, valid identifiers, authenticated-encryption envelope shape, and referential ownership. Project configuration and deployment transition services lock affected rows and append audit/event records within their state-changing transaction.
 
@@ -225,12 +228,21 @@ Database constraints enforce unique memberships, unique active project names, ty
 
 1. The API authorizes the actor and validates project configuration.
 2. In PostgreSQL, it creates an immutable deployment request and an initial `queued` event.
-3. The internal Phase 5 boundary creates a durable claim work item for an already-persisted `queued` deployment.
+3. The internal Phase 6 boundary creates a durable claim work item for an already-persisted `queued` deployment.
 4. After commit, it enqueues an identifier-only wake-up using the durable work-item ID as the stable key.
 5. A reconciliation path creates missing work items and republishes persisted due work if enqueueing fails.
-6. The worker leases the work item, reloads the deployment, and advances it through a valid transition.
+6. The worker leases the work item, reloads the deployment, advances it to `cloning`, and creates the source-preparation work item in the same transaction.
 
-Phase 5 begins only after step 2: tests seed an already-persisted `queued` deployment, and the internal worker boundary implements steps 3–6. There is no Phase 5 use case, HTTP route, or web flow that creates a deployment request.
+Phase 6 begins only after step 2: tests seed an already-persisted `queued` deployment, and the internal worker boundary implements steps 3–6. `createDeploymentSourcePersistence` supplies the versioned immutable source shape for a future creation use case, but there is no HTTP route or web flow that creates a deployment request.
+
+### Prepare repository source
+
+1. The source work item reloads only the deployment's immutable provider/owner/repository/requested-reference/Dockerfile snapshot and exact `source_revision`; mutable project configuration is not consulted.
+2. The provider makes bounded unauthenticated requests to fixed GitHub API origins, rejects redirects/private repositories/truncated trees/unsupported modes, and proves the persisted exact commit resolves to the expected tree. The original requested reference remains trace metadata and is not re-resolved by the worker.
+3. The checkout adapter creates a private staging directory under the configured worker-owned root and invokes the fixed Git executable with argument arrays, isolated environment/configuration, disabled credentials/hooks/smudge/submodules, an HTTPS-only protocol policy, and one absolute cancellation deadline.
+4. After exact-SHA fetch and checkout, a non-following filesystem walk verifies the Git manifest/blob identities; bounds files/bytes/path/depth; rejects special files, LFS pointers, and unsafe symlinks; and hashes a contained non-empty Dockerfile.
+5. A validated staging checkout is atomically renamed to a deterministic checkout ID with a trusted manifest marker. A retry adopts it only after revalidating the complete marker and live files.
+6. One PostgreSQL transaction rechecks the lease and immutable source, inserts or compares the portable source-preparation row, transitions `cloning` to `building`, and completes the job. Permanent or exhausted source failure instead atomically records `build_failed` and dead-letter state.
 
 ### Promote healthy release
 
@@ -265,10 +277,11 @@ packages/
   database/     Drizzle schema, migrations, and PostgreSQL adapters
   observability/ telemetry setup and conventions
   queue/        BullMQ wake-up adapter and retry-backoff policy
+  source/       public GitHub resolver and hardened exact-SHA checkout adapter
 docs/           lifecycle, operations, decisions, and evidence
 ```
 
-Phases 1 through 5 implement the listed application entry points and shared packages. Database adapters persist deployment transitions/promotions, identity/session data, organization-scoped projects, AES-256-GCM environment-variable envelopes, durable deployment work items, leases/dead letters, worker heartbeats, and audit records. The BullMQ adapter sends strict identifier-only wake-ups, and the worker re-reads PostgreSQL before performing an idempotent `queued` to `cloning` claim. The Fastify boundary still exposes only identity and project routes; the Next.js workspace exposes role-aware project and secret controls. Later phases add deployment-start HTTP/UI, repository/build/runtime adapters, cancellation, and healthy/failing example applications.
+Phases 1 through 6 implement the listed application entry points and shared packages. Database adapters persist deployment transitions/promotions, identity/session data, organization-scoped projects, AES-256-GCM environment-variable envelopes, durable deployment work, immutable source preparations, leases/dead letters, worker heartbeats, and audit records. The BullMQ adapter sends strict identifier-only wake-ups, and the worker re-reads PostgreSQL before claim and source-preparation effects. The source adapter verifies and prepares an exact public GitHub revision; the Fastify boundary still exposes only identity and project routes, and the Next.js workspace exposes role-aware project and secret controls. Later phases add deployment-start HTTP/UI, BuildKit/runtime adapters, cancellation, and healthy/failing example applications.
 
 ## Architecture decisions
 
@@ -282,4 +295,4 @@ Accepted decisions are recorded in [docs/adr](docs/adr):
 
 ## Known limitations
 
-Phases 1 through 5 implement process boundaries, shared foundations, deployment-domain/persistence rules, local-password authentication, organization authorization, project configuration/secret API and UI paths, and a PostgreSQL-authoritative BullMQ worker foundation. The canonical GitHub URL is syntactically validated but not contacted: repository existence/private access, revision resolution, cloning, and symlink containment remain Phase 6. There is no deployment-start HTTP/UI path, and project settings or secrets are intentionally absent from Redis and not injected into runtimes. Build, runtime, routing, activation/control, webhooks, full telemetry, broad failure recovery, automated key re-encryption, and password recovery/second factors remain later phases. Process-health endpoints are not queue readiness. Single-host Docker remains a large trust and failure boundary; nothing in this architecture makes LaunchRail production-ready or safe for hostile public multi-tenancy.
+Phases 1 through 6 implement process boundaries, shared foundations, deployment-domain/persistence rules, local-password authentication, organization authorization, project configuration/secret API and UI paths, PostgreSQL-authoritative background work, and hardened public GitHub source preparation. There is no deployment-start HTTP/UI path, private-repository authentication, Git LFS/submodule support, or external GitHub acceptance smoke; the source worker operates only on an already-persisted immutable deployment and retains its checkout for Phase 7. Project settings or secrets are intentionally absent from Redis and not injected into runtimes. Build, runtime, routing, activation/control, webhooks, full telemetry, broad orphan recovery, automated key re-encryption, and password recovery/second factors remain later phases. Process-health endpoints are not queue readiness. The source filesystem monitor is polling-based rather than a kernel quota, and a single trusted local host remains a large trust/failure boundary; nothing in this architecture makes LaunchRail production-ready or safe for hostile public multi-tenancy.

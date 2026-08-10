@@ -23,7 +23,7 @@ The API rejects unknown fields and validates the same safety rules in the domain
 | Process limit          | Integer from 16 through 1,024                                                                                                 |
 | Read-only root setting | Boolean                                                                                                                       |
 
-This syntax validation does not contact GitHub. Phase 6 will verify repository access, resolve the selected reference to an exact commit, perform a bounded clone, and prove the Dockerfile remains inside the checkout after symlink resolution. Private-repository authentication is not available.
+Project create/update syntax validation deliberately does not contact GitHub. Phase 6 adds a separate application/provider boundary that can resolve a public requested reference to exact immutable deployment source fields, and the worker later verifies/checks out that exact commit with source limits and Dockerfile containment. No deployment-start HTTP route calls that bridge yet. Private-repository authentication is not available.
 
 ## Role behavior
 
@@ -111,8 +111,9 @@ Run the repository gates from [development.md](development.md). Real-database cl
 
 ## Current boundaries
 
-- Repository existence, visibility, access, revision resolution, cloning, and symlink containment are Phase 6 work.
+- Public GitHub source verification and containment are available only for an already-persisted immutable deployment; project save itself remains an offline syntax operation.
+- Private repositories, Git LFS, submodules, arbitrary Git hosts, and deployment-start HTTP/UI are not available.
 - Saved project configuration and decrypted values are not yet placed in queue messages, builds, or runtime environments.
-- Queue consumption, builds, application containers, readiness checks, live logs, previews, deployment controls, and rollback do not exist yet.
+- Identifier-only queue consumption and source preparation are available; image builds, application containers, readiness checks, live logs, previews, deployment controls, and rollback do not exist yet.
 - Authentication is local-password only, and health endpoints report liveness rather than dependency readiness.
 - Automated key re-encryption and external key-management integration are not implemented.

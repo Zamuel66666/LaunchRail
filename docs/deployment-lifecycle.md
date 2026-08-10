@@ -6,7 +6,7 @@ A deployment is a recorded attempt to turn one exact source revision into a runn
 
 If a candidate fails, the previously healthy release stays active. Every step is recorded so a user can see what happened, and a restarted worker reconstructs work from PostgreSQL rather than assuming an in-memory job completed.
 
-Phase 2 implements this state model, ordinary transactional transitions, and healthy active-release promotion in PostgreSQL. Phase 5 adds durable background work, leases, retry/dead-letter state, heartbeat, BullMQ wake-ups, reconciliation, and one demonstrated idempotent `queued` to `cloning` claim. Repository processing, container orchestration, route reconciliation, cancellation side effects, and rollback execution remain later-phase behavior.
+Phase 2 implements this state model, ordinary transactional transitions, and healthy active-release promotion in PostgreSQL. Phase 5 adds durable background work, leases, retry/dead-letter state, heartbeat, BullMQ wake-ups, and an idempotent `queued` to `cloning` claim. Phase 6 adds exact public source verification, durable source work, immutable preparation metadata, and lease-fenced `cloning` to `building` or `build_failed` outcomes. Image building, container orchestration, route reconciliation, cancellation side effects, and rollback execution remain later-phase behavior.
 
 ## Terms
 
@@ -160,23 +160,24 @@ The current active release moves to `rolling_back` while this preparation is con
 
 - Retrying a failed deployment creates a new deployment record linked to the original; immutable source/configuration may be copied explicitly.
 - Retrying a transient worker step for the same deployment increments an attempt counter and reuses stable side-effect keys.
-- Phase 5 claim retries use deterministic capped exponential backoff with stable hash-derived 75–100% jitter, configurable base/cap, a maximum attempt count, and an execution timeout. PostgreSQL records the next due time.
+- Claim and source-preparation retries use deterministic capped exponential backoff with stable hash-derived 75–100% jitter, configurable base/cap, a maximum attempt count, and bounded execution. PostgreSQL records the next due time; permanent source-policy failures dead-letter at the actual attempt.
 - Exhausted work records safe failure details and dead-letter metadata in PostgreSQL. BullMQ failure state is not authoritative.
 - “Retry” never mutates a historical failure into a success.
 
 ## Worker restart and recovery
 
-PostgreSQL, not the BullMQ job, is authoritative. Phase 5 lease reconciliation identifies queued deployments without work items, due work absent from BullMQ, and expired claim leases. It creates or republishes identifier-only wake-ups, or schedules/dead-letters an expired attempt according to the persisted attempt count. Worker-heartbeat rows are operational records and do not authorize recovery. Later phases extend the same rule to observed build, runtime, and route resources.
+PostgreSQL, not the BullMQ job, is authoritative. Lease reconciliation identifies `queued` deployments without claim work, `cloning` deployments without source work, due work absent from BullMQ, and expired leases. It creates or republishes identifier-only wake-ups, or schedules/dead-letters/terminally fails an expired attempt according to its kind and persisted attempt count. Worker-heartbeat rows are operational records and do not authorize recovery. Later phases extend the same rule to observed build, runtime, and route resources.
 
 Examples:
 
 - `queued` without a durable claim work item receives one.
 - Due `pending` or `retry_wait` work missing from BullMQ is republished with the same stable job ID.
-- A `running` claim with an expired lease is retried or dead-lettered within the durable policy.
+- A `running` claim or source job with an expired lease is retried or terminally handled within the durable policy.
 - Duplicate wake-ups re-read the same work item and cannot append a second `queued` to `cloning` transition.
+- A source retry revalidates and adopts a matching completed checkout, then cannot append a second `cloning` to `building` transition or preparation row.
 - Future build/runtime/health/route reconciliation will adopt or repair labeled resources rather than duplicate them.
 
-No restart silently marks work complete, and Phase 5 does not claim exactly-once delivery.
+No restart silently marks work complete, and LaunchRail does not claim exactly-once delivery.
 
 ## Failure categories
 
@@ -190,7 +191,7 @@ Stable categories support UI guidance and metrics without exposing raw secrets:
 - `cancel_timeout`, `cleanup_failed`
 - `infrastructure_unavailable`, `internal_invariant_violation`
 
-Raw adapter errors remain in access-controlled structured logs after redaction. User-facing messages identify the failed stage, a safe reason, and a next action.
+Adapter errors may enter access-controlled structured logs only after safe classification and redaction. Phase 6 source events never interpolate raw provider/Git errors, output, arguments, or local paths. User-facing messages identify the failed stage, a safe reason, and a next action.
 
 ## Test obligations
 
@@ -208,6 +209,6 @@ Before this model can be marked available, tests must prove:
 
 ## Current limitations
 
-Phase 5 verifies queue/worker recovery only for the `queued` to `cloning` claim. There is no deployment-start HTTP/UI, repository access, clone, build, runtime, health, route, cancellation, stop, or rollback execution. Phase 14's broad interruption and orphan-resource recovery matrix remains planned. The eventual runtime design assumes one Docker host and one active route per project; route switching will not be a distributed transaction with PostgreSQL and must be proven through idempotent adapters, observed-state recording, compensation, and reconciliation.
+Phase 6 verifies queue/worker recovery from `queued` through a prepared exact public source checkout and `building`, including safe source failure. There is no deployment-start HTTP/UI, image build, runtime, health, route, cancellation, stop, or rollback execution. Prepared checkouts are retained for Phase 7, while Phase 14's broad interruption and orphan-resource recovery matrix remains planned. The eventual runtime design assumes one Docker host and one active route per project; route switching will not be a distributed transaction with PostgreSQL and must be proven through idempotent adapters, observed-state recording, compensation, and reconciliation.
 
 See [queue and worker operations](queue-worker.md) for the implemented contract, durable state, retry policy, reconciliation, and shutdown procedure.

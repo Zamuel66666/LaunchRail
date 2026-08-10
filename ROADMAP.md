@@ -14,14 +14,15 @@ The roadmap reports verified repository state, not aspirations as completed feat
 - **Phase 3 — Authentication and authorization:** bootstrapped owners, password verification, secure opaque sessions, organization roles, hardened requests, audited membership changes, and sign-in UI.
 - **Phase 4 — Project management:** validated organization-scoped project configuration, encrypted environment variables, optimistic archival, audited APIs, and a permission-aware project UI.
 - **Phase 5 — Queue and worker foundation:** strict identifier-only wake-ups, PostgreSQL-authoritative attempts/leases/dead letters, restart reconciliation, operational heartbeats, and bounded graceful draining.
+- **Phase 6 — Repository preparation:** public GitHub revision verification, isolated exact-SHA checkout, source limits and containment, immutable preparation metadata, and restart-safe source jobs.
 
 ### Planned next
 
-- **Phase 6 — Repository preparation:** public GitHub revision resolution, bounded checkout, source metadata, and Dockerfile containment validation.
+- **Phase 7 — Build pipeline:** constrained BuildKit execution, immutable image identity, bounded logs, cancellation, cleanup, and build-failure handling.
 
 ### Planned later
 
-- Phases 7–16 below.
+- Phases 8–16 below.
 
 ### Not currently planned
 
@@ -140,11 +141,18 @@ Exit evidence: [GitHub Actions run 31408251857](https://github.com/Zamuel66666/L
 
 ### Phase 6 — Repository preparation
 
-**Status:** Planned next
+**Status:** Available
 
-Add the Git provider/cloner ports, public GitHub adapter, exact revision resolution, bounded cloning, metadata storage, and Dockerfile validation.
+Delivered:
 
-Exit gate: healthy and malicious source fixtures prove revision integrity, constraints, failure categories, and timeouts.
+- Typed repository-provider and checkout ports plus an application use case that preserves requested revision, resolved commit, tree identity, and versioned deployment source snapshot separately.
+- A fixed-origin, public-only GitHub adapter that rejects redirects and authentication, bounds response bodies and recursive trees, resolves branch/tag/SHA-shaped references to an exact commit, and rejects truncated, malformed, unsupported, or oversized source metadata.
+- An isolated Git checkout adapter that uses argument arrays rather than a shell, disables ambient credentials/configuration/hooks/smudge/submodules, fetches only the verified SHA, enforces process output/time/disk bounds, and terminates the full process group on cancellation.
+- A post-checkout manifest that verifies commit/tree/blob integrity; bounds file count, bytes, path bytes, depth, and individual files; rejects special files, LFS pointers, and unsafe symlinks; and proves the configured Dockerfile resolves to a contained, non-empty regular file with a stored SHA-256 digest.
+- A second identifier-only `deployment.prepare_source` work item with PostgreSQL-authoritative leases, retries, permanent source failures, and reconciliation. Successful preparation atomically stores immutable portable metadata, advances `cloning` to `building`, and completes the work item; terminal failure atomically records `build_failed` without changing an active release.
+- Crash-safe checkout adoption that revalidates the trusted marker and complete manifest before reuse, with staging cleanup on ordinary failure and abort paths.
+
+Exit evidence: [GitHub Actions run 31414001234](https://github.com/Zamuel66666/LaunchRail/actions/runs/31414001234) passed formatting, documentation, lint, types, 250 unit tests, ordinary integration/build/health checks, clean PostgreSQL migrations and transaction tests, and the disposable PostgreSQL/Redis restart suite. Deterministic fake-HTTP and local real-Git fixtures cover revision races, malformed/oversized provider responses, hostile Git configuration, command injection, output/time/disk limits, process-tree cancellation, blob/tree mismatches, symlink escapes, special files, LFS pointers, Dockerfile failures, checkout tampering/adoption, duplicate delivery, lease fencing, retry/dead-letter behavior, and worker restart from claim through `building` without contacting external GitHub during CI.
 
 ### Phase 7 — Build pipeline
 

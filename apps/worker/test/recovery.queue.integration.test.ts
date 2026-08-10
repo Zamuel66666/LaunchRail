@@ -52,8 +52,7 @@ describeWithServices("deployment worker restart recovery", () => {
   });
 
   beforeEach(async () => {
-    await client.db.delete(schema.workerHeartbeats);
-    await client.db.delete(schema.organizations);
+    await client.db.execute(sql`truncate table organizations, worker_heartbeats cascade`);
   });
 
   afterEach(async () => {

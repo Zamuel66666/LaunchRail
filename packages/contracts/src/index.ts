@@ -1,3 +1,11 @@
+export {
+  createDeploymentClaimJobId,
+  createDeploymentClaimTransitionIdempotencyKey,
+  deploymentClaimJobSchema,
+  parseDeploymentClaimJob,
+  type DeploymentClaimJob,
+} from "./deployment-jobs.js";
+
 export const launchRailServices = ["api", "web", "worker"] as const;
 
 export type LaunchRailService = (typeof launchRailServices)[number];

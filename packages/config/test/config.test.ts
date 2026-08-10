@@ -37,8 +37,21 @@ describe("configuration", () => {
       Uint8Array.from(Buffer.alloc(32, 0x22)),
     );
     expect(loadWorkerConfig(serviceEnvironment)).toMatchObject({
+      WORKER_BACKOFF_BASE_MS: 1_000,
+      WORKER_BACKOFF_CAP_MS: 60_000,
+      WORKER_CONCURRENCY: 2,
       WORKER_HEALTH_HOST: "127.0.0.1",
       WORKER_HEALTH_PORT: 4001,
+      WORKER_HEARTBEAT_INTERVAL_MS: 10_000,
+      WORKER_JOB_TIMEOUT_MS: 300_000,
+      WORKER_LEASE_MS: 60_000,
+      WORKER_MAX_ATTEMPTS: 5,
+      WORKER_MODE: "run",
+      WORKER_QUEUE_NAME: "launchrail-deployments",
+      WORKER_QUEUE_PREFIX: "launchrail",
+      WORKER_RECONCILIATION_BATCH_SIZE: 100,
+      WORKER_RECONCILIATION_INTERVAL_MS: 15_000,
+      WORKER_SHUTDOWN_GRACE_MS: 30_000,
     });
     expect(loadWebConfig({})).toEqual({
       NEXT_PUBLIC_API_BASE_URL: "http://localhost:4000",
@@ -88,6 +101,55 @@ describe("configuration", () => {
         SESSION_IDLE_TTL_MINUTES: "61",
       }),
     ).toThrow("cannot exceed the absolute session lifetime");
+  });
+
+  it("parses bounded worker queue and lifecycle settings", () => {
+    expect(
+      loadWorkerConfig({
+        ...serviceEnvironment,
+        WORKER_BACKOFF_BASE_MS: "250",
+        WORKER_BACKOFF_CAP_MS: "5000",
+        WORKER_CONCURRENCY: "4",
+        WORKER_HEARTBEAT_INTERVAL_MS: "1000",
+        WORKER_JOB_TIMEOUT_MS: "10000",
+        WORKER_LEASE_MS: "5000",
+        WORKER_MAX_ATTEMPTS: "3",
+        WORKER_MODE: "health-only",
+        WORKER_QUEUE_NAME: "launchrail-test-deployments",
+        WORKER_QUEUE_PREFIX: "launchrail_test",
+        WORKER_RECONCILIATION_BATCH_SIZE: "25",
+        WORKER_RECONCILIATION_INTERVAL_MS: "2000",
+        WORKER_SHUTDOWN_GRACE_MS: "7500",
+      }),
+    ).toMatchObject({
+      WORKER_BACKOFF_BASE_MS: 250,
+      WORKER_BACKOFF_CAP_MS: 5_000,
+      WORKER_CONCURRENCY: 4,
+      WORKER_HEARTBEAT_INTERVAL_MS: 1_000,
+      WORKER_JOB_TIMEOUT_MS: 10_000,
+      WORKER_LEASE_MS: 5_000,
+      WORKER_MAX_ATTEMPTS: 3,
+      WORKER_MODE: "health-only",
+      WORKER_QUEUE_NAME: "launchrail-test-deployments",
+      WORKER_QUEUE_PREFIX: "launchrail_test",
+      WORKER_RECONCILIATION_BATCH_SIZE: 25,
+      WORKER_RECONCILIATION_INTERVAL_MS: 2_000,
+      WORKER_SHUTDOWN_GRACE_MS: 7_500,
+    });
+  });
+
+  it.each([
+    ["backoff order", { WORKER_BACKOFF_BASE_MS: "60001" }],
+    ["heartbeat lease order", { WORKER_HEARTBEAT_INTERVAL_MS: "60000" }],
+    ["reconciliation lease order", { WORKER_RECONCILIATION_INTERVAL_MS: "60000" }],
+    ["timeout heartbeat order", { WORKER_JOB_TIMEOUT_MS: "10000" }],
+    ["unsafe queue name", { WORKER_QUEUE_NAME: "launchrail:deployments" }],
+    ["excessive concurrency", { WORKER_CONCURRENCY: "33" }],
+    ["excessive attempts", { WORKER_MAX_ATTEMPTS: "21" }],
+  ])("rejects invalid worker setting relationships: %s", (_description, override) => {
+    expect(() => loadWorkerConfig({ ...serviceEnvironment, ...override })).toThrow(
+      ConfigurationError,
+    );
   });
 
   it("parses one to eight unique versioned 32-byte base64url keys", () => {

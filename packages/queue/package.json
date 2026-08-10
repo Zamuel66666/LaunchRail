@@ -1,5 +1,5 @@
 {
-  "name": "@launchrail/contracts",
+  "name": "@launchrail/queue",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -14,9 +14,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "zod": "4.4.3"
+    "@launchrail/contracts": "workspace:*",
+    "bullmq": "5.81.3",
+    "ioredis": "5.11.1"
   },
   "devDependencies": {
+    "@types/node": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

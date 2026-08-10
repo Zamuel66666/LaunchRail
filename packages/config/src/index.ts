@@ -7,6 +7,7 @@ const logLevelSchema = z.enum(["fatal", "error", "warn", "info", "debug", "trace
 const portSchema = z.coerce.number().int().min(1).max(65_535);
 const positiveIntegerSchema = z.coerce.number().int().positive();
 const urlSchema = z.string().url();
+const workerIdentifierSchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/);
 
 const secretKeyringEntryLimit = 8;
 const secretKeyByteLength = 32;
@@ -77,8 +78,21 @@ const apiSchema = sharedServiceSchema.extend({
 });
 
 const workerSchema = sharedServiceSchema.extend({
+  WORKER_BACKOFF_BASE_MS: positiveIntegerSchema.max(3_600_000).default(1_000),
+  WORKER_BACKOFF_CAP_MS: positiveIntegerSchema.max(86_400_000).default(60_000),
+  WORKER_CONCURRENCY: positiveIntegerSchema.max(32).default(2),
   WORKER_HEALTH_HOST: z.string().min(1).default("127.0.0.1"),
   WORKER_HEALTH_PORT: portSchema.default(4001),
+  WORKER_HEARTBEAT_INTERVAL_MS: positiveIntegerSchema.max(300_000).default(10_000),
+  WORKER_JOB_TIMEOUT_MS: positiveIntegerSchema.max(86_400_000).default(300_000),
+  WORKER_LEASE_MS: positiveIntegerSchema.max(86_400_000).default(60_000),
+  WORKER_MAX_ATTEMPTS: positiveIntegerSchema.max(20).default(5),
+  WORKER_MODE: z.enum(["run", "health-only"]).default("run"),
+  WORKER_QUEUE_NAME: workerIdentifierSchema.default("launchrail-deployments"),
+  WORKER_QUEUE_PREFIX: workerIdentifierSchema.default("launchrail"),
+  WORKER_RECONCILIATION_BATCH_SIZE: positiveIntegerSchema.max(1_000).default(100),
+  WORKER_RECONCILIATION_INTERVAL_MS: positiveIntegerSchema.max(3_600_000).default(15_000),
+  WORKER_SHUTDOWN_GRACE_MS: positiveIntegerSchema.max(3_600_000).default(30_000),
 });
 
 const webSchema = z.object({
@@ -157,6 +171,25 @@ function validateApiSecurity(config: ApiConfig): void {
   }
 }
 
+function validateWorkerRuntime(config: WorkerConfig): void {
+  const issues: string[] = [];
+  if (config.WORKER_BACKOFF_BASE_MS > config.WORKER_BACKOFF_CAP_MS) {
+    issues.push("WORKER_BACKOFF_BASE_MS: cannot exceed WORKER_BACKOFF_CAP_MS");
+  }
+  if (config.WORKER_HEARTBEAT_INTERVAL_MS >= config.WORKER_LEASE_MS) {
+    issues.push("WORKER_HEARTBEAT_INTERVAL_MS: must be shorter than WORKER_LEASE_MS");
+  }
+  if (config.WORKER_RECONCILIATION_INTERVAL_MS >= config.WORKER_LEASE_MS) {
+    issues.push("WORKER_RECONCILIATION_INTERVAL_MS: must be shorter than WORKER_LEASE_MS");
+  }
+  if (config.WORKER_JOB_TIMEOUT_MS <= config.WORKER_HEARTBEAT_INTERVAL_MS) {
+    issues.push("WORKER_JOB_TIMEOUT_MS: must exceed WORKER_HEARTBEAT_INTERVAL_MS");
+  }
+  if (issues.length > 0) {
+    throw new ConfigurationError(issues);
+  }
+}
+
 export function loadApiConfig(source: EnvironmentSource = process.env): ApiConfig {
   const config = parseConfig(apiSchema, source);
   rejectDevelopmentCredentialsInProduction(config);
@@ -167,6 +200,7 @@ export function loadApiConfig(source: EnvironmentSource = process.env): ApiConfi
 export function loadWorkerConfig(source: EnvironmentSource = process.env): WorkerConfig {
   const config = parseConfig(workerSchema, source);
   rejectDevelopmentCredentialsInProduction(config);
+  validateWorkerRuntime(config);
   return config;
 }
 

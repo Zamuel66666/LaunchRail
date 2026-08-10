@@ -58,6 +58,19 @@ export const webhookProcessingState = pgEnum("webhook_processing_state", [
   "failed",
 ]);
 export const auditOutcome = pgEnum("audit_outcome", ["succeeded", "rejected", "failed"]);
+export const deploymentJobStatus = pgEnum("deployment_job_status", [
+  "pending",
+  "running",
+  "retry_wait",
+  "completed",
+  "dead_lettered",
+]);
+export const workerHeartbeatStatus = pgEnum("worker_heartbeat_status", [
+  "starting",
+  "ready",
+  "draining",
+  "stopped",
+]);
 
 export const users = pgTable(
   "users",
@@ -506,5 +519,140 @@ export const deploymentCommands = pgTable(
       name: "deployment_commands_deployment_organization_fk",
     }).onDelete("cascade"),
     check("deployment_commands_key_not_blank", sql`length(trim(${table.idempotencyKey})) > 0`),
+  ],
+);
+
+export const deploymentJobs = pgTable(
+  "deployment_jobs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    deploymentId: uuid("deployment_id").notNull(),
+    organizationId: uuid("organization_id").notNull(),
+    kind: text("kind").notNull(),
+    contractVersion: integer("contract_version").default(1).notNull(),
+    status: deploymentJobStatus("status").default("pending").notNull(),
+    attemptCount: integer("attempt_count").default(0).notNull(),
+    maxAttempts: integer("max_attempts").notNull(),
+    availableAt: timestamp("available_at", { mode: "date", withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    leaseToken: uuid("lease_token"),
+    workerId: text("worker_id"),
+    heartbeatAt: timestamp("heartbeat_at", { mode: "date", withTimezone: true }),
+    leaseExpiresAt: timestamp("lease_expires_at", { mode: "date", withTimezone: true }),
+    lastErrorCode: text("last_error_code"),
+    lastErrorMessage: text("last_error_message"),
+    completedAt: timestamp("completed_at", { mode: "date", withTimezone: true }),
+    deadLetteredAt: timestamp("dead_lettered_at", { mode: "date", withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.deploymentId, table.organizationId],
+      foreignColumns: [deployments.id, deployments.organizationId],
+      name: "deployment_jobs_deployment_organization_fk",
+    }).onDelete("cascade"),
+    unique("deployment_jobs_deployment_kind_unique").on(table.deploymentId, table.kind),
+    unique("deployment_jobs_lease_token_unique").on(table.leaseToken),
+    index("deployment_jobs_dispatch_index").on(table.status, table.availableAt),
+    index("deployment_jobs_expired_lease_index").on(table.status, table.leaseExpiresAt),
+    check("deployment_jobs_kind", sql`${table.kind} = 'deployment.claim'`),
+    check("deployment_jobs_contract_version", sql`${table.contractVersion} = 1`),
+    check(
+      "deployment_jobs_attempt_bounds",
+      sql`${table.attemptCount} >= 0 and ${table.maxAttempts} between 1 and 100 and ${table.attemptCount} <= ${table.maxAttempts}`,
+    ),
+    check(
+      "deployment_jobs_attempt_matches_status",
+      sql`(${table.status} = 'pending' and ${table.attemptCount} = 0)
+        or (${table.status} = 'retry_wait' and ${table.attemptCount} > 0 and ${table.attemptCount} < ${table.maxAttempts})
+        or (${table.status} = 'dead_lettered' and ${table.attemptCount} = ${table.maxAttempts})
+        or (${table.status} = 'running' and ${table.attemptCount} > 0)
+        or ${table.status} = 'completed'`,
+    ),
+    check(
+      "deployment_jobs_lease_shape",
+      sql`(${table.status} = 'running'
+          and ${table.leaseToken} is not null
+          and ${table.workerId} is not null
+          and ${table.heartbeatAt} is not null
+          and ${table.leaseExpiresAt} is not null)
+        or (${table.status} <> 'running'
+          and ${table.leaseToken} is null
+          and ${table.workerId} is null
+          and ${table.heartbeatAt} is null
+          and ${table.leaseExpiresAt} is null)`,
+    ),
+    check(
+      "deployment_jobs_lease_order",
+      sql`${table.leaseExpiresAt} is null or ${table.leaseExpiresAt} > ${table.heartbeatAt}`,
+    ),
+    check(
+      "deployment_jobs_worker_id_format",
+      sql`${table.workerId} is null or ${table.workerId} ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'`,
+    ),
+    check(
+      "deployment_jobs_failure_shape",
+      sql`(${table.status} in ('retry_wait', 'dead_lettered')
+          and ${table.lastErrorCode} is not null
+          and ${table.lastErrorMessage} is not null)
+        or (${table.status} not in ('retry_wait', 'dead_lettered')
+          and ${table.lastErrorCode} is null
+          and ${table.lastErrorMessage} is null)`,
+    ),
+    check(
+      "deployment_jobs_error_code_format",
+      sql`${table.lastErrorCode} is null or ${table.lastErrorCode} ~ '^[a-z][a-z0-9_]{0,63}$'`,
+    ),
+    check(
+      "deployment_jobs_error_message_bounds",
+      sql`${table.lastErrorMessage} is null or (length(${table.lastErrorMessage}) between 1 and 512 and ${table.lastErrorMessage} = trim(${table.lastErrorMessage}) and ${table.lastErrorMessage} !~ '[[:cntrl:]]')`,
+    ),
+    check(
+      "deployment_jobs_completion_shape",
+      sql`(${table.status} = 'completed') = (${table.completedAt} is not null)`,
+    ),
+    check(
+      "deployment_jobs_dead_letter_shape",
+      sql`(${table.status} = 'dead_lettered') = (${table.deadLetteredAt} is not null)`,
+    ),
+  ],
+);
+
+export const workerHeartbeats = pgTable(
+  "worker_heartbeats",
+  {
+    workerId: text("worker_id").primaryKey(),
+    status: workerHeartbeatStatus("status").notNull(),
+    version: text("version").notNull(),
+    activeJobCount: integer("active_job_count").default(0).notNull(),
+    startedAt: timestamp("started_at", { mode: "date", withTimezone: true }).notNull(),
+    heartbeatAt: timestamp("heartbeat_at", { mode: "date", withTimezone: true }).notNull(),
+    stoppedAt: timestamp("stopped_at", { mode: "date", withTimezone: true }),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("worker_heartbeats_status_heartbeat_index").on(table.status, table.heartbeatAt),
+    check(
+      "worker_heartbeats_worker_id_format",
+      sql`${table.workerId} ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'`,
+    ),
+    check(
+      "worker_heartbeats_version_format",
+      sql`${table.version} ~ '^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$'`,
+    ),
+    check("worker_heartbeats_active_jobs_bounds", sql`${table.activeJobCount} between 0 and 10000`),
+    check(
+      "worker_heartbeats_time_order",
+      sql`${table.heartbeatAt} >= ${table.startedAt} and (${table.stoppedAt} is null or ${table.stoppedAt} >= ${table.heartbeatAt})`,
+    ),
+    check(
+      "worker_heartbeats_stopped_shape",
+      sql`(${table.status} = 'stopped') = (${table.stoppedAt} is not null)`,
+    ),
+    check(
+      "worker_heartbeats_stopped_has_no_active_jobs",
+      sql`${table.status} <> 'stopped' or ${table.activeJobCount} = 0`,
+    ),
   ],
 );

@@ -10,12 +10,18 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@launchrail/application": "workspace:*",
     "@launchrail/config": "workspace:*",
     "@launchrail/contracts": "workspace:*",
-    "@launchrail/observability": "workspace:*"
+    "@launchrail/database": "workspace:*",
+    "@launchrail/observability": "workspace:*",
+    "@launchrail/queue": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",
+    "bullmq": "5.81.3",
+    "drizzle-orm": "0.45.2",
+    "ioredis": "5.11.1",
     "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

@@ -161,6 +161,95 @@ describeWithDatabase("PostgresDeploymentTransitionStore", () => {
     ).resolves.toHaveLength(1);
   });
 
+  it("rejects an idempotency key reused for a different transition target", async () => {
+    const seeded = await seedDeployment();
+    const idempotencyKey = "mismatched-transition-replay";
+
+    await store.transition({
+      deploymentId: seeded.deploymentId,
+      idempotencyKey,
+      organizationId: seeded.organizationId,
+      to: "cancelling",
+    });
+    await expect(
+      store.transition({
+        deploymentId: seeded.deploymentId,
+        idempotencyKey,
+        organizationId: seeded.organizationId,
+        to: "cloning",
+      }),
+    ).rejects.toBeInstanceOf(DeploymentPersistenceConflictError);
+
+    const [deployment] = await client.db
+      .select()
+      .from(schema.deployments)
+      .where(eq(schema.deployments.id, seeded.deploymentId));
+    expect(deployment).toMatchObject({ eventSequence: 1, state: "cancelling", version: 2 });
+    await expect(
+      client.db
+        .select()
+        .from(schema.deploymentEvents)
+        .where(eq(schema.deploymentEvents.deploymentId, seeded.deploymentId)),
+    ).resolves.toHaveLength(1);
+  });
+
+  it("rejects failure-transition replay with different safe details", async () => {
+    const seeded = await seedDeployment({ state: "building" });
+    const idempotencyKey = "mismatched-failure-replay";
+
+    await store.transition({
+      deploymentId: seeded.deploymentId,
+      failure: { category: "build_failed", message: "The build command failed safely" },
+      idempotencyKey,
+      organizationId: seeded.organizationId,
+      to: "build_failed",
+    });
+    await expect(
+      store.transition({
+        deploymentId: seeded.deploymentId,
+        failure: { category: "build_timeout", message: "The build exceeded its time limit" },
+        idempotencyKey,
+        organizationId: seeded.organizationId,
+        to: "build_failed",
+      }),
+    ).rejects.toBeInstanceOf(DeploymentPersistenceConflictError);
+
+    const [event] = await client.db
+      .select()
+      .from(schema.deploymentEvents)
+      .where(eq(schema.deploymentEvents.deploymentId, seeded.deploymentId));
+    expect(event?.metadata).toEqual({
+      failureCategory: "build_failed",
+      failureMessage: "The build command failed safely",
+    });
+  });
+
+  it("rejects promotion replay backed by a non-promotion result", async () => {
+    const candidate = await seedDeployment({ healthChecked: true, state: "health_checking" });
+    const idempotencyKey = "mismatched-promotion-replay";
+    await client.db.insert(schema.deploymentCommands).values({
+      deploymentId: candidate.deploymentId,
+      idempotencyKey,
+      organizationId: candidate.organizationId,
+      result: {
+        deploymentId: candidate.deploymentId,
+        eventSequence: 1,
+        from: "queued",
+        to: "cloning",
+        version: 2,
+      },
+    });
+
+    await expect(
+      store.promote({
+        deploymentId: candidate.deploymentId,
+        idempotencyKey,
+        organizationId: candidate.organizationId,
+      }),
+    ).rejects.toBeInstanceOf(DeploymentPersistenceConflictError);
+    await expect(client.db.select().from(schema.activeReleases)).resolves.toHaveLength(0);
+  });
+
   it("rolls back the state update when event persistence fails", async () => {
     const seeded = await seedDeployment();
     await client.db.insert(schema.deploymentEvents).values({

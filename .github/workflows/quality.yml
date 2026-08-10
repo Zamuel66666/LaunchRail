@@ -61,11 +61,12 @@ jobs:
         run: pnpm smoke:health
 
   development-services:
-    name: PostgreSQL migrations and transaction invariants
+    name: PostgreSQL, Redis, and restart invariants
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
       DATABASE_URL: postgresql://launchrail:launchrail_dev_only@127.0.0.1:5432/launchrail
+      REDIS_URL: redis://127.0.0.1:6379
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -102,6 +103,9 @@ jobs:
 
       - name: Test ownership and transition transactions
         run: pnpm test:database
+
+      - name: Test durable queue and worker recovery
+        run: pnpm test:queue
 
       - name: Show service logs after failure
         if: failure()

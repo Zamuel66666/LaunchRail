@@ -358,7 +358,10 @@ describeWithDatabase("PostgresDeploymentJobStore", () => {
     await expect(store.recoverExpired({ limit: 10 })).resolves.toEqual([
       { id: job.id, status: "retry_wait" },
     ]);
-    const second = await claim(job.id, { workerId: "worker-b" });
+    const second = await claim(job.id, {
+      leaseDurationMs: 10_000,
+      workerId: "worker-b",
+    });
     if (second.kind !== "claimed") {
       throw new Error(`Expected reclaimed work, received ${second.kind}`);
     }

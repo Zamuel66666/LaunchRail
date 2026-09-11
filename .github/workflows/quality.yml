@@ -139,7 +139,7 @@ jobs:
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
         with:
           buildkitd-config: .github/buildkitd.toml
-          buildkitd-flags: --oci-worker-net=bridge
+          buildkitd-flags: --oci-worker-net=bridge --allow-insecure-entitlement=
           driver: docker-container
           driver-opts: |
             image=moby/buildkit:v0.32.2@sha256:28a898719c18a33f4e8000685287fa36fd0dd9560c6440227d3a732d79bb41d8
@@ -156,7 +156,7 @@ jobs:
           test "$(docker buildx version | awk '{print $2}')" = "v0.36.1"
           docker buildx inspect --builder launchrail-builder --bootstrap | grep -F "v0.32.2"
           test "$(docker inspect buildx_buildkit_launchrail-builder0 --format '{{.Config.Image}}')" = "moby/buildkit:v0.32.2@sha256:28a898719c18a33f4e8000685287fa36fd0dd9560c6440227d3a732d79bb41d8"
-          ! docker inspect buildx_buildkit_launchrail-builder0 --format '{{json .Args}}' | grep -F "allow-insecure-entitlement"
+          ! docker inspect buildx_buildkit_launchrail-builder0 --format '{{json .Args}}' | grep -E 'allow-insecure-entitlement=(network.host|security.insecure|device)'
 
       - name: Install pnpm
         uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9

@@ -36,7 +36,9 @@ function createLogger(): WorkerEventLogger & { readonly records: unknown[] } {
 
 function createStore(overrides: Partial<DeploymentJobStore> = {}): DeploymentJobStore {
   return {
+    appendBuildLogs: vi.fn(async () => ({ kind: "not_found" as const })),
     claim: vi.fn(async () => ({ kind: "claimed" as const, lease })),
+    completeBuild: vi.fn(async () => ({ kind: "not_found" as const })),
     completeClaimTransition: vi.fn(async () => ({
       kind: "completed" as const,
       transition: {
@@ -57,6 +59,7 @@ function createStore(overrides: Partial<DeploymentJobStore> = {}): DeploymentJob
       availableAt: now,
       kind: "retry_scheduled" as const,
     })),
+    failBuild: vi.fn(async () => ({ kind: "not_found" as const })),
     failSourcePreparation: vi.fn(async () => ({ kind: "not_found" as const })),
     heartbeat: vi.fn(async () => ({
       kind: "extended" as const,
@@ -64,6 +67,7 @@ function createStore(overrides: Partial<DeploymentJobStore> = {}): DeploymentJob
     })),
     listDispatchable: vi.fn(async () => []),
     listWorkerHeartbeats: vi.fn(async () => []),
+    loadBuildInput: vi.fn(async () => ({ kind: "not_found" as const })),
     loadSourcePreparation: vi.fn(async () => ({ kind: "not_found" as const })),
     recordWorkerHeartbeat: vi.fn(async () => ({ kind: "version_mismatch" as const })),
     recoverExpired: vi.fn(async () => []),
@@ -298,15 +302,17 @@ describe("DeploymentClaimProcessor", () => {
       backoffBaseMs: 1,
       backoffCapMs: 1,
       heartbeatIntervalMs: 1,
-      jobTimeoutMs: 20,
+      jobTimeoutMs: 5_000,
       leaseDurationMs: 60_000,
       logger: createLogger(),
       store,
       workerId: "worker-test",
     });
 
-    const processing = processor.process(job, new AbortController().signal);
+    const shutdown = new AbortController();
+    const processing = processor.process(job, shutdown.signal);
     await vi.waitFor(() => expect(heartbeatCall).toHaveBeenCalledOnce());
+    shutdown.abort();
     await expect(processing).resolves.toBe("interrupted");
     expect(processor.getActiveJobCount()).toBe(1);
 

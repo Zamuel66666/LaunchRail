@@ -19,6 +19,7 @@ const leaseToken = "44444444-4444-4444-8444-444444444444";
 const commitSha = "a".repeat(40);
 const treeSha = "b".repeat(40);
 const dockerfileSha256 = "c".repeat(64);
+const contextSha256 = "d".repeat(64);
 const now = new Date("2026-08-10T12:00:00.000Z");
 
 const lease: DeploymentJobLease = {
@@ -46,6 +47,7 @@ const preparedCheckout: PreparedRepositoryCheckout = {
   adopted: false,
   checkoutKey: deploymentId,
   commitSha,
+  contextSha256,
   directory: `/worker/source/${deploymentId}`,
   dockerfile: {
     relativePath: "Dockerfile",
@@ -72,12 +74,15 @@ function createLogger(): WorkerEventLogger & { readonly records: unknown[] } {
 
 function createStore(overrides: Partial<DeploymentJobStore> = {}): DeploymentJobStore {
   return {
+    appendBuildLogs: vi.fn(async () => ({ kind: "not_found" as const })),
     claim: vi.fn(async () => ({ kind: "claimed" as const, lease })),
+    completeBuild: vi.fn(async () => ({ kind: "not_found" as const })),
     completeClaimTransition: vi.fn(async () => ({ kind: "not_found" as const })),
     completeSourcePreparation: vi.fn(async () => ({
       kind: "completed" as const,
       source: {
         checkoutId: deploymentId,
+        contextSha256,
         deploymentId,
         dockerfilePath: "Dockerfile",
         dockerfileResolvedPath: "container/Dockerfile",
@@ -102,6 +107,7 @@ function createStore(overrides: Partial<DeploymentJobStore> = {}): DeploymentJob
     ensureMissingClaims: vi.fn(async () => []),
     ensurePendingClaim: vi.fn(async () => ({ kind: "deployment_not_found" as const })),
     fail: vi.fn(async () => ({ kind: "not_found" as const })),
+    failBuild: vi.fn(async () => ({ kind: "not_found" as const })),
     failSourcePreparation: vi.fn(async () => ({ kind: "not_found" as const })),
     heartbeat: vi.fn(async () => ({
       kind: "extended" as const,
@@ -109,6 +115,7 @@ function createStore(overrides: Partial<DeploymentJobStore> = {}): DeploymentJob
     })),
     listDispatchable: vi.fn(async () => []),
     listWorkerHeartbeats: vi.fn(async () => []),
+    loadBuildInput: vi.fn(async () => ({ kind: "not_found" as const })),
     loadSourcePreparation: vi.fn(async () => ({
       kind: "loaded" as const,
       source: {
@@ -199,6 +206,7 @@ describe("DeploymentSourceProcessor", () => {
       leaseToken,
       metadata: {
         checkoutId: deploymentId,
+        contextSha256,
         dockerfilePath: "Dockerfile",
         dockerfileResolvedPath: "container/Dockerfile",
         dockerfileSha256,

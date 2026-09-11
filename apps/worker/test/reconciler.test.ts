@@ -15,17 +15,21 @@ const logger: WorkerEventLogger = {
 
 function createStore(overrides: Partial<DeploymentJobStore> = {}): DeploymentJobStore {
   return {
+    appendBuildLogs: vi.fn(async () => ({ kind: "not_found" as const })),
     claim: vi.fn(async () => ({ kind: "not_found" as const })),
+    completeBuild: vi.fn(async () => ({ kind: "not_found" as const })),
     completeClaimTransition: vi.fn(async () => ({ kind: "not_found" as const })),
     completeSourcePreparation: vi.fn(async () => ({ kind: "not_found" as const })),
     ensureMissing: vi.fn(async () => []),
     ensureMissingClaims: vi.fn(async () => []),
     ensurePendingClaim: vi.fn(async () => ({ kind: "deployment_not_found" as const })),
     fail: vi.fn(async () => ({ kind: "not_found" as const })),
+    failBuild: vi.fn(async () => ({ kind: "not_found" as const })),
     failSourcePreparation: vi.fn(async () => ({ kind: "not_found" as const })),
     heartbeat: vi.fn(async () => ({ kind: "not_found" as const })),
     listDispatchable: vi.fn(async () => []),
     listWorkerHeartbeats: vi.fn(async () => []),
+    loadBuildInput: vi.fn(async () => ({ kind: "not_found" as const })),
     loadSourcePreparation: vi.fn(async () => ({ kind: "not_found" as const })),
     recordWorkerHeartbeat: vi.fn(async () => ({ kind: "version_mismatch" as const })),
     recoverExpired: vi.fn(async () => []),

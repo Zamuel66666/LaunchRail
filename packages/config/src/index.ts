@@ -1,4 +1,4 @@
-import { isAbsolute, parse, resolve } from "node:path";
+import { isAbsolute, parse, relative, resolve, sep } from "node:path";
 
 import { z } from "zod";
 
@@ -11,6 +11,7 @@ const positiveIntegerSchema = z.coerce.number().int().positive();
 const urlSchema = z.string().url();
 const workerIdentifierSchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/);
 const defaultWorkerSourceRoot = resolve(process.cwd(), ".launchrail/sources");
+const defaultWorkerBuildRoot = resolve(process.cwd(), ".launchrail/builds");
 const workerSourceRootSchema = z.string().refine((value) => {
   if (!isAbsolute(value) || value.includes("\0")) {
     return false;
@@ -18,6 +19,7 @@ const workerSourceRootSchema = z.string().refine((value) => {
   const normalized = resolve(value);
   return normalized === value && normalized !== parse(normalized).root;
 }, "must be a normalized absolute directory below the filesystem root");
+const workerBuildRootSchema = workerSourceRootSchema;
 
 const secretKeyringEntryLimit = 8;
 const secretKeyByteLength = 32;
@@ -90,6 +92,20 @@ const apiSchema = sharedServiceSchema.extend({
 const workerSchema = sharedServiceSchema.extend({
   WORKER_BACKOFF_BASE_MS: positiveIntegerSchema.max(3_600_000).default(1_000),
   WORKER_BACKOFF_CAP_MS: positiveIntegerSchema.max(86_400_000).default(60_000),
+  WORKER_BUILD_CPU_MILLICORES: positiveIntegerSchema.max(16_000).default(1_000),
+  WORKER_BUILD_INSPECT_BYTES: positiveIntegerSchema.max(1_048_576).default(262_144),
+  WORKER_BUILD_IMAGE_MAX_BYTES: positiveIntegerSchema.max(10_737_418_240).default(1_073_741_824),
+  WORKER_BUILD_LOG_MAX_BYTES: positiveIntegerSchema.max(1_073_741_824).default(1_048_576),
+  WORKER_BUILD_LOG_CHUNK_BYTES: positiveIntegerSchema.max(65_536).default(16_384),
+  WORKER_BUILD_MEMORY_MEGABYTES: positiveIntegerSchema.max(32_768).default(1_024),
+  WORKER_BUILD_METADATA_BYTES: positiveIntegerSchema.max(1_048_576).default(65_536),
+  WORKER_BUILD_PLATFORM: z.enum(["linux/amd64", "linux/arm64"]).default("linux/amd64"),
+  WORKER_BUILD_PROCESS_LIMIT: positiveIntegerSchema.max(4_096).default(256),
+  WORKER_BUILD_PROGRESS_BYTES: positiveIntegerSchema.max(1_073_741_824).default(8_388_608),
+  WORKER_BUILD_PROGRESS_LINE_BYTES: positiveIntegerSchema.max(1_048_576).default(65_536),
+  WORKER_BUILD_ROOT: workerBuildRootSchema.default(defaultWorkerBuildRoot),
+  WORKER_BUILD_SHARED_MEMORY_MEGABYTES: positiveIntegerSchema.max(4_096).default(64),
+  WORKER_BUILD_TIMEOUT_MS: positiveIntegerSchema.max(3_600_000).default(240_000),
   WORKER_CONCURRENCY: positiveIntegerSchema.max(32).default(2),
   WORKER_HEALTH_HOST: z.string().min(1).default("127.0.0.1"),
   WORKER_HEALTH_PORT: portSchema.default(4001),
@@ -206,6 +222,12 @@ function validateWorkerRuntime(config: WorkerConfig): void {
   if (config.WORKER_JOB_TIMEOUT_MS <= config.WORKER_HEARTBEAT_INTERVAL_MS) {
     issues.push("WORKER_JOB_TIMEOUT_MS: must exceed WORKER_HEARTBEAT_INTERVAL_MS");
   }
+  if (config.WORKER_BUILD_TIMEOUT_MS > config.WORKER_JOB_TIMEOUT_MS) {
+    issues.push("WORKER_BUILD_TIMEOUT_MS: cannot exceed WORKER_JOB_TIMEOUT_MS");
+  }
+  if (config.WORKER_BUILD_PROGRESS_LINE_BYTES > config.WORKER_BUILD_PROGRESS_BYTES) {
+    issues.push("WORKER_BUILD_PROGRESS_LINE_BYTES: cannot exceed WORKER_BUILD_PROGRESS_BYTES");
+  }
   if (config.WORKER_SOURCE_RESOLVE_TIMEOUT_MS > config.WORKER_JOB_TIMEOUT_MS) {
     issues.push("WORKER_SOURCE_RESOLVE_TIMEOUT_MS: cannot exceed WORKER_JOB_TIMEOUT_MS");
   }
@@ -214,6 +236,13 @@ function validateWorkerRuntime(config: WorkerConfig): void {
   }
   if (config.WORKER_SOURCE_MAX_FILE_BYTES > config.WORKER_SOURCE_MAX_BYTES) {
     issues.push("WORKER_SOURCE_MAX_FILE_BYTES: cannot exceed WORKER_SOURCE_MAX_BYTES");
+  }
+  const sourceToBuild = relative(config.WORKER_SOURCE_ROOT, config.WORKER_BUILD_ROOT);
+  const buildToSource = relative(config.WORKER_BUILD_ROOT, config.WORKER_SOURCE_ROOT);
+  const isContained = (child: string): boolean =>
+    child === "" || (child !== ".." && !child.startsWith(`..${sep}`) && !isAbsolute(child));
+  if (isContained(sourceToBuild) || isContained(buildToSource)) {
+    issues.push("WORKER_BUILD_ROOT: must be separate from WORKER_SOURCE_ROOT");
   }
   if (issues.length > 0) {
     throw new ConfigurationError(issues);

@@ -43,6 +43,13 @@
       "when": 1786380169719,
       "tag": "0005_slim_ikaris",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786384589669,
+      "tag": "0006_overconfident_outlaw_kid",
+      "breakpoints": true
     }
   ]
 }

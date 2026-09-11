@@ -1,12 +1,19 @@
 import { randomUUID } from "node:crypto";
 
 import type {
+  AppendDeploymentBuildLogsCommand,
+  AppendDeploymentBuildLogsResult,
+  BuiltDeploymentImageMetadata,
+  BuiltDeploymentImageSummary,
   ClaimDeploymentJobCommand,
   ClaimDeploymentJobResult,
+  CompleteDeploymentBuildCommand,
+  CompleteDeploymentBuildResult,
   CompleteDeploymentClaimTransitionCommand,
   CompleteDeploymentClaimTransitionResult,
   CompleteDeploymentSourcePreparationCommand,
   CompleteDeploymentSourcePreparationResult,
+  DeploymentBuildInput,
   DeploymentJobStore,
   DeploymentJobKind,
   DeploymentJobSummary,
@@ -16,6 +23,8 @@ import type {
   EnsureDeploymentClaimJobResult,
   EnsureMissingDeploymentClaimJobsCommand,
   EnsureMissingDeploymentJobsCommand,
+  FailDeploymentBuildCommand,
+  FailDeploymentBuildResult,
   FailDeploymentSourcePreparationCommand,
   FailDeploymentSourcePreparationResult,
   FailDeploymentJobCommand,
@@ -24,6 +33,8 @@ import type {
   HeartbeatDeploymentJobResult,
   ListDispatchableDeploymentJobsQuery,
   ListWorkerHeartbeatsQuery,
+  LoadDeploymentBuildInputCommand,
+  LoadDeploymentBuildInputResult,
   LoadDeploymentSourcePreparationCommand,
   LoadDeploymentSourcePreparationResult,
   LeaseMutationFailure,
@@ -38,15 +49,32 @@ import type {
   WorkerHeartbeatSummary,
 } from "@launchrail/application";
 import {
+  createDeploymentBuildFailureIdempotencyKey,
+  createDeploymentBuildTransitionIdempotencyKey,
   createDeploymentClaimTransitionIdempotencyKey,
   createDeploymentSourceFailureIdempotencyKey,
   createDeploymentSourceTransitionIdempotencyKey,
 } from "@launchrail/contracts";
-import { and, asc, eq, getTableColumns, gt, inArray, lte, notExists, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  exists,
+  getTableColumns,
+  gt,
+  inArray,
+  lte,
+  notExists,
+  or,
+  sql,
+} from "drizzle-orm";
 
 import type { LaunchRailDatabase } from "./client.js";
 import { transitionDeploymentInTransaction } from "./deployment-transition-store.js";
 import {
+  buildLogs,
+  deploymentBuildArtifacts,
+  deploymentBuildLogCursors,
   deploymentJobs,
   deploymentSourcePreparations,
   deployments,
@@ -55,6 +83,7 @@ import {
 
 const deploymentClaimJobKind = "deployment.claim" as const;
 const deploymentPrepareSourceJobKind = "deployment.prepare_source" as const;
+const deploymentBuildJobKind = "deployment.build" as const;
 const deploymentJobContractVersion = 1;
 const maximumBatchSize = 1_000;
 const maximumAttempts = 100;
@@ -150,7 +179,11 @@ function assertSafeFailure(code: string, message: string): void {
 }
 
 function assertDeploymentJobKind(value: string): DeploymentJobKind {
-  if (value === deploymentClaimJobKind || value === deploymentPrepareSourceJobKind) {
+  if (
+    value === deploymentClaimJobKind ||
+    value === deploymentPrepareSourceJobKind ||
+    value === deploymentBuildJobKind
+  ) {
     return value;
   }
   throw new Error("PostgreSQL returned an unsupported deployment job kind");
@@ -167,7 +200,16 @@ const requestedRevisionPattern = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,254}$/;
 const dockerfilePathPattern = /^[A-Za-z0-9._/-]+$/;
 const checkoutIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 const sha256Pattern = /^[0-9a-f]{64}$/;
+const legacyUnknownContextSha256 = "0".repeat(64);
 const resolvedDockerfilePathMaximumBytes = 1_024;
+const buildLogTruncationMarker = "[LaunchRail] Build log output was truncated.\n";
+const maximumBuildLogRetentionBytes = 1_073_741_824;
+const maximumBuildLogBatchSize = 1_000;
+const maximumBuildLogChunkBytes = 65_536;
+const maximumImageSizeBytes = 1_000_000_000_000;
+const maximumBuildCacheCount = 1_000_000;
+const imageDigestPattern = /^sha256:[0-9a-f]{64}$/;
+const platformPattern = /^[a-z0-9]+\/[a-z0-9._-]+(?:\/[a-z0-9._-]+)?$/;
 
 function hasSafeRelativePathShape(value: string): boolean {
   const segments = value.split("/");
@@ -273,6 +315,75 @@ function assertPreparedSourceMetadata(metadata: PreparedDeploymentSourceMetadata
   if (!sha256Pattern.test(metadata.dockerfileSha256)) {
     throw new RangeError("dockerfileSha256 must be a lowercase SHA-256 digest");
   }
+  if (
+    !sha256Pattern.test(metadata.contextSha256) ||
+    metadata.contextSha256 === legacyUnknownContextSha256
+  ) {
+    throw new RangeError("contextSha256 must be a lowercase SHA-256 digest");
+  }
+}
+
+function assertBuildImageMetadata(image: BuiltDeploymentImageMetadata): void {
+  assertIntegerInRange(image.cacheHitCount, "cacheHitCount", 0, maximumBuildCacheCount);
+  assertIntegerInRange(image.cacheMissCount, "cacheMissCount", 0, maximumBuildCacheCount);
+  assertIntegerInRange(image.imageSizeBytes, "imageSizeBytes", 1, maximumImageSizeBytes);
+  if (
+    !sha256Pattern.test(image.contextSha256) ||
+    image.contextSha256 === legacyUnknownContextSha256
+  ) {
+    throw new RangeError("contextSha256 must be a lowercase SHA-256 digest");
+  }
+  if (
+    image.imageReference.length === 0 ||
+    image.imageReference.length > 255 ||
+    image.imageReference !== image.imageReference.trim() ||
+    controlCharacterPattern.test(image.imageReference)
+  ) {
+    throw new RangeError("imageReference must be a bounded printable reference");
+  }
+  if (!imageDigestPattern.test(image.imageId)) {
+    throw new RangeError("imageId must be a lowercase sha256 digest");
+  }
+  if (!imageDigestPattern.test(image.manifestDigest)) {
+    throw new RangeError("manifestDigest must be a lowercase sha256 digest");
+  }
+  if (image.platform.length > 64 || !platformPattern.test(image.platform)) {
+    throw new RangeError("platform must be a bounded OCI platform");
+  }
+}
+
+function assertBuildFailure(command: FailDeploymentBuildCommand): void {
+  assertIntegerInRange(command.retryDelayMs, "retryDelayMs", 0, maximumRetryDelayMs);
+  assertSafeFailure(command.failure.category, command.failure.message);
+  if (
+    command.failure.category !== "build_failed" &&
+    command.failure.category !== "build_rejected" &&
+    command.failure.category !== "build_timeout" &&
+    command.failure.category !== "infrastructure_unavailable" &&
+    command.failure.category !== "internal_invariant_violation"
+  ) {
+    throw new RangeError("failure category is not valid for an image build");
+  }
+}
+
+function assertBuildLogCommand(command: AppendDeploymentBuildLogsCommand): void {
+  const markerBytes = Buffer.byteLength(buildLogTruncationMarker, "utf8");
+  assertIntegerInRange(
+    command.maxRetainedBytes,
+    "maxRetainedBytes",
+    markerBytes,
+    maximumBuildLogRetentionBytes,
+  );
+  assertIntegerInRange(command.chunks.length, "chunks.length", 1, maximumBuildLogBatchSize);
+  for (const chunk of command.chunks) {
+    const bytes = Buffer.byteLength(chunk.content, "utf8");
+    if (bytes < 1 || bytes > maximumBuildLogChunkBytes || chunk.content.includes("\0")) {
+      throw new RangeError("build log chunks must contain 1 to 65536 safe UTF-8 bytes");
+    }
+    if (chunk.stream !== "stderr" && chunk.stream !== "stdout" && chunk.stream !== "system") {
+      throw new RangeError("build log stream is unsupported");
+    }
+  }
 }
 
 function assertSourcePreparationFailure(command: FailDeploymentSourcePreparationCommand): void {
@@ -294,6 +405,7 @@ function toPreparedSourceSummary(
 ): PreparedDeploymentSourceSummary {
   return {
     checkoutId: row.checkoutId,
+    contextSha256: row.contextSha256,
     deploymentId: row.deploymentId,
     dockerfilePath: row.dockerfilePath,
     dockerfileResolvedPath: row.dockerfileResolvedPath,
@@ -304,6 +416,51 @@ function toPreparedSourceSummary(
     resolvedRevision: row.resolvedRevision,
     totalBytes: row.totalBytes,
     treeRevision: row.treeRevision,
+  };
+}
+
+function toBuildInput(
+  job: DeploymentJobRow,
+  deployment: typeof deployments.$inferSelect,
+  source: typeof deploymentSourcePreparations.$inferSelect,
+): DeploymentBuildInput {
+  return {
+    checkoutId: source.checkoutId,
+    contextSha256: source.contextSha256,
+    deploymentId: deployment.id,
+    dockerfilePath: source.dockerfilePath,
+    dockerfileResolvedPath: source.dockerfileResolvedPath,
+    dockerfileSha256: source.dockerfileSha256,
+    fileCount: source.fileCount,
+    organizationId: deployment.organizationId,
+    projectId: deployment.projectId,
+    resolvedRevision: source.resolvedRevision,
+    totalBytes: source.totalBytes,
+    treeRevision: source.treeRevision,
+    workItemId: job.id,
+  };
+}
+
+function toBuiltImageSummary(
+  row: typeof deploymentBuildArtifacts.$inferSelect,
+): BuiltDeploymentImageSummary {
+  return {
+    builtAt: row.builtAt,
+    cacheHitCount: row.cacheHitCount,
+    cacheMissCount: row.cacheMissCount,
+    checkoutId: row.checkoutId,
+    contextSha256: row.contextSha256,
+    deploymentId: row.deploymentId,
+    dockerfileSha256: row.dockerfileSha256,
+    imageId: row.imageId,
+    imageReference: row.imageReference,
+    imageSizeBytes: row.imageSizeBytes,
+    manifestDigest: row.manifestDigest,
+    organizationId: row.organizationId,
+    platform: row.platform,
+    sourceRevision: row.sourceRevision,
+    treeRevision: row.treeRevision,
+    workItemId: row.workItemId,
   };
 }
 
@@ -348,12 +505,14 @@ function toWorkerSummary(
 }
 
 export interface PostgresDeploymentJobStoreOptions {
+  readonly afterInitialBuildLeaseValidation?: () => Promise<void>;
   readonly afterInitialClaimLeaseValidation?: () => Promise<void>;
   readonly afterInitialSourceLeaseValidation?: () => Promise<void>;
   readonly generateLeaseToken?: () => string;
 }
 
 export class PostgresDeploymentJobStore implements DeploymentJobStore {
+  private readonly afterInitialBuildLeaseValidation: () => Promise<void>;
   private readonly afterInitialClaimLeaseValidation: () => Promise<void>;
   private readonly afterInitialSourceLeaseValidation: () => Promise<void>;
   private readonly generateLeaseToken: () => string;
@@ -361,11 +520,13 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
   public constructor(
     private readonly db: LaunchRailDatabase,
     {
+      afterInitialBuildLeaseValidation = () => Promise.resolve(),
       afterInitialClaimLeaseValidation = () => Promise.resolve(),
       afterInitialSourceLeaseValidation = () => Promise.resolve(),
       generateLeaseToken = randomUUID,
     }: PostgresDeploymentJobStoreOptions = {},
   ) {
+    this.afterInitialBuildLeaseValidation = afterInitialBuildLeaseValidation;
     this.afterInitialClaimLeaseValidation = afterInitialClaimLeaseValidation;
     this.afterInitialSourceLeaseValidation = afterInitialSourceLeaseValidation;
     this.generateLeaseToken = generateLeaseToken;
@@ -558,6 +719,26 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
                   ),
               ),
             ),
+            and(
+              eq(deployments.state, "building"),
+              exists(
+                transaction
+                  .select({ deploymentId: deploymentSourcePreparations.deploymentId })
+                  .from(deploymentSourcePreparations)
+                  .where(eq(deploymentSourcePreparations.deploymentId, deployments.id)),
+              ),
+              notExists(
+                transaction
+                  .select({ id: deploymentJobs.id })
+                  .from(deploymentJobs)
+                  .where(
+                    and(
+                      eq(deploymentJobs.deploymentId, deployments.id),
+                      eq(deploymentJobs.kind, deploymentBuildJobKind),
+                    ),
+                  ),
+              ),
+            ),
           ),
         )
         .orderBy(asc(deployments.createdAt), asc(deployments.id))
@@ -578,7 +759,9 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
             kind:
               candidate.state === "queued"
                 ? deploymentClaimJobKind
-                : deploymentPrepareSourceJobKind,
+                : candidate.state === "cloning"
+                  ? deploymentPrepareSourceJobKind
+                  : deploymentBuildJobKind,
             maxAttempts: command.maxAttempts,
             organizationId: candidate.organizationId,
           })),
@@ -655,9 +838,18 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
         return { kind: "not_found" };
       }
 
-      const eligibleState = actualKind === deploymentClaimJobKind ? "queued" : "cloning";
+      const eligibleState =
+        actualKind === deploymentClaimJobKind
+          ? "queued"
+          : actualKind === deploymentPrepareSourceJobKind
+            ? "cloning"
+            : "building";
       if (deployment.state !== eligibleState) {
-        if (actualKind === deploymentPrepareSourceJobKind && deployment.state === "queued") {
+        if (
+          (actualKind === deploymentPrepareSourceJobKind && deployment.state === "queued") ||
+          (actualKind === deploymentBuildJobKind &&
+            (deployment.state === "queued" || deployment.state === "cloning"))
+        ) {
           return { kind: "state_mismatch", state: deployment.state };
         }
         const completionClock = transaction
@@ -721,6 +913,17 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
               message: "Source preparation stopped before it could complete",
             },
             idempotencyKey: createDeploymentSourceFailureIdempotencyKey(job.id),
+            organizationId: job.organizationId,
+            to: "build_failed",
+          });
+        } else if (actualKind === deploymentBuildJobKind && deployment.state === "building") {
+          await transitionDeploymentInTransaction(transaction, {
+            deploymentId: job.deploymentId,
+            failure: {
+              category: "infrastructure_unavailable",
+              message: "Image build stopped before it could complete",
+            },
+            idempotencyKey: createDeploymentBuildFailureIdempotencyKey(job.id),
             organizationId: job.organizationId,
             to: "build_failed",
           });
@@ -1024,6 +1227,230 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
     });
   }
 
+  public async loadBuildInput(
+    command: LoadDeploymentBuildInputCommand,
+  ): Promise<LoadDeploymentBuildInputResult> {
+    return this.db.transaction(async (transaction) => {
+      const [job] = await transaction
+        .select()
+        .from(deploymentJobs)
+        .where(eq(deploymentJobs.id, command.workItemId))
+        .for("update");
+      if (job === undefined) {
+        return { kind: "not_found" };
+      }
+      const actualKind = assertDeploymentJobKind(job.kind);
+      if (actualKind !== deploymentBuildJobKind) {
+        return { actualKind, kind: "kind_mismatch" };
+      }
+      if (job.status !== "running") {
+        return { kind: "not_running", status: job.status };
+      }
+      if (job.leaseToken !== command.leaseToken) {
+        return { kind: "lease_mismatch" };
+      }
+      const [currentLease] = await transaction
+        .select({ id: deploymentJobs.id })
+        .from(deploymentJobs)
+        .where(
+          and(
+            eq(deploymentJobs.id, command.workItemId),
+            eq(deploymentJobs.status, "running"),
+            eq(deploymentJobs.leaseToken, command.leaseToken),
+            gt(deploymentJobs.leaseExpiresAt, sql`clock_timestamp()`),
+          ),
+        );
+      if (currentLease === undefined) {
+        return { kind: "lease_expired" };
+      }
+
+      const [deployment] = await transaction
+        .select()
+        .from(deployments)
+        .where(
+          and(
+            eq(deployments.id, job.deploymentId),
+            eq(deployments.organizationId, job.organizationId),
+          ),
+        )
+        .for("update");
+      if (deployment === undefined) {
+        return { kind: "not_found" };
+      }
+      if (deployment.state !== "building") {
+        return { kind: "state_mismatch", state: deployment.state };
+      }
+
+      const [source] = await transaction
+        .select()
+        .from(deploymentSourcePreparations)
+        .where(
+          and(
+            eq(deploymentSourcePreparations.deploymentId, deployment.id),
+            eq(deploymentSourcePreparations.organizationId, deployment.organizationId),
+          ),
+        )
+        .for("update");
+      if (
+        source === undefined ||
+        source.resolvedRevision !== deployment.sourceRevision ||
+        source.contextSha256 === legacyUnknownContextSha256
+      ) {
+        return { kind: "source_not_prepared" };
+      }
+      return { build: toBuildInput(job, deployment, source), kind: "loaded" };
+    });
+  }
+
+  public async appendBuildLogs(
+    command: AppendDeploymentBuildLogsCommand,
+  ): Promise<AppendDeploymentBuildLogsResult> {
+    assertBuildLogCommand(command);
+
+    try {
+      return await this.db.transaction(async (transaction) => {
+        const [job] = await transaction
+          .select()
+          .from(deploymentJobs)
+          .where(eq(deploymentJobs.id, command.workItemId))
+          .for("update");
+        if (job === undefined) {
+          return { kind: "not_found" };
+        }
+        const actualKind = assertDeploymentJobKind(job.kind);
+        if (actualKind !== deploymentBuildJobKind) {
+          return { actualKind, kind: "kind_mismatch" };
+        }
+        if (job.status !== "running") {
+          return { kind: "not_running", status: job.status };
+        }
+        if (job.leaseToken !== command.leaseToken) {
+          return { kind: "lease_mismatch" };
+        }
+        const [currentLease] = await transaction
+          .select({ id: deploymentJobs.id })
+          .from(deploymentJobs)
+          .where(
+            and(
+              eq(deploymentJobs.id, command.workItemId),
+              eq(deploymentJobs.status, "running"),
+              eq(deploymentJobs.leaseToken, command.leaseToken),
+              gt(deploymentJobs.leaseExpiresAt, sql`clock_timestamp()`),
+            ),
+          );
+        if (currentLease === undefined) {
+          return { kind: "lease_expired" };
+        }
+
+        await transaction
+          .insert(deploymentBuildLogCursors)
+          .values({
+            deploymentId: job.deploymentId,
+            organizationId: job.organizationId,
+            workItemId: job.id,
+          })
+          .onConflictDoNothing({ target: deploymentBuildLogCursors.deploymentId });
+        const [cursor] = await transaction
+          .select()
+          .from(deploymentBuildLogCursors)
+          .where(eq(deploymentBuildLogCursors.deploymentId, job.deploymentId))
+          .for("update");
+        if (cursor === undefined || cursor.workItemId !== job.id) {
+          throw new Error("Build log cursor does not match its durable build job");
+        }
+
+        const markerBytes = Buffer.byteLength(buildLogTruncationMarker, "utf8");
+        const contentLimit = command.maxRetainedBytes - markerBytes;
+        const rows: Array<{
+          attempt: number;
+          content: string;
+          deploymentId: string;
+          organizationId: string;
+          sequence: number;
+          stream: "stderr" | "stdout" | "system";
+          workItemId: string;
+        }> = [];
+        let nextSequence = cursor.nextSequence;
+        let retainedBytes = cursor.retainedBytes;
+        let truncated = cursor.truncated;
+
+        if (!truncated) {
+          for (const chunk of command.chunks) {
+            const chunkBytes = Buffer.byteLength(chunk.content, "utf8");
+            if (retainedBytes + chunkBytes > contentLimit) {
+              rows.push({
+                attempt: job.attemptCount,
+                content: buildLogTruncationMarker,
+                deploymentId: job.deploymentId,
+                organizationId: job.organizationId,
+                sequence: nextSequence,
+                stream: "system",
+                workItemId: job.id,
+              });
+              nextSequence += 1;
+              retainedBytes += markerBytes;
+              truncated = true;
+              break;
+            }
+            rows.push({
+              attempt: job.attemptCount,
+              content: chunk.content,
+              deploymentId: job.deploymentId,
+              organizationId: job.organizationId,
+              sequence: nextSequence,
+              stream: chunk.stream,
+              workItemId: job.id,
+            });
+            nextSequence += 1;
+            retainedBytes += chunkBytes;
+          }
+        }
+
+        if (rows.length > 0) {
+          await transaction.insert(buildLogs).values(rows);
+        }
+        await transaction
+          .update(deploymentBuildLogCursors)
+          .set({
+            nextSequence,
+            retainedBytes,
+            truncated,
+            updatedAt: sql<Date>`clock_timestamp()`,
+          })
+          .where(eq(deploymentBuildLogCursors.deploymentId, job.deploymentId));
+
+        const [fenced] = await transaction
+          .update(deploymentJobs)
+          .set({ updatedAt: sql<Date>`clock_timestamp()` })
+          .where(
+            and(
+              eq(deploymentJobs.id, command.workItemId),
+              eq(deploymentJobs.status, "running"),
+              eq(deploymentJobs.leaseToken, command.leaseToken),
+              gt(deploymentJobs.leaseExpiresAt, sql`clock_timestamp()`),
+            ),
+          )
+          .returning({ id: deploymentJobs.id });
+        if (fenced === undefined) {
+          throw new AtomicLeaseFailure({ kind: "lease_expired" });
+        }
+
+        return {
+          acceptedBytes: retainedBytes - cursor.retainedBytes,
+          firstSequence: rows[0]?.sequence ?? null,
+          kind: "appended",
+          lastSequence: rows.at(-1)?.sequence ?? null,
+          truncated,
+        };
+      });
+    } catch (error) {
+      if (error instanceof AtomicLeaseFailure) {
+        return error.result;
+      }
+      throw error;
+    }
+  }
+
   public async completeSourcePreparation(
     command: CompleteDeploymentSourcePreparationCommand,
   ): Promise<CompleteDeploymentSourcePreparationResult> {
@@ -1097,6 +1524,7 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
           preparedSource = toPreparedSourceSummary(existing);
           if (
             preparedSource.checkoutId !== command.metadata.checkoutId ||
+            preparedSource.contextSha256 !== command.metadata.contextSha256 ||
             preparedSource.resolvedRevision !== command.metadata.resolvedRevision ||
             preparedSource.treeRevision !== command.metadata.treeRevision ||
             preparedSource.fileCount !== command.metadata.fileCount ||
@@ -1112,6 +1540,7 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
             .insert(deploymentSourcePreparations)
             .values({
               checkoutId: command.metadata.checkoutId,
+              contextSha256: command.metadata.contextSha256,
               deploymentId: deployment.id,
               dockerfilePath: command.metadata.dockerfilePath,
               dockerfileResolvedPath: command.metadata.dockerfileResolvedPath,
@@ -1136,6 +1565,20 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
           organizationId: deployment.organizationId,
           to: "building",
         });
+
+        await transaction
+          .insert(deploymentJobs)
+          .values({
+            availableAt: sql<Date>`clock_timestamp()`,
+            contractVersion: deploymentJobContractVersion,
+            deploymentId: deployment.id,
+            kind: deploymentBuildJobKind,
+            maxAttempts: job.maxAttempts,
+            organizationId: deployment.organizationId,
+          })
+          .onConflictDoNothing({
+            target: [deploymentJobs.deploymentId, deploymentJobs.kind],
+          });
 
         const completionClock = transaction
           .select({ now: sql<Date>`clock_timestamp()`.as("now") })
@@ -1170,6 +1613,309 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
         }
 
         return { kind: "completed", source: preparedSource, transition };
+      });
+    } catch (error) {
+      if (error instanceof AtomicLeaseFailure) {
+        return error.result;
+      }
+      throw error;
+    }
+  }
+
+  public async completeBuild(
+    command: CompleteDeploymentBuildCommand,
+  ): Promise<CompleteDeploymentBuildResult> {
+    assertBuildImageMetadata(command.image);
+
+    try {
+      return await this.db.transaction(async (transaction) => {
+        const [job] = await transaction
+          .select()
+          .from(deploymentJobs)
+          .where(eq(deploymentJobs.id, command.workItemId))
+          .for("update");
+        if (job === undefined) {
+          return { kind: "not_found" };
+        }
+        const actualKind = assertDeploymentJobKind(job.kind);
+        if (actualKind !== deploymentBuildJobKind) {
+          return { actualKind, kind: "kind_mismatch" };
+        }
+        if (job.status !== "running") {
+          return { kind: "not_running", status: job.status };
+        }
+        if (job.leaseToken !== command.leaseToken) {
+          return { kind: "lease_mismatch" };
+        }
+        const [currentLease] = await transaction
+          .select({ id: deploymentJobs.id })
+          .from(deploymentJobs)
+          .where(
+            and(
+              eq(deploymentJobs.id, command.workItemId),
+              eq(deploymentJobs.status, "running"),
+              eq(deploymentJobs.leaseToken, command.leaseToken),
+              gt(deploymentJobs.leaseExpiresAt, sql`clock_timestamp()`),
+            ),
+          );
+        if (currentLease === undefined) {
+          return { kind: "lease_expired" };
+        }
+        await this.afterInitialBuildLeaseValidation();
+
+        const [deployment] = await transaction
+          .select()
+          .from(deployments)
+          .where(
+            and(
+              eq(deployments.id, job.deploymentId),
+              eq(deployments.organizationId, job.organizationId),
+            ),
+          )
+          .for("update");
+        if (deployment === undefined) {
+          return { kind: "not_found" };
+        }
+        if (deployment.state !== "building") {
+          return { kind: "state_mismatch", state: deployment.state };
+        }
+
+        const [source] = await transaction
+          .select()
+          .from(deploymentSourcePreparations)
+          .where(
+            and(
+              eq(deploymentSourcePreparations.deploymentId, deployment.id),
+              eq(deploymentSourcePreparations.organizationId, deployment.organizationId),
+            ),
+          )
+          .for("update");
+        if (
+          source === undefined ||
+          source.resolvedRevision !== deployment.sourceRevision ||
+          source.contextSha256 === legacyUnknownContextSha256
+        ) {
+          return { kind: "source_mismatch" };
+        }
+        if (command.image.contextSha256 !== source.contextSha256) {
+          return { kind: "source_mismatch" };
+        }
+
+        const [existing] = await transaction
+          .select()
+          .from(deploymentBuildArtifacts)
+          .where(eq(deploymentBuildArtifacts.deploymentId, deployment.id))
+          .for("update");
+        let builtImage: BuiltDeploymentImageSummary;
+        if (existing !== undefined) {
+          builtImage = toBuiltImageSummary(existing);
+          if (
+            builtImage.workItemId !== job.id ||
+            builtImage.checkoutId !== source.checkoutId ||
+            builtImage.sourceRevision !== source.resolvedRevision ||
+            builtImage.treeRevision !== source.treeRevision ||
+            builtImage.dockerfileSha256 !== source.dockerfileSha256 ||
+            builtImage.contextSha256 !== command.image.contextSha256 ||
+            builtImage.imageReference !== command.image.imageReference ||
+            builtImage.imageId !== command.image.imageId ||
+            builtImage.manifestDigest !== command.image.manifestDigest ||
+            builtImage.platform !== command.image.platform ||
+            builtImage.imageSizeBytes !== command.image.imageSizeBytes ||
+            builtImage.cacheHitCount !== command.image.cacheHitCount ||
+            builtImage.cacheMissCount !== command.image.cacheMissCount
+          ) {
+            return { kind: "build_mismatch" };
+          }
+        } else {
+          const [created] = await transaction
+            .insert(deploymentBuildArtifacts)
+            .values({
+              cacheHitCount: command.image.cacheHitCount,
+              cacheMissCount: command.image.cacheMissCount,
+              checkoutId: source.checkoutId,
+              contextSha256: source.contextSha256,
+              deploymentId: deployment.id,
+              dockerfileSha256: source.dockerfileSha256,
+              imageId: command.image.imageId,
+              imageReference: command.image.imageReference,
+              imageSizeBytes: command.image.imageSizeBytes,
+              manifestDigest: command.image.manifestDigest,
+              organizationId: deployment.organizationId,
+              platform: command.image.platform,
+              sourceRevision: source.resolvedRevision,
+              treeRevision: source.treeRevision,
+              workItemId: job.id,
+            })
+            .returning();
+          if (created === undefined) {
+            throw new Error("Deployment build artifact insert returned no row");
+          }
+          builtImage = toBuiltImageSummary(created);
+        }
+
+        const transition = await transitionDeploymentInTransaction(transaction, {
+          deploymentId: deployment.id,
+          idempotencyKey: createDeploymentBuildTransitionIdempotencyKey(job.id),
+          organizationId: deployment.organizationId,
+          to: "deploying",
+        });
+
+        const completionClock = transaction
+          .select({ now: sql<Date>`clock_timestamp()`.as("now") })
+          .from(sql`(select 1) as clock_source`)
+          .as("build_completion_clock");
+        const [completed] = await transaction
+          .update(deploymentJobs)
+          .set({
+            completedAt: sql<Date>`${completionClock.now}`,
+            deadLetteredAt: null,
+            heartbeatAt: null,
+            lastErrorCode: null,
+            lastErrorMessage: null,
+            leaseExpiresAt: null,
+            leaseToken: null,
+            status: "completed",
+            updatedAt: sql<Date>`${completionClock.now}`,
+            workerId: null,
+          })
+          .from(completionClock)
+          .where(
+            and(
+              eq(deploymentJobs.id, command.workItemId),
+              eq(deploymentJobs.status, "running"),
+              eq(deploymentJobs.leaseToken, command.leaseToken),
+              gt(deploymentJobs.leaseExpiresAt, completionClock.now),
+            ),
+          )
+          .returning({ id: deploymentJobs.id });
+        if (completed === undefined) {
+          throw new AtomicLeaseFailure({ kind: "lease_expired" });
+        }
+        return { image: builtImage, kind: "completed", transition };
+      });
+    } catch (error) {
+      if (error instanceof AtomicLeaseFailure) {
+        return error.result;
+      }
+      throw error;
+    }
+  }
+
+  public async failBuild(command: FailDeploymentBuildCommand): Promise<FailDeploymentBuildResult> {
+    assertBuildFailure(command);
+
+    try {
+      return await this.db.transaction(async (transaction) => {
+        const [job] = await transaction
+          .select()
+          .from(deploymentJobs)
+          .where(eq(deploymentJobs.id, command.workItemId))
+          .for("update");
+        if (job === undefined) {
+          return { kind: "not_found" };
+        }
+        const actualKind = assertDeploymentJobKind(job.kind);
+        if (actualKind !== deploymentBuildJobKind) {
+          return { actualKind, kind: "kind_mismatch" };
+        }
+        if (job.status !== "running") {
+          return { kind: "not_running", status: job.status };
+        }
+        if (job.leaseToken !== command.leaseToken) {
+          return { kind: "lease_mismatch" };
+        }
+
+        const [deployment] = await transaction
+          .select({ state: deployments.state })
+          .from(deployments)
+          .where(
+            and(
+              eq(deployments.id, job.deploymentId),
+              eq(deployments.organizationId, job.organizationId),
+            ),
+          )
+          .for("update");
+        if (deployment === undefined) {
+          return { kind: "not_found" };
+        }
+        if (deployment.state !== "building") {
+          return { kind: "state_mismatch", state: deployment.state };
+        }
+
+        const terminal = !command.retryable || job.attemptCount >= job.maxAttempts;
+        const failureClock = transaction
+          .select({ now: sql<Date>`clock_timestamp()`.as("now") })
+          .from(sql`(select 1) as clock_source`)
+          .as("build_failure_clock");
+        if (!terminal) {
+          const [failed] = await transaction
+            .update(deploymentJobs)
+            .set({
+              availableAt: sql<Date>`${failureClock.now} + (${command.retryDelayMs}::bigint * interval '1 millisecond')`,
+              deadLetteredAt: null,
+              heartbeatAt: null,
+              lastErrorCode: command.failure.category,
+              lastErrorMessage: command.failure.message,
+              leaseExpiresAt: null,
+              leaseToken: null,
+              status: "retry_wait",
+              updatedAt: sql<Date>`${failureClock.now}`,
+              workerId: null,
+            })
+            .from(failureClock)
+            .where(
+              and(
+                eq(deploymentJobs.id, command.workItemId),
+                eq(deploymentJobs.status, "running"),
+                eq(deploymentJobs.leaseToken, command.leaseToken),
+                gt(deploymentJobs.leaseExpiresAt, failureClock.now),
+              ),
+            )
+            .returning({ availableAt: deploymentJobs.availableAt });
+          return failed === undefined
+            ? { kind: "lease_expired" }
+            : {
+                attemptCount: job.attemptCount,
+                availableAt: failed.availableAt,
+                kind: "retry_scheduled",
+              };
+        }
+
+        const transition = await transitionDeploymentInTransaction(transaction, {
+          deploymentId: job.deploymentId,
+          failure: command.failure,
+          idempotencyKey: createDeploymentBuildFailureIdempotencyKey(job.id),
+          organizationId: job.organizationId,
+          to: "build_failed",
+        });
+        const [deadLettered] = await transaction
+          .update(deploymentJobs)
+          .set({
+            availableAt: sql<Date>`${failureClock.now}`,
+            deadLetteredAt: sql<Date>`${failureClock.now}`,
+            heartbeatAt: null,
+            lastErrorCode: command.failure.category,
+            lastErrorMessage: command.failure.message,
+            leaseExpiresAt: null,
+            leaseToken: null,
+            status: "dead_lettered",
+            updatedAt: sql<Date>`${failureClock.now}`,
+            workerId: null,
+          })
+          .from(failureClock)
+          .where(
+            and(
+              eq(deploymentJobs.id, command.workItemId),
+              eq(deploymentJobs.status, "running"),
+              eq(deploymentJobs.leaseToken, command.leaseToken),
+              gt(deploymentJobs.leaseExpiresAt, failureClock.now),
+            ),
+          )
+          .returning({ id: deploymentJobs.id });
+        if (deadLettered === undefined) {
+          throw new AtomicLeaseFailure({ kind: "lease_expired" });
+        }
+        return { attemptCount: job.attemptCount, kind: "dead_lettered", transition };
       });
     } catch (error) {
       if (error instanceof AtomicLeaseFailure) {
@@ -1375,7 +2121,11 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
       for (const job of expired) {
         const deadLettered = job.attemptCount >= job.maxAttempts;
         const status = deadLettered ? "dead_lettered" : "retry_wait";
-        if (deadLettered && assertDeploymentJobKind(job.kind) === deploymentPrepareSourceJobKind) {
+        const jobKind = assertDeploymentJobKind(job.kind);
+        if (
+          deadLettered &&
+          (jobKind === deploymentPrepareSourceJobKind || jobKind === deploymentBuildJobKind)
+        ) {
           const [deployment] = await transaction
             .select({ state: deployments.state })
             .from(deployments)
@@ -1385,14 +2135,23 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
                 eq(deployments.organizationId, job.organizationId),
               ),
             );
-          if (deployment?.state === "cloning") {
+          if (
+            (jobKind === deploymentPrepareSourceJobKind && deployment?.state === "cloning") ||
+            (jobKind === deploymentBuildJobKind && deployment?.state === "building")
+          ) {
             await transitionDeploymentInTransaction(transaction, {
               deploymentId: job.deploymentId,
               failure: {
                 category: "infrastructure_unavailable",
-                message: "Source preparation stopped before it could complete",
+                message:
+                  jobKind === deploymentPrepareSourceJobKind
+                    ? "Source preparation stopped before it could complete"
+                    : "Image build stopped before it could complete",
               },
-              idempotencyKey: createDeploymentSourceFailureIdempotencyKey(job.id),
+              idempotencyKey:
+                jobKind === deploymentPrepareSourceJobKind
+                  ? createDeploymentSourceFailureIdempotencyKey(job.id)
+                  : createDeploymentBuildFailureIdempotencyKey(job.id),
               organizationId: job.organizationId,
               to: "build_failed",
             });

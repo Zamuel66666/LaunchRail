@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import {
   createDeploymentClaimJobId,
+  type DeploymentBuildJob,
   type DeploymentClaimJob,
   type DeploymentJob,
   type DeploymentPrepareSourceJob,
@@ -230,6 +231,28 @@ describeWithRedis("BullMQ deployment job queue", () => {
     await waitFor(
       async () =>
         (await publisher.getState(payload.workItemId, "deployment.prepare_source")) === "absent",
+    );
+  });
+
+  it("publishes and consumes a kind-bound build wake-up", async () => {
+    const publisher = createPublisher();
+    let received: DeploymentJob | undefined;
+    const consumer = createConsumer(async (payload) => {
+      received = payload;
+    });
+    consumer.start();
+    await Promise.all([publisher.waitUntilReady(), consumer.waitUntilReady()]);
+    const payload = {
+      contractVersion: 1,
+      kind: "deployment.build",
+      workItemId: randomUUID(),
+    } satisfies DeploymentBuildJob;
+
+    await publisher.enqueue(payload);
+    await waitFor(() => received !== undefined);
+    expect(received).toEqual(payload);
+    await waitFor(
+      async () => (await publisher.getState(payload.workItemId, "deployment.build")) === "absent",
     );
   });
 

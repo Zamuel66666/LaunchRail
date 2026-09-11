@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
-import type { RepositoryCheckout, RepositoryProvider } from "@launchrail/application";
+import type { ImageBuilder, RepositoryCheckout, RepositoryProvider } from "@launchrail/application";
 import { loadWorkerConfig } from "@launchrail/config";
 import { createDatabaseClient, PostgresDeploymentJobStore, schema } from "@launchrail/database";
 import { Queue } from "bullmq";
@@ -175,6 +175,8 @@ describeWithServices("deployment worker restart recovery", () => {
       REDIS_URL: redisUrl,
       WORKER_BACKOFF_BASE_MS: "1",
       WORKER_BACKOFF_CAP_MS: "1",
+      WORKER_BUILD_TIMEOUT_MS: "400",
+      WORKER_BUILD_ROOT: `/tmp/launchrail-build-${suffix}`,
       WORKER_CONCURRENCY: "1",
       WORKER_HEARTBEAT_INTERVAL_MS: "20",
       WORKER_JOB_TIMEOUT_MS: "500",
@@ -207,6 +209,7 @@ describeWithServices("deployment worker restart recovery", () => {
       adopted: false,
       checkoutKey: command.checkoutKey,
       commitSha: seeded.sourceRevision,
+      contextSha256: "c".repeat(64),
       directory: `/fixture/${command.checkoutKey}`,
       dockerfile: {
         relativePath: command.dockerfilePath,
@@ -218,7 +221,21 @@ describeWithServices("deployment worker restart recovery", () => {
       totalBytes: 13,
       treeSha: "e".repeat(40),
     }));
+    const build = vi.fn<ImageBuilder["build"]>(async (_command, sink) => {
+      await sink.write([{ stream: "stdout", content: "Fixture image built\n" }]);
+      return {
+        adopted: false,
+        cacheHitCount: 0,
+        cacheMissCount: 1,
+        imageDigest: `sha256:${"a".repeat(64)}`,
+        imageId: `sha256:${"b".repeat(64)}`,
+        imageReference: "launchrail/fixture:build",
+        platform: "linux/amd64",
+        sizeBytes: 1024,
+      };
+    });
     const components = createDeploymentWorkerComponents({
+      imageBuilder: { build, remove: async () => undefined },
       config,
       database: client.db,
       logger,
@@ -238,18 +255,27 @@ describeWithServices("deployment worker restart recovery", () => {
       const deployment = await client.db.query.deployments.findFirst({
         where: (deployments, { eq }) => eq(deployments.id, seeded.deploymentId),
       });
-      return deployment?.state === "building";
+      return deployment?.state === "deploying";
     });
 
     const completedJobs = await client.db.query.deploymentJobs.findMany({
       where: (jobs, { eq }) => eq(jobs.deploymentId, seeded.deploymentId),
     });
     const sourceJob = completedJobs.find(({ kind }) => kind === "deployment.prepare_source");
+    const buildJob = completedJobs.find(({ kind }) => kind === "deployment.build");
+    if (buildJob === undefined) {
+      throw new Error("Expected a durable build job");
+    }
     if (sourceJob === undefined) {
       throw new Error("Expected a durable source preparation job");
     }
 
-    // Fresh duplicate deliveries after both effects must remain harmless and removable.
+    // Fresh duplicate deliveries after all three effects must remain harmless and removable.
+    await components.publisher.enqueue({
+      contractVersion: 1,
+      kind: "deployment.build",
+      workItemId: buildJob.id,
+    });
     await components.publisher.enqueue({
       contractVersion: 1,
       kind: "deployment.claim",
@@ -261,6 +287,10 @@ describeWithServices("deployment worker restart recovery", () => {
       workItemId: sourceJob.id,
     });
     await waitFor(async () => (await components.publisher.getState(workItemId)) === "absent");
+    await waitFor(
+      async () =>
+        (await components.publisher.getState(buildJob.id, "deployment.build")) === "absent",
+    );
     await waitFor(
       async () =>
         (await components.publisher.getState(sourceJob.id, "deployment.prepare_source")) ===
@@ -289,6 +319,16 @@ describeWithServices("deployment worker restart recovery", () => {
     const preparedSources = await client.db.query.deploymentSourcePreparations.findMany({
       where: (sources, { eq }) => eq(sources.deploymentId, seeded.deploymentId),
     });
+    const artifacts = await client.db.query.deploymentBuildArtifacts.findMany({
+      where: (images, { eq }) => eq(images.deploymentId, seeded.deploymentId),
+    });
+    const logs = await client.db.query.buildLogs.findMany({
+      where: (logs, { eq }) => eq(logs.deploymentId, seeded.deploymentId),
+    });
+    expect(artifacts).toHaveLength(1);
+    expect(artifacts[0]).toMatchObject({ imageId: `sha256:${"b".repeat(64)}` });
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toMatchObject({ content: "Fixture image built\n", stream: "stdout" });
 
     expect(jobs).toEqual(
       expect.arrayContaining([
@@ -306,8 +346,12 @@ describeWithServices("deployment worker restart recovery", () => {
         }),
       ]),
     );
-    expect(jobs).toHaveLength(2);
-    expect(deployment).toMatchObject({ attempt: 3, eventSequence: 2, state: "building" });
+    expect(jobs).toHaveLength(3);
+    expect(jobs.find(({ kind }) => kind === "deployment.build")).toMatchObject({
+      status: "completed",
+      attemptCount: 1,
+    });
+    expect(deployment).toMatchObject({ attempt: 4, eventSequence: 3, state: "deploying" });
     expect(preparedSources).toEqual([
       expect.objectContaining({
         checkoutId: seeded.deploymentId,
@@ -317,9 +361,10 @@ describeWithServices("deployment worker restart recovery", () => {
         treeRevision: "e".repeat(40),
       }),
     ]);
-    expect(events).toHaveLength(2);
-    expect(commands).toHaveLength(2);
-    expect(audits).toHaveLength(2);
+    expect(events).toHaveLength(3);
+    expect(commands).toHaveLength(3);
+    expect(audits).toHaveLength(3);
+    expect(build).toHaveBeenCalledOnce();
     expect(resolveRevision).toHaveBeenCalledOnce();
     expect(resolveRevision.mock.calls[0]?.[0]).toMatchObject({
       repository: { owner: "launchrail-test", repository: "queue-recovery" },

@@ -9,6 +9,7 @@ import type { ResolvedRepositoryRevision } from "@launchrail/application";
 
 import {
   HardenedGitRepositoryCheckout,
+  computeRepositoryContextSha256,
   sourceCheckoutDefaultLimits,
   type GitCommandExecutor,
   type GitCommandRequest,
@@ -129,6 +130,15 @@ describe("HardenedGitRepositoryCheckout", () => {
       adopted: false,
       checkoutKey: "deployment_123",
       commitSha,
+      contextSha256: computeRepositoryContextSha256([
+        {
+          contentSha256: createHash("sha256").update(dockerfile).digest("hex"),
+          kind: "file",
+          mode: "100644",
+          path: "Dockerfile",
+          size: Buffer.byteLength(dockerfile),
+        },
+      ]),
       dockerfile: {
         relativePath: "Dockerfile",
         resolvedRelativePath: "Dockerfile",

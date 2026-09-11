@@ -12,7 +12,11 @@ export const deploymentJobStatuses = [
 
 export type DeploymentJobStatus = (typeof deploymentJobStatuses)[number];
 
-export const deploymentJobKinds = ["deployment.claim", "deployment.prepare_source"] as const;
+export const deploymentJobKinds = [
+  "deployment.claim",
+  "deployment.prepare_source",
+  "deployment.build",
+] as const;
 
 export type DeploymentJobKind = (typeof deploymentJobKinds)[number];
 
@@ -148,6 +152,7 @@ export type LoadDeploymentSourcePreparationResult =
 
 export interface PreparedDeploymentSourceMetadata {
   readonly checkoutId: string;
+  readonly contextSha256: string;
   readonly dockerfilePath: string;
   readonly dockerfileResolvedPath: string;
   readonly dockerfileSha256: string;
@@ -176,6 +181,131 @@ export type CompleteDeploymentSourcePreparationResult =
       readonly transition: DeploymentTransitionResult;
     }
   | { readonly kind: "source_mismatch" }
+  | LeaseMutationFailure;
+
+export const deploymentBuildLogStreams = ["stdout", "stderr", "system"] as const;
+
+export type DeploymentBuildLogStream = (typeof deploymentBuildLogStreams)[number];
+
+export interface DeploymentBuildInput {
+  readonly checkoutId: string;
+  readonly contextSha256: string;
+  readonly deploymentId: string;
+  readonly dockerfilePath: string;
+  readonly dockerfileResolvedPath: string;
+  readonly dockerfileSha256: string;
+  readonly organizationId: string;
+  readonly projectId: string;
+  readonly resolvedRevision: string;
+  readonly fileCount: number;
+  readonly totalBytes: number;
+  readonly treeRevision: string;
+  readonly workItemId: string;
+}
+
+export interface LoadDeploymentBuildInputCommand {
+  readonly leaseToken: string;
+  readonly workItemId: string;
+}
+
+export type LoadDeploymentBuildInputResult =
+  | { readonly build: DeploymentBuildInput; readonly kind: "loaded" }
+  | { readonly kind: "source_not_prepared" }
+  | { readonly kind: "state_mismatch"; readonly state: DeploymentState }
+  | LeaseMutationFailure;
+
+export interface DeploymentBuildLogChunk {
+  readonly content: string;
+  readonly stream: DeploymentBuildLogStream;
+}
+
+export interface AppendDeploymentBuildLogsCommand {
+  readonly chunks: readonly DeploymentBuildLogChunk[];
+  readonly leaseToken: string;
+  readonly maxRetainedBytes: number;
+  readonly workItemId: string;
+}
+
+export type AppendDeploymentBuildLogsResult =
+  | {
+      readonly acceptedBytes: number;
+      readonly firstSequence: number | null;
+      readonly kind: "appended";
+      readonly lastSequence: number | null;
+      readonly truncated: boolean;
+    }
+  | LeaseMutationFailure;
+
+export interface BuiltDeploymentImageMetadata {
+  readonly cacheHitCount: number;
+  readonly cacheMissCount: number;
+  readonly contextSha256: string;
+  readonly imageId: string;
+  readonly imageReference: string;
+  readonly imageSizeBytes: number;
+  readonly manifestDigest: string;
+  readonly platform: string;
+}
+
+export interface BuiltDeploymentImageSummary extends BuiltDeploymentImageMetadata {
+  readonly builtAt: Date;
+  readonly checkoutId: string;
+  readonly deploymentId: string;
+  readonly dockerfileSha256: string;
+  readonly organizationId: string;
+  readonly sourceRevision: string;
+  readonly treeRevision: string;
+  readonly workItemId: string;
+}
+
+export interface CompleteDeploymentBuildCommand {
+  readonly image: BuiltDeploymentImageMetadata;
+  readonly leaseToken: string;
+  readonly workItemId: string;
+}
+
+export type CompleteDeploymentBuildResult =
+  | {
+      readonly image: BuiltDeploymentImageSummary;
+      readonly kind: "completed";
+      readonly transition: DeploymentTransitionResult;
+    }
+  | { readonly kind: "build_mismatch" | "source_mismatch" }
+  | { readonly kind: "state_mismatch"; readonly state: DeploymentState }
+  | LeaseMutationFailure;
+
+export type DeploymentBuildFailureCategory = Extract<
+  DeploymentFailureCategory,
+  | "build_failed"
+  | "build_rejected"
+  | "build_timeout"
+  | "infrastructure_unavailable"
+  | "internal_invariant_violation"
+>;
+
+export interface FailDeploymentBuildCommand {
+  readonly failure: {
+    readonly category: DeploymentBuildFailureCategory;
+    readonly message: string;
+  };
+  readonly leaseToken: string;
+  readonly retryable: boolean;
+  readonly retryDelayMs: number;
+  readonly workItemId: string;
+}
+
+export type FailDeploymentBuildResult =
+  | {
+      readonly attemptCount: number;
+      readonly availableAt: Date;
+      readonly kind: "retry_scheduled";
+    }
+  | {
+      readonly attemptCount: number;
+      readonly kind: "dead_lettered";
+      readonly transition: DeploymentTransitionResult;
+    }
+  | { readonly kind: "state_mismatch"; readonly state: DeploymentState }
   | LeaseMutationFailure;
 
 export type SourcePreparationFailureCategory = Extract<
@@ -271,10 +401,14 @@ export interface ListWorkerHeartbeatsQuery {
 }
 
 export interface DeploymentJobStore {
+  appendBuildLogs(
+    command: AppendDeploymentBuildLogsCommand,
+  ): Promise<AppendDeploymentBuildLogsResult>;
   claim(command: ClaimDeploymentJobCommand): Promise<ClaimDeploymentJobResult>;
   completeClaimTransition(
     command: CompleteDeploymentClaimTransitionCommand,
   ): Promise<CompleteDeploymentClaimTransitionResult>;
+  completeBuild(command: CompleteDeploymentBuildCommand): Promise<CompleteDeploymentBuildResult>;
   completeSourcePreparation(
     command: CompleteDeploymentSourcePreparationCommand,
   ): Promise<CompleteDeploymentSourcePreparationResult>;
@@ -288,6 +422,7 @@ export interface DeploymentJobStore {
     command: EnsureDeploymentClaimJobCommand,
   ): Promise<EnsureDeploymentClaimJobResult>;
   fail(command: FailDeploymentJobCommand): Promise<FailDeploymentJobResult>;
+  failBuild(command: FailDeploymentBuildCommand): Promise<FailDeploymentBuildResult>;
   failSourcePreparation(
     command: FailDeploymentSourcePreparationCommand,
   ): Promise<FailDeploymentSourcePreparationResult>;
@@ -307,4 +442,5 @@ export interface DeploymentJobStore {
   loadSourcePreparation(
     command: LoadDeploymentSourcePreparationCommand,
   ): Promise<LoadDeploymentSourcePreparationResult>;
+  loadBuildInput(command: LoadDeploymentBuildInputCommand): Promise<LoadDeploymentBuildInputResult>;
 }

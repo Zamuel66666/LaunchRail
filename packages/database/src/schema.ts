@@ -7,6 +7,7 @@ import {
 import { sql } from "drizzle-orm";
 import {
   bigint,
+  boolean,
   check,
   foreignKey,
   index,
@@ -338,6 +339,8 @@ export const buildLogs = pgTable(
     id: bigint("id", { mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
     organizationId: uuid("organization_id").notNull(),
     deploymentId: uuid("deployment_id").notNull(),
+    workItemId: uuid("work_item_id").notNull(),
+    attempt: integer("attempt").notNull(),
     sequence: integer("sequence").notNull(),
     stream: text("stream").notNull(),
     content: text("content").notNull(),
@@ -349,9 +352,25 @@ export const buildLogs = pgTable(
       foreignColumns: [deployments.id, deployments.organizationId],
       name: "build_logs_deployment_organization_fk",
     }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.workItemId, table.deploymentId, table.organizationId],
+      foreignColumns: [
+        deploymentJobs.id,
+        deploymentJobs.deploymentId,
+        deploymentJobs.organizationId,
+      ],
+      name: "build_logs_work_item_deployment_organization_fk",
+    }).onDelete("cascade"),
     unique("build_logs_sequence_unique").on(table.deploymentId, table.sequence),
+    index("build_logs_organization_deployment_sequence_index").on(
+      table.organizationId,
+      table.deploymentId,
+      table.sequence,
+    ),
+    check("build_logs_attempt_positive", sql`${table.attempt} > 0`),
     check("build_logs_sequence_positive", sql`${table.sequence} > 0`),
-    check("build_logs_content_bounded", sql`octet_length(${table.content}) <= 65536`),
+    check("build_logs_stream", sql`${table.stream} in ('stdout', 'stderr', 'system')`),
+    check("build_logs_content_bounded", sql`octet_length(${table.content}) between 1 and 65536`),
   ],
 );
 
@@ -540,6 +559,7 @@ export const deploymentSourcePreparations = pgTable(
     dockerfilePath: text("dockerfile_path").notNull(),
     dockerfileResolvedPath: text("dockerfile_resolved_path").notNull(),
     dockerfileSha256: text("dockerfile_sha256").notNull(),
+    contextSha256: text("context_sha256").notNull(),
     preparedAt: timestamp("prepared_at", { mode: "date", withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -551,6 +571,15 @@ export const deploymentSourcePreparations = pgTable(
       name: "deployment_source_preparations_deployment_organization_fk",
     }).onDelete("cascade"),
     unique("deployment_source_preparations_checkout_unique").on(table.checkoutId),
+    unique("deployment_source_preparations_build_identity_unique").on(
+      table.deploymentId,
+      table.organizationId,
+      table.checkoutId,
+      table.resolvedRevision,
+      table.treeRevision,
+      table.dockerfileSha256,
+      table.contextSha256,
+    ),
     check(
       "deployment_source_preparations_checkout_id_format",
       sql`${table.checkoutId} ~ '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$'`,
@@ -584,6 +613,10 @@ export const deploymentSourcePreparations = pgTable(
     check(
       "deployment_source_preparations_dockerfile_sha256_format",
       sql`${table.dockerfileSha256} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      "deployment_source_preparations_context_sha256_format",
+      sql`${table.contextSha256} ~ '^[0-9a-f]{64}$'`,
     ),
     check(
       "deployment_source_preparations_dockerfile_resolved_path_bounds",
@@ -628,12 +661,17 @@ export const deploymentJobs = pgTable(
       name: "deployment_jobs_deployment_organization_fk",
     }).onDelete("cascade"),
     unique("deployment_jobs_deployment_kind_unique").on(table.deploymentId, table.kind),
+    unique("deployment_jobs_id_deployment_organization_unique").on(
+      table.id,
+      table.deploymentId,
+      table.organizationId,
+    ),
     unique("deployment_jobs_lease_token_unique").on(table.leaseToken),
     index("deployment_jobs_dispatch_index").on(table.status, table.availableAt),
     index("deployment_jobs_expired_lease_index").on(table.status, table.leaseExpiresAt),
     check(
       "deployment_jobs_kind",
-      sql`${table.kind} in ('deployment.claim', 'deployment.prepare_source')`,
+      sql`${table.kind} in ('deployment.claim', 'deployment.prepare_source', 'deployment.build')`,
     ),
     check("deployment_jobs_contract_version", sql`${table.contractVersion} = 1`),
     check(
@@ -693,6 +731,146 @@ export const deploymentJobs = pgTable(
     check(
       "deployment_jobs_dead_letter_shape",
       sql`(${table.status} = 'dead_lettered') = (${table.deadLetteredAt} is not null)`,
+    ),
+  ],
+);
+
+export const deploymentBuildLogCursors = pgTable(
+  "deployment_build_log_cursors",
+  {
+    deploymentId: uuid("deployment_id").primaryKey(),
+    organizationId: uuid("organization_id").notNull(),
+    workItemId: uuid("work_item_id").notNull(),
+    nextSequence: integer("next_sequence").default(1).notNull(),
+    retainedBytes: bigint("retained_bytes", { mode: "number" }).default(0).notNull(),
+    truncated: boolean("truncated").default(false).notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.workItemId, table.deploymentId, table.organizationId],
+      foreignColumns: [
+        deploymentJobs.id,
+        deploymentJobs.deploymentId,
+        deploymentJobs.organizationId,
+      ],
+      name: "deployment_build_log_cursors_work_item_fk",
+    }).onDelete("cascade"),
+    unique("deployment_build_log_cursors_work_item_unique").on(table.workItemId),
+    check("deployment_build_log_cursors_next_sequence_positive", sql`${table.nextSequence} > 0`),
+    check(
+      "deployment_build_log_cursors_retained_bytes_bounds",
+      sql`${table.retainedBytes} between 0 and 1073741824`,
+    ),
+  ],
+);
+
+export const deploymentBuildArtifacts = pgTable(
+  "deployment_build_artifacts",
+  {
+    deploymentId: uuid("deployment_id").primaryKey(),
+    organizationId: uuid("organization_id").notNull(),
+    workItemId: uuid("work_item_id").notNull(),
+    checkoutId: text("checkout_id").notNull(),
+    sourceRevision: text("source_revision").notNull(),
+    treeRevision: text("tree_revision").notNull(),
+    dockerfileSha256: text("dockerfile_sha256").notNull(),
+    contextSha256: text("context_sha256").notNull(),
+    imageReference: text("image_reference").notNull(),
+    imageId: text("image_id").notNull(),
+    manifestDigest: text("manifest_digest").notNull(),
+    platform: text("platform").notNull(),
+    imageSizeBytes: bigint("image_size_bytes", { mode: "number" }).notNull(),
+    cacheHitCount: integer("cache_hit_count").notNull(),
+    cacheMissCount: integer("cache_miss_count").notNull(),
+    builtAt: timestamp("built_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.deploymentId, table.organizationId],
+      foreignColumns: [deployments.id, deployments.organizationId],
+      name: "deployment_build_artifacts_deployment_organization_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.workItemId, table.deploymentId, table.organizationId],
+      foreignColumns: [
+        deploymentJobs.id,
+        deploymentJobs.deploymentId,
+        deploymentJobs.organizationId,
+      ],
+      name: "deployment_build_artifacts_work_item_fk",
+    }).onDelete("restrict"),
+    foreignKey({
+      columns: [
+        table.deploymentId,
+        table.organizationId,
+        table.checkoutId,
+        table.sourceRevision,
+        table.treeRevision,
+        table.dockerfileSha256,
+        table.contextSha256,
+      ],
+      foreignColumns: [
+        deploymentSourcePreparations.deploymentId,
+        deploymentSourcePreparations.organizationId,
+        deploymentSourcePreparations.checkoutId,
+        deploymentSourcePreparations.resolvedRevision,
+        deploymentSourcePreparations.treeRevision,
+        deploymentSourcePreparations.dockerfileSha256,
+        deploymentSourcePreparations.contextSha256,
+      ],
+      name: "deployment_build_artifacts_source_identity_fk",
+    }).onDelete("restrict"),
+    unique("deployment_build_artifacts_work_item_unique").on(table.workItemId),
+    unique("deployment_build_artifacts_image_reference_unique").on(table.imageReference),
+    check(
+      "deployment_build_artifacts_context_sha256_format",
+      sql`${table.contextSha256} ~ '^[0-9a-f]{64}$'
+        and ${table.contextSha256} <> repeat('0', 64)`,
+    ),
+    check(
+      "deployment_build_artifacts_checkout_id_format",
+      sql`${table.checkoutId} ~ '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$'`,
+    ),
+    check(
+      "deployment_build_artifacts_source_revision_format",
+      sql`${table.sourceRevision} ~ '^[0-9a-f]{40}([0-9a-f]{24})?$'`,
+    ),
+    check(
+      "deployment_build_artifacts_tree_revision_format",
+      sql`${table.treeRevision} ~ '^[0-9a-f]{40}([0-9a-f]{24})?$'`,
+    ),
+    check(
+      "deployment_build_artifacts_dockerfile_sha256_format",
+      sql`${table.dockerfileSha256} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      "deployment_build_artifacts_image_reference_bounds",
+      sql`length(${table.imageReference}) between 1 and 255
+        and ${table.imageReference} = trim(${table.imageReference})
+        and ${table.imageReference} !~ '[[:cntrl:]]'`,
+    ),
+    check(
+      "deployment_build_artifacts_image_id_format",
+      sql`${table.imageId} ~ '^sha256:[0-9a-f]{64}$'`,
+    ),
+    check(
+      "deployment_build_artifacts_manifest_digest_format",
+      sql`${table.manifestDigest} ~ '^sha256:[0-9a-f]{64}$'`,
+    ),
+    check(
+      "deployment_build_artifacts_platform_format",
+      sql`length(${table.platform}) between 3 and 64
+        and ${table.platform} ~ '^[a-z0-9]+/[a-z0-9._-]+(/[a-z0-9._-]+)?$'`,
+    ),
+    check(
+      "deployment_build_artifacts_image_size_bounds",
+      sql`${table.imageSizeBytes} between 1 and 1000000000000`,
+    ),
+    check(
+      "deployment_build_artifacts_cache_count_bounds",
+      sql`${table.cacheHitCount} between 0 and 1000000
+        and ${table.cacheMissCount} between 0 and 1000000`,
     ),
   ],
 );

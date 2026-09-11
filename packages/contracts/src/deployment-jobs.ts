@@ -21,17 +21,31 @@ export const deploymentPrepareSourceJobSchema = z
   })
   .strict();
 
+export const deploymentBuildJobSchema = z
+  .object({
+    contractVersion: z.literal(1),
+    kind: z.literal("deployment.build"),
+    workItemId: workItemIdSchema,
+  })
+  .strict();
+
 export const deploymentJobSchema = z.discriminatedUnion("kind", [
   deploymentClaimJobSchema,
   deploymentPrepareSourceJobSchema,
+  deploymentBuildJobSchema,
 ]);
 
+export type DeploymentBuildJob = z.infer<typeof deploymentBuildJobSchema>;
 export type DeploymentClaimJob = z.infer<typeof deploymentClaimJobSchema>;
 export type DeploymentPrepareSourceJob = z.infer<typeof deploymentPrepareSourceJobSchema>;
 export type DeploymentJob = z.infer<typeof deploymentJobSchema>;
 
 export function parseDeploymentClaimJob(input: unknown): DeploymentClaimJob {
   return deploymentClaimJobSchema.parse(input);
+}
+
+export function parseDeploymentBuildJob(input: unknown): DeploymentBuildJob {
+  return deploymentBuildJobSchema.parse(input);
 }
 
 export function parseDeploymentJob(input: unknown): DeploymentJob {
@@ -55,9 +69,15 @@ export function createDeploymentClaimJobId(workItemId: string): string {
 }
 
 export function createDeploymentJobId(job: Pick<DeploymentJob, "kind" | "workItemId">): string {
-  return job.kind === "deployment.claim"
-    ? createDeploymentClaimJobId(job.workItemId)
-    : `deployment-prepare-source-v1-${parseWorkItemId(job.workItemId)}`;
+  const workItemId = parseWorkItemId(job.workItemId);
+  switch (job.kind) {
+    case "deployment.build":
+      return `deployment-build-v1-${workItemId}`;
+    case "deployment.claim":
+      return `deployment-claim-v1-${workItemId}`;
+    case "deployment.prepare_source":
+      return `deployment-prepare-source-v1-${workItemId}`;
+  }
 }
 
 export function createDeploymentClaimTransitionIdempotencyKey(workItemId: string): string {
@@ -70,4 +90,12 @@ export function createDeploymentSourceFailureIdempotencyKey(workItemId: string):
 
 export function createDeploymentSourceTransitionIdempotencyKey(workItemId: string): string {
   return `worker-source-ready-v1-${parseWorkItemId(workItemId)}`;
+}
+
+export function createDeploymentBuildFailureIdempotencyKey(workItemId: string): string {
+  return `worker-build-failure-v1-${parseWorkItemId(workItemId)}`;
+}
+
+export function createDeploymentBuildTransitionIdempotencyKey(workItemId: string): string {
+  return `worker-build-ready-v1-${parseWorkItemId(workItemId)}`;
 }

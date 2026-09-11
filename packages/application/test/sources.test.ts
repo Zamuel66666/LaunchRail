@@ -25,6 +25,7 @@ const preparedCheckout: PreparedRepositoryCheckout = {
   adopted: false,
   checkoutKey: "deployment-1",
   commitSha: resolvedRevision.commitSha,
+  contextSha256: "d".repeat(64),
   directory: "/safe/deployment-1/source",
   dockerfile: {
     relativePath: "Dockerfile",

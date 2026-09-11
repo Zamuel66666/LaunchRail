@@ -1,15 +1,20 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  createDeploymentBuildFailureIdempotencyKey,
+  createDeploymentBuildTransitionIdempotencyKey,
   createDeploymentClaimJobId,
   createDeploymentClaimTransitionIdempotencyKey,
   createDeploymentJobId,
   createDeploymentSourceFailureIdempotencyKey,
   createDeploymentSourceTransitionIdempotencyKey,
+  deploymentBuildJobSchema,
   deploymentClaimJobSchema,
+  parseDeploymentBuildJob,
   parseDeploymentClaimJob,
   parseDeploymentJob,
   parseDeploymentPrepareSourceJob,
+  type DeploymentBuildJob,
   type DeploymentClaimJob,
   type DeploymentPrepareSourceJob,
 } from "../src/index.js";
@@ -112,6 +117,33 @@ describe("deployment source-preparation job contract", () => {
     );
     expect(createDeploymentSourceFailureIdempotencyKey(workItemId)).toBe(
       `worker-source-failure-v1-${workItemId}`,
+    );
+  });
+});
+
+describe("deployment build job contract", () => {
+  const buildJob = {
+    contractVersion: 1,
+    kind: "deployment.build",
+    workItemId,
+  } satisfies DeploymentBuildJob;
+
+  it("accepts only the versioned identifier-only build wake-up", () => {
+    expect(parseDeploymentJob(buildJob)).toEqual(buildJob);
+    expect(parseDeploymentBuildJob(buildJob)).toEqual(buildJob);
+    expect(deploymentBuildJobSchema.parse(buildJob)).toEqual(buildJob);
+    expect(() => parseDeploymentJob({ ...buildJob, imageReference: "unsafe" })).toThrow();
+    expect(() => parseDeploymentBuildJob(validJob)).toThrow();
+  });
+
+  it("derives kind-separated stable queue and transition identifiers", () => {
+    expect(createDeploymentJobId(buildJob)).toBe(`deployment-build-v1-${workItemId}`);
+    expect(createDeploymentJobId(buildJob)).not.toBe(createDeploymentJobId(validJob));
+    expect(createDeploymentBuildTransitionIdempotencyKey(workItemId)).toBe(
+      `worker-build-ready-v1-${workItemId}`,
+    );
+    expect(createDeploymentBuildFailureIdempotencyKey(workItemId)).toBe(
+      `worker-build-failure-v1-${workItemId}`,
     );
   });
 });

@@ -1,0 +1,24 @@
+debug = false
+insecure-entitlements = []
+
+[worker.oci]
+  enabled = true
+  gc = true
+  max-parallelism = 2
+  networkMode = "bridge"
+
+  [[worker.oci.gcpolicy]]
+    filters = ["type==source.local", "type==exec.cachemount", "type==source.git.checkout"]
+    keepDuration = "24h"
+    maxUsedSpace = "2GB"
+    minFreeSpace = "10GB"
+    reservedSpace = "256MB"
+
+  [[worker.oci.gcpolicy]]
+    all = true
+    maxUsedSpace = "4GB"
+    minFreeSpace = "10GB"
+    reservedSpace = "512MB"
+
+[frontend."gateway.v0"]
+  enabled = false

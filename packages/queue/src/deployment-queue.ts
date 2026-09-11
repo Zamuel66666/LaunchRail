@@ -296,7 +296,11 @@ export class BullMqDeploymentQueueConsumer {
     signal: AbortSignal | undefined,
     handler: DeploymentJobHandler,
   ): Promise<void> {
-    if (name !== "deployment.claim" && name !== "deployment.prepare_source") {
+    if (
+      name !== "deployment.build" &&
+      name !== "deployment.claim" &&
+      name !== "deployment.prepare_source"
+    ) {
       throw new UnrecoverableError("Unsupported deployment queue job");
     }
 

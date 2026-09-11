@@ -27,6 +27,11 @@ import {
 } from "@launchrail/application";
 
 import {
+  computeRepositoryContextSha256,
+  repositoryContextEmptyContentSha256,
+  type RepositoryContextManifestEntry,
+} from "./context-manifest.js";
+import {
   GitCommandExecutionError,
   GitCommandOutputLimitError,
   type GitCommandExecutor,
@@ -52,6 +57,7 @@ interface CheckoutMarkerV1 {
   readonly checkoutKey: string;
   readonly commitSha: string;
   readonly contractVersion: 1;
+  readonly contextSha256?: string;
   readonly dockerfile: PreparedDockerfile;
   readonly fileCount: number;
   readonly owner: string;
@@ -69,6 +75,7 @@ export interface HardenedGitRepositoryCheckoutOptions {
 }
 
 interface ScannedCheckout {
+  readonly contextSha256: string;
   readonly fileCount: number;
   readonly totalBytes: number;
 }
@@ -154,6 +161,7 @@ function markerMatches(
     marker.requestedRevision === resolved.requestedRevision &&
     marker.commitSha === resolved.commitSha &&
     marker.treeSha === resolved.treeSha &&
+    (marker.contextSha256 === undefined || marker.contextSha256 === scan.contextSha256) &&
     marker.fileCount === scan.fileCount &&
     marker.totalBytes === scan.totalBytes &&
     marker.dockerfile.relativePath === dockerfile.relativePath &&
@@ -330,12 +338,17 @@ export class HardenedGitRepositoryCheckout implements RepositoryCheckout {
       .digest("hex");
   }
 
-  private async gitFileBlobSha(path: string, size: number): Promise<string> {
-    const hash = createHash("sha1").update(`blob ${size}\0`);
+  private async fileDigests(
+    path: string,
+    size: number,
+  ): Promise<Readonly<{ gitBlobSha: string; sha256: string }>> {
+    const gitHash = createHash("sha1").update(`blob ${size}\0`);
+    const contentHash = createHash("sha256");
     for await (const chunk of createReadStream(path)) {
-      hash.update(chunk as Buffer);
+      gitHash.update(chunk as Buffer);
+      contentHash.update(chunk as Buffer);
     }
-    return hash.digest("hex");
+    return { gitBlobSha: gitHash.digest("hex"), sha256: contentHash.digest("hex") };
   }
 
   private async scanCheckout(
@@ -350,6 +363,7 @@ export class HardenedGitRepositoryCheckout implements RepositoryCheckout {
     );
     const seen = new Set<string>();
     const seenDirectories = new Set<string>();
+    const manifestEntries: RepositoryContextManifestEntry[] = [];
     let fileCount = 0;
     let totalBytes = 0;
     const pending = [sourceDirectory];
@@ -370,6 +384,13 @@ export class HardenedGitRepositoryCheckout implements RepositoryCheckout {
             throw invalidSource("source_integrity_failed");
           }
           seenDirectories.add(relativePath);
+          manifestEntries.push({
+            contentSha256: repositoryContextEmptyContentSha256,
+            kind: "directory",
+            mode: "040000",
+            path: relativePath,
+            size: 0,
+          });
           pending.push(path);
           continue;
         }
@@ -415,6 +436,13 @@ export class HardenedGitRepositoryCheckout implements RepositoryCheckout {
           if (this.gitBlobSha(targetBytes) !== expected.sha) {
             throw invalidSource("source_integrity_failed");
           }
+          manifestEntries.push({
+            contentSha256: createHash("sha256").update(targetBytes).digest("hex"),
+            kind: "symlink",
+            mode: "120000",
+            path: relativePath,
+            size: targetBytes.byteLength,
+          });
         } else if (entryStats.isFile()) {
           if (expected.mode !== "100644" && expected.mode !== "100755") {
             throw invalidSource("source_integrity_failed");
@@ -426,9 +454,17 @@ export class HardenedGitRepositoryCheckout implements RepositoryCheckout {
           if (await this.rejectsLfsPointer(path, entryStats.size)) {
             throw invalidSource("source_integrity_failed", "Git LFS source is not supported");
           }
-          if ((await this.gitFileBlobSha(path, entryStats.size)) !== expected.sha) {
+          const digests = await this.fileDigests(path, entryStats.size);
+          if (digests.gitBlobSha !== expected.sha) {
             throw invalidSource("source_integrity_failed");
           }
+          manifestEntries.push({
+            contentSha256: digests.sha256,
+            kind: "file",
+            mode: expected.mode,
+            path: relativePath,
+            size: entryStats.size,
+          });
         } else {
           throw invalidSource("source_integrity_failed");
         }
@@ -442,7 +478,11 @@ export class HardenedGitRepositoryCheckout implements RepositoryCheckout {
     if (seen.size !== expectedFiles.size || seenDirectories.size !== expectedDirectories.size) {
       throw invalidSource("source_integrity_failed");
     }
-    return { fileCount, totalBytes };
+    return {
+      contextSha256: computeRepositoryContextSha256(manifestEntries),
+      fileCount,
+      totalBytes,
+    };
   }
 
   private async inspectDockerfile(
@@ -502,6 +542,7 @@ export class HardenedGitRepositoryCheckout implements RepositoryCheckout {
       adopted,
       checkoutKey: marker.checkoutKey,
       commitSha: marker.commitSha,
+      contextSha256: marker.contextSha256 ?? "",
       directory: join(finalDirectory, "source"),
       dockerfile: marker.dockerfile,
       fileCount: marker.fileCount,
@@ -535,7 +576,11 @@ export class HardenedGitRepositoryCheckout implements RepositoryCheckout {
     if (!markerMatches(marker, command, dockerfile, scan)) {
       throw invalidSource("source_integrity_failed");
     }
-    return this.resultFromMarker(finalDirectory, marker, true);
+    return this.resultFromMarker(
+      finalDirectory,
+      { ...marker, contextSha256: scan.contextSha256 },
+      true,
+    );
   }
 
   public async prepare(command: CheckoutRepositoryCommand): Promise<PreparedRepositoryCheckout> {
@@ -636,6 +681,7 @@ export class HardenedGitRepositoryCheckout implements RepositoryCheckout {
         checkoutKey: command.checkoutKey,
         commitSha: command.resolvedRevision.commitSha,
         contractVersion: 1,
+        contextSha256: scan.contextSha256,
         dockerfile,
         fileCount: scan.fileCount,
         owner: command.resolvedRevision.owner,

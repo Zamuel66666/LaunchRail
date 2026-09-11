@@ -173,6 +173,49 @@ describeWithDatabase("PostgresDeploymentJobStore", () => {
     return sourceJob;
   }
 
+  async function enterBuilding(
+    deployment: {
+      readonly deploymentId: string;
+      readonly organizationId: string;
+      readonly sourceRevision: string;
+    },
+    maxAttempts = 3,
+  ) {
+    const sourceJob = await enterCloning(deployment, maxAttempts);
+    const claimed = await claim(sourceJob.id, { expectedKind: "deployment.prepare_source" });
+    if (claimed.kind !== "claimed") {
+      throw new Error(`Expected source work lease, received ${claimed.kind}`);
+    }
+    const source = {
+      checkoutId: deployment.deploymentId,
+      contextSha256: "c".repeat(64),
+      dockerfilePath: "Dockerfile",
+      dockerfileResolvedPath: "Dockerfile",
+      dockerfileSha256: "d".repeat(64),
+      fileCount: 4,
+      resolvedRevision: deployment.sourceRevision,
+      totalBytes: 1_024,
+      treeRevision: "e".repeat(40),
+    } as const;
+    const completed = await store.completeSourcePreparation({
+      leaseToken: claimed.lease.leaseToken,
+      metadata: source,
+      workItemId: sourceJob.id,
+    });
+    if (completed.kind !== "completed") {
+      throw new Error(`Expected source completion, received ${completed.kind}`);
+    }
+    const jobs = await client.db
+      .select()
+      .from(schema.deploymentJobs)
+      .where(eq(schema.deploymentJobs.deploymentId, deployment.deploymentId));
+    const buildJob = jobs.find(({ kind }) => kind === "deployment.build");
+    if (buildJob === undefined) {
+      throw new Error("Expected build work");
+    }
+    return { buildJob, source, sourceJob };
+  }
+
   async function databaseNow(): Promise<Date> {
     const clock = await client.db.execute<{ now_milliseconds: number }>(
       sql`select (extract(epoch from clock_timestamp()) * 1000)::double precision as now_milliseconds`,
@@ -197,7 +240,7 @@ describeWithDatabase("PostgresDeploymentJobStore", () => {
   async function claim(
     workItemId: string,
     options: {
-      readonly expectedKind?: "deployment.claim" | "deployment.prepare_source";
+      readonly expectedKind?: "deployment.build" | "deployment.claim" | "deployment.prepare_source";
       readonly leaseDurationMs?: number;
       readonly workerId?: string;
     } = {},
@@ -984,6 +1027,7 @@ describeWithDatabase("PostgresDeploymentJobStore", () => {
     }
     const metadata = {
       checkoutId: deployment.deploymentId,
+      contextSha256: "c".repeat(64),
       dockerfilePath: "Dockerfile",
       dockerfileResolvedPath: "deploy/Δockerfile",
       dockerfileSha256: "d".repeat(64),
@@ -992,6 +1036,14 @@ describeWithDatabase("PostgresDeploymentJobStore", () => {
       totalBytes: 4_096,
       treeRevision: "e".repeat(40),
     } as const;
+
+    await expect(
+      store.completeSourcePreparation({
+        leaseToken: claimed.lease.leaseToken,
+        metadata: { ...metadata, contextSha256: "0".repeat(64) },
+        workItemId: sourceJob.id,
+      }),
+    ).rejects.toThrow("contextSha256 must be a lowercase SHA-256 digest");
 
     await expect(
       store.completeSourcePreparation({
@@ -1023,9 +1075,17 @@ describeWithDatabase("PostgresDeploymentJobStore", () => {
       .select()
       .from(schema.deploymentJobs)
       .where(eq(schema.deploymentJobs.id, sourceJob.id));
+    const [buildJob] = await client.db
+      .select()
+      .from(schema.deploymentJobs)
+      .where(
+        sql`${schema.deploymentJobs.deploymentId} = ${deployment.deploymentId}
+          and ${schema.deploymentJobs.kind} = 'deployment.build'`,
+      );
     expect(storedDeployment).toMatchObject({ eventSequence: 2, state: "building" });
     expect(storedSource).toMatchObject({ ...metadata, preparedAt: expect.any(Date) });
     expect(storedJob).toMatchObject({ completedAt: expect.any(Date), status: "completed" });
+    expect(buildJob).toMatchObject({ attemptCount: 0, maxAttempts: 3, status: "pending" });
     let mutationError: unknown;
     try {
       await client.db
@@ -1063,6 +1123,7 @@ describeWithDatabase("PostgresDeploymentJobStore", () => {
       leaseToken: claimed.lease.leaseToken,
       metadata: {
         checkoutId: deployment.deploymentId,
+        contextSha256: "c".repeat(64),
         dockerfilePath: "Dockerfile",
         dockerfileResolvedPath: "Dockerfile",
         dockerfileSha256: "d".repeat(64),
@@ -1221,6 +1282,326 @@ describeWithDatabase("PostgresDeploymentJobStore", () => {
       ]),
     );
     expect(created).toHaveLength(2);
+  });
+
+  it("loads build input, bounds ordered logs, and atomically persists an immutable image", async () => {
+    const deployment = await seedDeployment();
+    const { buildJob, source } = await enterBuilding(deployment);
+
+    await expect(
+      claim(buildJob.id, { expectedKind: "deployment.prepare_source" }),
+    ).resolves.toEqual({ actualKind: "deployment.build", kind: "kind_mismatch" });
+    const claimed = await claim(buildJob.id, { expectedKind: "deployment.build" });
+    if (claimed.kind !== "claimed") {
+      throw new Error(`Expected build work lease, received ${claimed.kind}`);
+    }
+    await expect(
+      store.loadBuildInput({
+        leaseToken: claimed.lease.leaseToken,
+        workItemId: buildJob.id,
+      }),
+    ).resolves.toEqual({
+      build: {
+        ...source,
+        deploymentId: deployment.deploymentId,
+        organizationId: deployment.organizationId,
+        projectId: deployment.projectId,
+        workItemId: buildJob.id,
+      },
+      kind: "loaded",
+    });
+
+    const marker = "[LaunchRail] Build log output was truncated.\n";
+    const logResult = await store.appendBuildLogs({
+      chunks: [
+        { content: "first", stream: "stdout" },
+        { content: "second", stream: "stderr" },
+      ],
+      leaseToken: claimed.lease.leaseToken,
+      maxRetainedBytes: Buffer.byteLength(marker) + 5,
+      workItemId: buildJob.id,
+    });
+    expect(logResult).toEqual({
+      acceptedBytes: Buffer.byteLength(marker) + 5,
+      firstSequence: 1,
+      kind: "appended",
+      lastSequence: 2,
+      truncated: true,
+    });
+    await expect(
+      store.appendBuildLogs({
+        chunks: [{ content: "ignored", stream: "system" }],
+        leaseToken: claimed.lease.leaseToken,
+        maxRetainedBytes: Buffer.byteLength(marker) + 5,
+        workItemId: buildJob.id,
+      }),
+    ).resolves.toEqual({
+      acceptedBytes: 0,
+      firstSequence: null,
+      kind: "appended",
+      lastSequence: null,
+      truncated: true,
+    });
+    await expect(
+      client.db
+        .select()
+        .from(schema.buildLogs)
+        .where(eq(schema.buildLogs.deploymentId, deployment.deploymentId)),
+    ).resolves.toEqual([
+      expect.objectContaining({ attempt: 1, content: "first", sequence: 1, stream: "stdout" }),
+      expect.objectContaining({ attempt: 1, content: marker, sequence: 2, stream: "system" }),
+    ]);
+
+    const image = {
+      cacheHitCount: 3,
+      cacheMissCount: 2,
+      contextSha256: source.contextSha256,
+      imageId: `sha256:${"a".repeat(64)}`,
+      imageReference: `launchrail/deployment:${deployment.deploymentId}`,
+      imageSizeBytes: 8_192,
+      manifestDigest: `sha256:${"b".repeat(64)}`,
+      platform: "linux/amd64",
+    } as const;
+    await expect(
+      store.completeBuild({
+        image,
+        leaseToken: claimed.lease.leaseToken,
+        workItemId: buildJob.id,
+      }),
+    ).resolves.toMatchObject({
+      image: {
+        ...image,
+        checkoutId: source.checkoutId,
+        deploymentId: deployment.deploymentId,
+        dockerfileSha256: source.dockerfileSha256,
+        organizationId: deployment.organizationId,
+        sourceRevision: source.resolvedRevision,
+        treeRevision: source.treeRevision,
+        workItemId: buildJob.id,
+      },
+      kind: "completed",
+      transition: { from: "building", to: "deploying" },
+    });
+    const [storedDeployment] = await client.db
+      .select()
+      .from(schema.deployments)
+      .where(eq(schema.deployments.id, deployment.deploymentId));
+    const [storedBuildJob] = await client.db
+      .select()
+      .from(schema.deploymentJobs)
+      .where(eq(schema.deploymentJobs.id, buildJob.id));
+    expect(storedDeployment).toMatchObject({ eventSequence: 3, state: "deploying" });
+    expect(storedBuildJob).toMatchObject({ completedAt: expect.any(Date), status: "completed" });
+
+    let mutationError: unknown;
+    try {
+      await client.db
+        .update(schema.deploymentBuildArtifacts)
+        .set({ imageSizeBytes: 8_193 })
+        .where(eq(schema.deploymentBuildArtifacts.deploymentId, deployment.deploymentId));
+    } catch (error) {
+      mutationError = error;
+    }
+    expect(findDatabaseError(mutationError)).toEqual({
+      code: "23514",
+      message: "deployment build artifact metadata is immutable",
+    });
+  });
+
+  it("rolls back image metadata and deployment transition when the final build fence expires", async () => {
+    const deployment = await seedDeployment();
+    const { buildJob, source } = await enterBuilding(deployment);
+    const claimed = await claim(buildJob.id, {
+      expectedKind: "deployment.build",
+      leaseDurationMs: 250,
+    });
+    if (claimed.kind !== "claimed") {
+      throw new Error(`Expected build work lease, received ${claimed.kind}`);
+    }
+    const leaseValidated = deferred();
+    const releaseCompletion = deferred();
+    const synchronizedStore = new PostgresDeploymentJobStore(client.db, {
+      afterInitialBuildLeaseValidation: async () => {
+        leaseValidated.resolve();
+        await releaseCompletion.promise;
+      },
+    });
+    const completion = synchronizedStore.completeBuild({
+      image: {
+        cacheHitCount: 0,
+        cacheMissCount: 1,
+        contextSha256: source.contextSha256,
+        imageId: `sha256:${"a".repeat(64)}`,
+        imageReference: `launchrail/deployment:${deployment.deploymentId}`,
+        imageSizeBytes: 8_192,
+        manifestDigest: `sha256:${"b".repeat(64)}`,
+        platform: "linux/amd64",
+      },
+      leaseToken: claimed.lease.leaseToken,
+      workItemId: buildJob.id,
+    });
+    await leaseValidated.promise;
+    await waitForDatabaseTime(claimed.lease.leaseExpiresAt);
+    releaseCompletion.resolve();
+
+    await expect(completion).resolves.toEqual({ kind: "lease_expired" });
+    const [storedDeployment] = await client.db
+      .select()
+      .from(schema.deployments)
+      .where(eq(schema.deployments.id, deployment.deploymentId));
+    expect(storedDeployment).toMatchObject({ eventSequence: 2, state: "building", version: 3 });
+    await expect(client.db.select().from(schema.deploymentBuildArtifacts)).resolves.toEqual([]);
+  });
+
+  it("retries transient build infrastructure and terminally records a permanent build failure", async () => {
+    const deployment = await seedDeployment();
+    const { buildJob } = await enterBuilding(deployment, 2);
+    const first = await claim(buildJob.id, { expectedKind: "deployment.build" });
+    if (first.kind !== "claimed") {
+      throw new Error(`Expected build work lease, received ${first.kind}`);
+    }
+    await expect(
+      store.failBuild({
+        failure: {
+          category: "infrastructure_unavailable",
+          message: "The image builder is temporarily unavailable",
+        },
+        leaseToken: first.lease.leaseToken,
+        retryable: true,
+        retryDelayMs: 1,
+        workItemId: buildJob.id,
+      }),
+    ).resolves.toMatchObject({ attemptCount: 1, kind: "retry_scheduled" });
+    await makeAvailable(buildJob.id);
+    const second = await claim(buildJob.id, { expectedKind: "deployment.build" });
+    if (second.kind !== "claimed") {
+      throw new Error(`Expected second build work lease, received ${second.kind}`);
+    }
+    await expect(
+      store.failBuild({
+        failure: { category: "build_failed", message: "The Dockerfile build command failed" },
+        leaseToken: second.lease.leaseToken,
+        retryable: false,
+        retryDelayMs: 0,
+        workItemId: buildJob.id,
+      }),
+    ).resolves.toMatchObject({
+      attemptCount: 2,
+      kind: "dead_lettered",
+      transition: { from: "building", to: "build_failed" },
+    });
+    const [storedDeployment] = await client.db
+      .select()
+      .from(schema.deployments)
+      .where(eq(schema.deployments.id, deployment.deploymentId));
+    expect(storedDeployment).toMatchObject({
+      failureCategory: "build_failed",
+      state: "build_failed",
+    });
+    await expect(client.db.select().from(schema.deploymentBuildArtifacts)).resolves.toEqual([]);
+  });
+
+  it("reconciles missing build work and terminally handles an exhausted build lease", async () => {
+    const deployment = await seedDeployment();
+    const { buildJob } = await enterBuilding(deployment, 1);
+    await client.db.delete(schema.deploymentJobs).where(eq(schema.deploymentJobs.id, buildJob.id));
+    const withoutSource = await seedDeployment({ state: "building" });
+
+    const ensured = await store.ensureMissing({ limit: 10, maxAttempts: 1 });
+    expect(ensured).toEqual([
+      expect.objectContaining({
+        deploymentId: deployment.deploymentId,
+        kind: "deployment.build",
+      }),
+    ]);
+    expect(ensured.some(({ deploymentId }) => deploymentId === withoutSource.deploymentId)).toBe(
+      false,
+    );
+    const recoveredJob = ensured[0];
+    if (recoveredJob === undefined) {
+      throw new Error("Expected reconciled build work");
+    }
+    const claimed = await claim(recoveredJob.id, { expectedKind: "deployment.build" });
+    if (claimed.kind !== "claimed") {
+      throw new Error(`Expected reconciled build lease, received ${claimed.kind}`);
+    }
+    await expireLease(recoveredJob.id);
+    await expect(store.recoverExpired({ limit: 10 })).resolves.toContainEqual({
+      id: recoveredJob.id,
+      status: "dead_lettered",
+    });
+    const [storedDeployment] = await client.db
+      .select()
+      .from(schema.deployments)
+      .where(eq(schema.deployments.id, deployment.deploymentId));
+    expect(storedDeployment).toMatchObject({
+      failureCategory: "infrastructure_unavailable",
+      state: "build_failed",
+    });
+  });
+
+  it("fails a legacy prepared source whose build context identity is unknown", async () => {
+    const deployment = await seedDeployment({ state: "building" });
+    await client.db.insert(schema.deploymentSourcePreparations).values({
+      checkoutId: deployment.deploymentId,
+      contextSha256: "0".repeat(64),
+      deploymentId: deployment.deploymentId,
+      dockerfilePath: "Dockerfile",
+      dockerfileResolvedPath: "Dockerfile",
+      dockerfileSha256: "d".repeat(64),
+      fileCount: 4,
+      organizationId: deployment.organizationId,
+      resolvedRevision: deployment.sourceRevision,
+      totalBytes: 1_024,
+      treeRevision: "e".repeat(40),
+    });
+    const [buildJob] = await client.db
+      .insert(schema.deploymentJobs)
+      .values({
+        deploymentId: deployment.deploymentId,
+        kind: "deployment.build",
+        maxAttempts: 3,
+        organizationId: deployment.organizationId,
+      })
+      .returning();
+    if (buildJob === undefined) {
+      throw new Error("Expected legacy build job insert");
+    }
+    const claimed = await claim(buildJob.id, { expectedKind: "deployment.build" });
+    if (claimed.kind !== "claimed") {
+      throw new Error(`Expected legacy build lease, received ${claimed.kind}`);
+    }
+
+    await expect(
+      store.loadBuildInput({
+        leaseToken: claimed.lease.leaseToken,
+        workItemId: buildJob.id,
+      }),
+    ).resolves.toEqual({ kind: "source_not_prepared" });
+    await expect(
+      store.failBuild({
+        failure: {
+          category: "internal_invariant_violation",
+          message: "Prepared source predates durable build context identity",
+        },
+        leaseToken: claimed.lease.leaseToken,
+        retryable: false,
+        retryDelayMs: 0,
+        workItemId: buildJob.id,
+      }),
+    ).resolves.toMatchObject({
+      attemptCount: 1,
+      kind: "dead_lettered",
+      transition: { from: "building", to: "build_failed" },
+    });
+    const [storedDeployment] = await client.db
+      .select()
+      .from(schema.deployments)
+      .where(eq(schema.deployments.id, deployment.deploymentId));
+    expect(storedDeployment).toMatchObject({
+      failureCategory: "internal_invariant_violation",
+      state: "build_failed",
+    });
   });
 
   it("persists worker lifecycle, freshness, and terminal status without reopening instances", async () => {

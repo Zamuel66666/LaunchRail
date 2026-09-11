@@ -3,6 +3,11 @@ export {
   type GitHubRepositoryProviderOptions,
 } from "./github-provider.js";
 export {
+  computeRepositoryContextSha256,
+  repositoryContextEmptyContentSha256,
+  type RepositoryContextManifestEntry,
+} from "./context-manifest.js";
+export {
   HardenedGitRepositoryCheckout,
   type HardenedGitRepositoryCheckoutOptions,
 } from "./git-checkout.js";

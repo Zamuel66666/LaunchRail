@@ -1,9 +1,13 @@
+import { join } from "node:path";
+
 import {
   PrepareRepository,
+  type ImageBuilder,
   type DeploymentJobStore,
   type RepositoryCheckout,
   type RepositoryProvider,
 } from "@launchrail/application";
+import { BuildKitImageBuilder } from "@launchrail/build";
 import type { WorkerConfig } from "@launchrail/config";
 import { PostgresDeploymentJobStore, type LaunchRailDatabase } from "@launchrail/database";
 import {
@@ -14,12 +18,14 @@ import {
 import { GitHubRepositoryProvider, HardenedGitRepositoryCheckout } from "@launchrail/source";
 
 import { DeploymentJobProcessor } from "./job-processor.js";
+import { DeploymentBuildProcessor } from "./build-processor.js";
 import { DeploymentClaimProcessor, type WorkerEventLogger } from "./processor.js";
 import { DeploymentJobReconciler } from "./reconciler.js";
 import { DeploymentWorkerRuntime } from "./runtime.js";
 import { DeploymentSourceProcessor } from "./source-processor.js";
 
 export interface DeploymentWorkerComponents {
+  readonly buildProcessor: DeploymentBuildProcessor;
   readonly consumer: BullMqDeploymentQueueConsumer;
   readonly claimProcessor: DeploymentClaimProcessor;
   readonly processor: DeploymentJobProcessor;
@@ -31,6 +37,7 @@ export interface DeploymentWorkerComponents {
 }
 
 export interface CreateDeploymentWorkerComponentsOptions {
+  readonly imageBuilder?: ImageBuilder;
   readonly config: WorkerConfig;
   readonly database: LaunchRailDatabase;
   readonly logger: WorkerEventLogger;
@@ -44,6 +51,7 @@ export function createDeploymentWorkerComponents({
   config,
   database,
   logger,
+  imageBuilder,
   repositoryCheckout,
   repositoryProvider,
   version,
@@ -109,7 +117,41 @@ export function createDeploymentWorkerComponents({
     store,
     workerId,
   });
-  const processor = new DeploymentJobProcessor({ claimProcessor, sourceProcessor });
+  const buildProcessor = new DeploymentBuildProcessor({
+    backoffBaseMs: config.WORKER_BACKOFF_BASE_MS,
+    backoffCapMs: config.WORKER_BACKOFF_CAP_MS,
+    heartbeatIntervalMs: config.WORKER_HEARTBEAT_INTERVAL_MS,
+    imageBuilder:
+      imageBuilder ??
+      new BuildKitImageBuilder({
+        buildRootDirectory: config.WORKER_BUILD_ROOT,
+        dockerConfigDirectory: join(config.WORKER_BUILD_ROOT, "docker-config"),
+        platform: config.WORKER_BUILD_PLATFORM,
+        timeoutMs: config.WORKER_BUILD_TIMEOUT_MS,
+        limits: {
+          cpuMillicores: config.WORKER_BUILD_CPU_MILLICORES,
+          maxImageBytes: config.WORKER_BUILD_IMAGE_MAX_BYTES,
+          maxInspectBytes: config.WORKER_BUILD_INSPECT_BYTES,
+          maxLogBytes: config.WORKER_BUILD_LOG_MAX_BYTES,
+          maxLogChunkBytes: config.WORKER_BUILD_LOG_CHUNK_BYTES,
+          maxMetadataBytes: config.WORKER_BUILD_METADATA_BYTES,
+          maxProgressBytes: config.WORKER_BUILD_PROGRESS_BYTES,
+          maxProgressLineBytes: config.WORKER_BUILD_PROGRESS_LINE_BYTES,
+          memoryMegabytes: config.WORKER_BUILD_MEMORY_MEGABYTES,
+          processLimit: config.WORKER_BUILD_PROCESS_LIMIT,
+          sharedMemoryMegabytes: config.WORKER_BUILD_SHARED_MEMORY_MEGABYTES,
+        },
+      }),
+    jobTimeoutMs: config.WORKER_JOB_TIMEOUT_MS,
+    leaseDurationMs: config.WORKER_LEASE_MS,
+    logMaxRetainedBytes: config.WORKER_BUILD_LOG_MAX_BYTES,
+    logger,
+    repositoryCheckout: checkout,
+    sourceRoot: config.WORKER_SOURCE_ROOT,
+    store,
+    workerId,
+  });
+  const processor = new DeploymentJobProcessor({ buildProcessor, claimProcessor, sourceProcessor });
   const consumer = new BullMqDeploymentQueueConsumer({
     ...queueOptions,
     concurrency: config.WORKER_CONCURRENCY,
@@ -137,6 +179,7 @@ export function createDeploymentWorkerComponents({
   });
 
   return {
+    buildProcessor,
     claimProcessor,
     consumer,
     processor,

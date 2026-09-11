@@ -118,3 +118,67 @@ jobs:
       - name: Stop development services
         if: always()
         run: docker compose down --volumes
+
+  buildkit-acceptance:
+    name: Constrained BuildKit acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DOCKER_CONFIG: ${{ runner.temp }}/launchrail-docker-config
+      LAUNCHRAIL_BUILDX_BUILDER: launchrail-builder
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Prepare isolated Docker client configuration
+        run: |
+          mkdir --parents "$DOCKER_CONFIG"
+          chmod 0700 "$DOCKER_CONFIG"
+
+      - name: Provision constrained BuildKit builder
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+        with:
+          buildkitd-config: .github/buildkitd.toml
+          buildkitd-flags: --oci-worker-net=bridge
+          driver: docker-container
+          driver-opts: |
+            image=moby/buildkit:v0.32.2@sha256:28a898719c18a33f4e8000685287fa36fd0dd9560c6440227d3a732d79bb41d8
+            network=bridge
+            memory=2g
+            memory-swap=2g
+            cpu-period=100000
+            cpu-quota=200000
+          name: launchrail-builder
+          version: v0.36.1
+
+      - name: Verify pinned builder boundary
+        run: |
+          test "$(docker buildx version | awk '{print $2}')" = "v0.36.1"
+          docker buildx inspect --builder launchrail-builder --bootstrap | grep -F "v0.32.2"
+          test "$(docker inspect buildx_buildkit_launchrail-builder0 --format '{{.Config.Image}}')" = "moby/buildkit:v0.32.2@sha256:28a898719c18a33f4e8000685287fa36fd0dd9560c6440227d3a732d79bb41d8"
+          ! docker inspect buildx_buildkit_launchrail-builder0 --format '{{json .Args}}' | grep -F "allow-insecure-entitlement"
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          version: 11.9.0
+          run_install: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Exercise real BuildKit boundary
+        run: pnpm test:buildkit
+
+      - name: Show builder diagnostics after failure
+        if: failure()
+        run: |
+          docker buildx inspect --builder launchrail-builder
+          docker buildx du --builder launchrail-builder || true
+          docker ps --all --filter name=buildx_buildkit_launchrail-builder0

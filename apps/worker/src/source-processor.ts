@@ -394,6 +394,7 @@ export class DeploymentSourceProcessor {
                 leaseToken: lease.leaseToken,
                 metadata: {
                   checkoutId: prepared.checkoutKey,
+                  contextSha256: prepared.contextSha256,
                   dockerfilePath: prepared.dockerfile.relativePath,
                   dockerfileResolvedPath: prepared.dockerfile.resolvedRelativePath,
                   dockerfileSha256: prepared.dockerfile.sha256,

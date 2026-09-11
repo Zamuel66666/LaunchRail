@@ -57,6 +57,7 @@ export interface PreparedRepositoryCheckout {
   readonly adopted: boolean;
   readonly checkoutKey: string;
   readonly commitSha: string;
+  readonly contextSha256: string;
   readonly directory: string;
   readonly dockerfile: PreparedDockerfile;
   readonly fileCount: number;

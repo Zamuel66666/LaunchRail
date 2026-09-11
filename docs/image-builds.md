@@ -42,3 +42,7 @@ step networking does not prevent the builder from fetching base images or
 remote build inputs. This is not a hostile multi-tenant sandbox. Registry
 publication, signing, scanning, runtime startup, browser log streaming, and the
 deployment-start interface remain subsequent work.
+
+The acceptance builder disables external Dockerfile frontends. Dockerfiles that
+request an external `syntax` frontend are rejected; ordinary Dockerfiles use the
+frontend bundled with the pinned BuildKit daemon.

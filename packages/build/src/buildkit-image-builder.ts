@@ -739,7 +739,6 @@ export class BuildKitImageBuilder implements ImageBuilder {
       }
       arguments_.push(
         "--load",
-        "--build-arg=BUILDKIT_SYNTAX=dockerfile.v0",
         "--metadata-file",
         paths.metadata,
         "--network=none",

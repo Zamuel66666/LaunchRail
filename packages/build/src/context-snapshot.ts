@@ -356,11 +356,25 @@ export async function createPrivateBuildContextSnapshot(options: {
       stageDirectory,
     };
   } catch (error) {
-    await rm(stageDirectory, { force: true, recursive: true });
+    await removePrivateBuildContextSnapshot(stageDirectory);
     throw error;
   }
 }
 
 export async function removePrivateBuildContextSnapshot(stageDirectory: string): Promise<void> {
+  const restoreDirectoryPermissions = async (directory: string): Promise<void> => {
+    const stats = await lstat(directory);
+    if (!stats.isDirectory() || stats.isSymbolicLink()) return;
+    await chmod(directory, 0o700);
+    const entries = await opendir(directory);
+    for await (const entry of entries) {
+      if (entry.isDirectory() && !entry.isSymbolicLink()) {
+        await restoreDirectoryPermissions(join(directory, entry.name));
+      }
+    }
+  };
+  await restoreDirectoryPermissions(stageDirectory).catch((error: unknown) => {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  });
   await rm(stageDirectory, { force: true, recursive: true });
 }

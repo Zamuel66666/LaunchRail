@@ -124,7 +124,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      DOCKER_CONFIG: ${{ runner.temp }}/launchrail-docker-config
+      DOCKER_CONFIG: /tmp/launchrail-ci-docker-config
       LAUNCHRAIL_BUILDX_BUILDER: launchrail-builder
     steps:
       - name: Check out repository

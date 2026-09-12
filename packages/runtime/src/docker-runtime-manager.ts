@@ -52,6 +52,11 @@ interface DockerInspection {
     readonly SecurityOpt?: readonly string[];
   };
   readonly Id?: string;
+  readonly NetworkSettings?: {
+    readonly Ports?: Readonly<
+      Record<string, readonly { readonly HostIp?: string; readonly HostPort?: string }[]>
+    >;
+  };
   readonly State?: { readonly Running?: boolean };
 }
 
@@ -233,7 +238,9 @@ export class DockerDeploymentRuntimeManager implements DeploymentRuntimeManager 
         "The existing runtime does not match LaunchRail policy",
         false,
       );
-    const bindings = inspected.HostConfig.PortBindings?.[`${command.healthCheckPort}/tcp`];
+    const bindings =
+      inspected.NetworkSettings?.Ports?.[`${command.healthCheckPort}/tcp`] ??
+      inspected.HostConfig.PortBindings?.[`${command.healthCheckPort}/tcp`];
     const binding = bindings?.[0];
     const hostPort = Number(binding?.HostPort);
     if (

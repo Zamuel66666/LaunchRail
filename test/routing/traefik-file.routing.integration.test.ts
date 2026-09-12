@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { TraefikFileRouteManager } from "@launchrail/routing";
+import { TraefikFileRouteManager } from "../../packages/routing/dist/index.js";
 
 const deploymentId = "11111111-1111-4111-8111-111111111111";
 const hostname = `d-${deploymentId}.localhost`;

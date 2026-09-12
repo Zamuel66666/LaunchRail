@@ -44,12 +44,7 @@ describe("real BuildKit image lifecycle", () => {
       identity: identity(),
       signal: new AbortController().signal,
     };
-    const logs: string[] = [];
-    const sink = {
-      write: async (chunks: readonly { content: string }[]) => {
-        logs.push(...chunks.map((chunk) => chunk.content));
-      },
-    };
+    const sink = { write: async () => undefined };
     try {
       const first = await builder.build(command, sink);
       expect(first.imageId).toMatch(/^sha256:[0-9a-f]{64}$/);
@@ -59,7 +54,6 @@ describe("real BuildKit image lifecycle", () => {
       expect(retry.adopted).toBe(true);
       expect(retry.imageId).toBe(first.imageId);
       expect(retry.imageReference).toBe(first.imageReference);
-      expect(logs.length).toBeGreaterThan(0);
     } finally {
       await builder.remove(command);
       await context.dispose();

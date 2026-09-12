@@ -134,4 +134,44 @@ describe("DockerDeploymentRuntimeManager", () => {
       await rm(root, { force: true, recursive: true });
     }
   });
+
+  it("does not force a read-only root filesystem when the project disables it", async () => {
+    const root = await mkdtemp(join(tmpdir(), "launchrail-runtime-test-"));
+    const requests: string[][] = [];
+    let inspectCount = 0;
+    try {
+      const manager = new DockerDeploymentRuntimeManager({
+        dockerConfigDirectory: root,
+        executor: {
+          execute: async (request) => {
+            requests.push([...request.arguments]);
+            if (request.arguments[0] === "inspect") {
+              inspectCount += 1;
+              if (inspectCount === 1) throw new Error("missing");
+              const existing = inspection()[0]!;
+              return {
+                exitCode: 0,
+                stderr: "",
+                stdout: JSON.stringify([
+                  {
+                    ...existing,
+                    HostConfig: { ...existing.HostConfig, ReadonlyRootfs: false },
+                  },
+                ]),
+              };
+            }
+            return { exitCode: 0, stderr: "", stdout: "" };
+          },
+        },
+        timeoutMs: 1_000,
+      });
+      await manager.start({
+        ...command,
+        runtimeConfig: { ...command.runtimeConfig, readOnlyRootFilesystem: false },
+      });
+      expect(requests.find((request) => request[0] === "create")).not.toContain("--read-only");
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
 });

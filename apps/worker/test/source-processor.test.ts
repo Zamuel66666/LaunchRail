@@ -77,6 +77,7 @@ function createStore(overrides: Partial<DeploymentJobStore> = {}): DeploymentJob
     appendBuildLogs: vi.fn(async () => ({ kind: "not_found" as const })),
     claim: vi.fn(async () => ({ kind: "claimed" as const, lease })),
     completeBuild: vi.fn(async () => ({ kind: "not_found" as const })),
+    completeRuntime: vi.fn(async () => ({ kind: "not_found" as const })),
     completeClaimTransition: vi.fn(async () => ({ kind: "not_found" as const })),
     completeSourcePreparation: vi.fn(async () => ({
       kind: "completed" as const,
@@ -108,6 +109,7 @@ function createStore(overrides: Partial<DeploymentJobStore> = {}): DeploymentJob
     ensurePendingClaim: vi.fn(async () => ({ kind: "deployment_not_found" as const })),
     fail: vi.fn(async () => ({ kind: "not_found" as const })),
     failBuild: vi.fn(async () => ({ kind: "not_found" as const })),
+    failRuntime: vi.fn(async () => ({ kind: "not_found" as const })),
     failSourcePreparation: vi.fn(async () => ({ kind: "not_found" as const })),
     heartbeat: vi.fn(async () => ({
       kind: "extended" as const,
@@ -116,6 +118,7 @@ function createStore(overrides: Partial<DeploymentJobStore> = {}): DeploymentJob
     listDispatchable: vi.fn(async () => []),
     listWorkerHeartbeats: vi.fn(async () => []),
     loadBuildInput: vi.fn(async () => ({ kind: "not_found" as const })),
+    loadRuntimeInput: vi.fn(async () => ({ kind: "not_found" as const })),
     loadSourcePreparation: vi.fn(async () => ({
       kind: "loaded" as const,
       source: {

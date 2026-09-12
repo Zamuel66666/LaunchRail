@@ -23,6 +23,7 @@ describe("DeploymentJobProcessor", () => {
     const claimProcess = vi.fn(async () => "completed" as const);
     const sourceProcess = vi.fn(async () => "dead_lettered" as const);
     const buildProcess = vi.fn(async () => "completed" as const);
+    const runtimeProcess = vi.fn(async () => "completed" as const);
     const processor = new DeploymentJobProcessor({
       buildProcessor: {
         getActiveJobCount: () => 0,
@@ -37,6 +38,11 @@ describe("DeploymentJobProcessor", () => {
       sourceProcessor: {
         getActiveJobCount: () => 0,
         process: sourceProcess,
+        waitForIdle: vi.fn(async () => undefined),
+      } as never,
+      runtimeProcessor: {
+        getActiveJobCount: () => 0,
+        process: runtimeProcess,
         waitForIdle: vi.fn(async () => undefined),
       } as never,
     });
@@ -57,6 +63,7 @@ describe("DeploymentJobProcessor", () => {
     });
     let claimActive = 1;
     let sourceActive = 2;
+    let runtimeActive = 0;
     const claimWait = vi.fn(async () => {
       claimActive = 0;
     });
@@ -78,6 +85,13 @@ describe("DeploymentJobProcessor", () => {
         getActiveJobCount: () => sourceActive,
         process: vi.fn(),
         waitForIdle: sourceWait,
+      } as never,
+      runtimeProcessor: {
+        getActiveJobCount: () => runtimeActive,
+        process: vi.fn(),
+        waitForIdle: vi.fn(async () => {
+          runtimeActive = 0;
+        }),
       } as never,
     });
 

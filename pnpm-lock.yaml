@@ -157,6 +157,9 @@ importers:
       '@launchrail/queue':
         specifier: workspace:*
         version: link:../../packages/queue
+      '@launchrail/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
       '@launchrail/source':
         specifier: workspace:*
         version: link:../../packages/source

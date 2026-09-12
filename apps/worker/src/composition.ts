@@ -3,6 +3,7 @@ import { join } from "node:path";
 import {
   PrepareRepository,
   type ImageBuilder,
+  type DeploymentRuntimeManager,
   type DeploymentJobStore,
   type RepositoryCheckout,
   type RepositoryProvider,
@@ -16,6 +17,7 @@ import {
   type QueueInfrastructureEvent,
 } from "@launchrail/queue";
 import { GitHubRepositoryProvider, HardenedGitRepositoryCheckout } from "@launchrail/source";
+import { DockerDeploymentRuntimeManager } from "@launchrail/runtime";
 
 import { DeploymentJobProcessor } from "./job-processor.js";
 import { DeploymentBuildProcessor } from "./build-processor.js";
@@ -23,6 +25,7 @@ import { DeploymentClaimProcessor, type WorkerEventLogger } from "./processor.js
 import { DeploymentJobReconciler } from "./reconciler.js";
 import { DeploymentWorkerRuntime } from "./runtime.js";
 import { DeploymentSourceProcessor } from "./source-processor.js";
+import { DeploymentRuntimeProcessor } from "./runtime-processor.js";
 
 export interface DeploymentWorkerComponents {
   readonly buildProcessor: DeploymentBuildProcessor;
@@ -33,6 +36,7 @@ export interface DeploymentWorkerComponents {
   readonly reconciler: DeploymentJobReconciler;
   readonly runtime: DeploymentWorkerRuntime;
   readonly sourceProcessor: DeploymentSourceProcessor;
+  readonly runtimeProcessor: DeploymentRuntimeProcessor;
   readonly store: DeploymentJobStore;
 }
 
@@ -43,6 +47,7 @@ export interface CreateDeploymentWorkerComponentsOptions {
   readonly logger: WorkerEventLogger;
   readonly repositoryCheckout?: RepositoryCheckout;
   readonly repositoryProvider?: RepositoryProvider;
+  readonly runtimeManager?: DeploymentRuntimeManager;
   readonly version: string;
   readonly workerId: string;
 }
@@ -54,6 +59,7 @@ export function createDeploymentWorkerComponents({
   imageBuilder,
   repositoryCheckout,
   repositoryProvider,
+  runtimeManager,
   version,
   workerId,
 }: CreateDeploymentWorkerComponentsOptions): DeploymentWorkerComponents {
@@ -151,7 +157,28 @@ export function createDeploymentWorkerComponents({
     store,
     workerId,
   });
-  const processor = new DeploymentJobProcessor({ buildProcessor, claimProcessor, sourceProcessor });
+  const runtimeProcessor = new DeploymentRuntimeProcessor({
+    backoffBaseMs: config.WORKER_BACKOFF_BASE_MS,
+    backoffCapMs: config.WORKER_BACKOFF_CAP_MS,
+    heartbeatIntervalMs: config.WORKER_HEARTBEAT_INTERVAL_MS,
+    jobTimeoutMs: config.WORKER_RUNTIME_TIMEOUT_MS,
+    leaseDurationMs: config.WORKER_LEASE_MS,
+    logger,
+    runtimeManager:
+      runtimeManager ??
+      new DockerDeploymentRuntimeManager({
+        dockerConfigDirectory: join(config.WORKER_BUILD_ROOT, "runtime-docker-config"),
+        timeoutMs: config.WORKER_RUNTIME_TIMEOUT_MS,
+      }),
+    store,
+    workerId,
+  });
+  const processor = new DeploymentJobProcessor({
+    buildProcessor,
+    claimProcessor,
+    runtimeProcessor,
+    sourceProcessor,
+  });
   const consumer = new BullMqDeploymentQueueConsumer({
     ...queueOptions,
     concurrency: config.WORKER_CONCURRENCY,
@@ -187,6 +214,7 @@ export function createDeploymentWorkerComponents({
     reconciler,
     runtime,
     sourceProcessor,
+    runtimeProcessor,
     store,
   };
 }

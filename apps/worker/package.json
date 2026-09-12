@@ -17,6 +17,7 @@
     "@launchrail/database": "workspace:*",
     "@launchrail/observability": "workspace:*",
     "@launchrail/queue": "workspace:*",
+    "@launchrail/runtime": "workspace:*",
     "@launchrail/source": "workspace:*"
   },
   "devDependencies": {

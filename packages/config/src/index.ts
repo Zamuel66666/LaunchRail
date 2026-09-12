@@ -118,6 +118,7 @@ const workerSchema = sharedServiceSchema.extend({
   WORKER_QUEUE_PREFIX: workerIdentifierSchema.default("launchrail"),
   WORKER_RECONCILIATION_BATCH_SIZE: positiveIntegerSchema.max(1_000).default(100),
   WORKER_RECONCILIATION_INTERVAL_MS: positiveIntegerSchema.max(3_600_000).default(15_000),
+  WORKER_RUNTIME_TIMEOUT_MS: positiveIntegerSchema.max(3_600_000).default(120_000),
   WORKER_SHUTDOWN_GRACE_MS: positiveIntegerSchema.max(3_600_000).default(30_000),
   WORKER_SOURCE_CLONE_TIMEOUT_MS: positiveIntegerSchema.max(3_600_000).default(120_000),
   WORKER_SOURCE_GIT_DIRECTORY_BYTES: positiveIntegerSchema.max(10_737_418_240).default(402_653_184),
@@ -224,6 +225,9 @@ function validateWorkerRuntime(config: WorkerConfig): void {
   }
   if (config.WORKER_BUILD_TIMEOUT_MS > config.WORKER_JOB_TIMEOUT_MS) {
     issues.push("WORKER_BUILD_TIMEOUT_MS: cannot exceed WORKER_JOB_TIMEOUT_MS");
+  }
+  if (config.WORKER_RUNTIME_TIMEOUT_MS > config.WORKER_JOB_TIMEOUT_MS) {
+    issues.push("WORKER_RUNTIME_TIMEOUT_MS: cannot exceed WORKER_JOB_TIMEOUT_MS");
   }
   if (config.WORKER_BUILD_PROGRESS_LINE_BYTES > config.WORKER_BUILD_PROGRESS_BYTES) {
     issues.push("WORKER_BUILD_PROGRESS_LINE_BYTES: cannot exceed WORKER_BUILD_PROGRESS_BYTES");

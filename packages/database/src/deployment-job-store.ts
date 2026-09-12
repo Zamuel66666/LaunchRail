@@ -58,7 +58,6 @@ import type {
 import {
   createDeploymentBuildFailureIdempotencyKey,
   createDeploymentBuildTransitionIdempotencyKey,
-  createDeploymentJobId,
   createDeploymentRuntimeFailureIdempotencyKey,
   createDeploymentRuntimeTransitionIdempotencyKey,
   createDeploymentClaimTransitionIdempotencyKey,
@@ -1945,10 +1944,6 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
             availableAt: sql<Date>`clock_timestamp()`,
             contractVersion: deploymentJobContractVersion,
             deploymentId: deployment.id,
-            id: createDeploymentJobId({
-              kind: deploymentStartRuntimeJobKind,
-              workItemId: deployment.id,
-            }),
             kind: deploymentStartRuntimeJobKind,
             maxAttempts: job.maxAttempts,
             organizationId: deployment.organizationId,

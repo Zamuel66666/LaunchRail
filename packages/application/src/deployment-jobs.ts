@@ -1,4 +1,8 @@
-import type { DeploymentFailureCategory, DeploymentState, ProjectRuntimeConfig } from "@launchrail/domain";
+import type {
+  DeploymentFailureCategory,
+  DeploymentState,
+  ProjectRuntimeConfig,
+} from "@launchrail/domain";
 
 import type { DeploymentTransitionResult } from "./deployments.js";
 
@@ -354,7 +358,11 @@ export interface CompleteDeploymentRuntimeCommand {
 }
 
 export type CompleteDeploymentRuntimeResult =
-  | { readonly kind: "completed"; readonly runtime: DeploymentRuntimeInstanceSummary; readonly transition: DeploymentTransitionResult }
+  | {
+      readonly kind: "completed";
+      readonly runtime: DeploymentRuntimeInstanceSummary;
+      readonly transition: DeploymentTransitionResult;
+    }
   | { readonly kind: "build_mismatch" | "runtime_mismatch" }
   | { readonly kind: "state_mismatch"; readonly state: DeploymentState }
   | LeaseMutationFailure;
@@ -369,7 +377,10 @@ export type DeploymentRuntimeFailureCategory = Extract<
 >;
 
 export interface FailDeploymentRuntimeCommand {
-  readonly failure: { readonly category: DeploymentRuntimeFailureCategory; readonly message: string };
+  readonly failure: {
+    readonly category: DeploymentRuntimeFailureCategory;
+    readonly message: string;
+  };
   readonly leaseToken: string;
   readonly retryable: boolean;
   readonly retryDelayMs: number;
@@ -378,7 +389,11 @@ export interface FailDeploymentRuntimeCommand {
 
 export type FailDeploymentRuntimeResult =
   | { readonly attemptCount: number; readonly availableAt: Date; readonly kind: "retry_scheduled" }
-  | { readonly attemptCount: number; readonly kind: "dead_lettered"; readonly transition: DeploymentTransitionResult }
+  | {
+      readonly attemptCount: number;
+      readonly kind: "dead_lettered";
+      readonly transition: DeploymentTransitionResult;
+    }
   | { readonly kind: "state_mismatch"; readonly state: DeploymentState }
   | LeaseMutationFailure;
 
@@ -483,7 +498,9 @@ export interface DeploymentJobStore {
     command: CompleteDeploymentClaimTransitionCommand,
   ): Promise<CompleteDeploymentClaimTransitionResult>;
   completeBuild(command: CompleteDeploymentBuildCommand): Promise<CompleteDeploymentBuildResult>;
-  completeRuntime(command: CompleteDeploymentRuntimeCommand): Promise<CompleteDeploymentRuntimeResult>;
+  completeRuntime(
+    command: CompleteDeploymentRuntimeCommand,
+  ): Promise<CompleteDeploymentRuntimeResult>;
   completeSourcePreparation(
     command: CompleteDeploymentSourcePreparationCommand,
   ): Promise<CompleteDeploymentSourcePreparationResult>;
@@ -519,5 +536,7 @@ export interface DeploymentJobStore {
     command: LoadDeploymentSourcePreparationCommand,
   ): Promise<LoadDeploymentSourcePreparationResult>;
   loadBuildInput(command: LoadDeploymentBuildInputCommand): Promise<LoadDeploymentBuildInputResult>;
-  loadRuntimeInput(command: LoadDeploymentRuntimeInputCommand): Promise<LoadDeploymentRuntimeInputResult>;
+  loadRuntimeInput(
+    command: LoadDeploymentRuntimeInputCommand,
+  ): Promise<LoadDeploymentRuntimeInputResult>;
 }

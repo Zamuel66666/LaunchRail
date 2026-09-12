@@ -1392,6 +1392,51 @@ describeWithDatabase("PostgresDeploymentJobStore", () => {
       .where(eq(schema.deploymentJobs.id, buildJob.id));
     expect(storedDeployment).toMatchObject({ eventSequence: 3, state: "deploying" });
     expect(storedBuildJob).toMatchObject({ completedAt: expect.any(Date), status: "completed" });
+    const runtimeJobs = await client.db
+      .select()
+      .from(schema.deploymentJobs)
+      .where(eq(schema.deploymentJobs.deploymentId, deployment.deploymentId));
+    const runtimeJob = runtimeJobs.find(({ kind }) => kind === "deployment.start_runtime");
+    expect(runtimeJob).toMatchObject({ status: "pending" });
+    if (runtimeJob === undefined) throw new Error("Expected runtime start work");
+    const runtimeClaim = await claim(runtimeJob.id, { expectedKind: "deployment.start_runtime" });
+    if (runtimeClaim.kind !== "claimed") throw new Error("Expected runtime work lease");
+    await expect(
+      store.loadRuntimeInput({
+        leaseToken: runtimeClaim.lease.leaseToken,
+        workItemId: runtimeJob.id,
+      }),
+    ).resolves.toMatchObject({
+      kind: "loaded",
+      runtime: {
+        deploymentId: deployment.deploymentId,
+        imageId: image.imageId,
+        manifestDigest: image.manifestDigest,
+      },
+    });
+    await expect(
+      store.completeRuntime({
+        leaseToken: runtimeClaim.lease.leaseToken,
+        runtime: {
+          containerId: "f".repeat(64),
+          hostPort: 43_123,
+          imageDigest: image.manifestDigest,
+          resourceMetadata: { networkMode: "bridge" },
+        },
+        workItemId: runtimeJob.id,
+      }),
+    ).resolves.toMatchObject({
+      kind: "completed",
+      transition: { from: "deploying", to: "health_checking" },
+    });
+    await expect(client.db.select().from(schema.runtimeInstances)).resolves.toEqual([
+      expect.objectContaining({
+        containerId: "f".repeat(64),
+        deploymentId: deployment.deploymentId,
+        hostPort: 43_123,
+        state: "running",
+      }),
+    ]);
 
     let mutationError: unknown;
     try {

@@ -29,13 +29,23 @@ export const deploymentBuildJobSchema = z
   })
   .strict();
 
+export const deploymentStartRuntimeJobSchema = z
+  .object({
+    contractVersion: z.literal(1),
+    kind: z.literal("deployment.start_runtime"),
+    workItemId: workItemIdSchema,
+  })
+  .strict();
+
 export const deploymentJobSchema = z.discriminatedUnion("kind", [
   deploymentClaimJobSchema,
   deploymentPrepareSourceJobSchema,
   deploymentBuildJobSchema,
+  deploymentStartRuntimeJobSchema,
 ]);
 
 export type DeploymentBuildJob = z.infer<typeof deploymentBuildJobSchema>;
+export type DeploymentStartRuntimeJob = z.infer<typeof deploymentStartRuntimeJobSchema>;
 export type DeploymentClaimJob = z.infer<typeof deploymentClaimJobSchema>;
 export type DeploymentPrepareSourceJob = z.infer<typeof deploymentPrepareSourceJobSchema>;
 export type DeploymentJob = z.infer<typeof deploymentJobSchema>;
@@ -46,6 +56,10 @@ export function parseDeploymentClaimJob(input: unknown): DeploymentClaimJob {
 
 export function parseDeploymentBuildJob(input: unknown): DeploymentBuildJob {
   return deploymentBuildJobSchema.parse(input);
+}
+
+export function parseDeploymentStartRuntimeJob(input: unknown): DeploymentStartRuntimeJob {
+  return deploymentStartRuntimeJobSchema.parse(input);
 }
 
 export function parseDeploymentJob(input: unknown): DeploymentJob {
@@ -73,6 +87,8 @@ export function createDeploymentJobId(job: Pick<DeploymentJob, "kind" | "workIte
   switch (job.kind) {
     case "deployment.build":
       return `deployment-build-v1-${workItemId}`;
+    case "deployment.start_runtime":
+      return `deployment-start-runtime-v1-${workItemId}`;
     case "deployment.claim":
       return `deployment-claim-v1-${workItemId}`;
     case "deployment.prepare_source":
@@ -98,4 +114,12 @@ export function createDeploymentBuildFailureIdempotencyKey(workItemId: string): 
 
 export function createDeploymentBuildTransitionIdempotencyKey(workItemId: string): string {
   return `worker-build-ready-v1-${parseWorkItemId(workItemId)}`;
+}
+
+export function createDeploymentRuntimeFailureIdempotencyKey(workItemId: string): string {
+  return `worker-runtime-failure-v1-${parseWorkItemId(workItemId)}`;
+}
+
+export function createDeploymentRuntimeTransitionIdempotencyKey(workItemId: string): string {
+  return `worker-runtime-ready-v1-${parseWorkItemId(workItemId)}`;
 }

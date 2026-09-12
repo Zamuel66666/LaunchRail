@@ -398,6 +398,7 @@ export const runtimeInstances = pgTable(
       name: "runtime_instances_deployment_organization_fk",
     }).onDelete("cascade"),
     unique("runtime_instances_container_unique").on(table.containerId),
+    unique("runtime_instances_deployment_unique").on(table.deploymentId),
     check(
       "runtime_instances_host_port_range",
       sql`${table.hostPort} is null or ${table.hostPort} between 1 and 65535`,
@@ -671,7 +672,7 @@ export const deploymentJobs = pgTable(
     index("deployment_jobs_expired_lease_index").on(table.status, table.leaseExpiresAt),
     check(
       "deployment_jobs_kind",
-      sql`${table.kind} in ('deployment.claim', 'deployment.prepare_source', 'deployment.build')`,
+      sql`${table.kind} in ('deployment.claim', 'deployment.prepare_source', 'deployment.build', 'deployment.start_runtime')`,
     ),
     check("deployment_jobs_contract_version", sql`${table.contractVersion} = 1`),
     check(

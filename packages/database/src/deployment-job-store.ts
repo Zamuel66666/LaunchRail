@@ -9,6 +9,8 @@ import type {
   ClaimDeploymentJobResult,
   CompleteDeploymentBuildCommand,
   CompleteDeploymentBuildResult,
+  CompleteDeploymentRuntimeCommand,
+  CompleteDeploymentRuntimeResult,
   CompleteDeploymentClaimTransitionCommand,
   CompleteDeploymentClaimTransitionResult,
   CompleteDeploymentSourcePreparationCommand,
@@ -17,6 +19,8 @@ import type {
   DeploymentJobStore,
   DeploymentJobKind,
   DeploymentJobSummary,
+  DeploymentRuntimeInput,
+  DeploymentRuntimeInstanceSummary,
   DeploymentSourcePreparationInput,
   DispatchableDeploymentJob,
   EnsureDeploymentClaimJobCommand,
@@ -25,6 +29,8 @@ import type {
   EnsureMissingDeploymentJobsCommand,
   FailDeploymentBuildCommand,
   FailDeploymentBuildResult,
+  FailDeploymentRuntimeCommand,
+  FailDeploymentRuntimeResult,
   FailDeploymentSourcePreparationCommand,
   FailDeploymentSourcePreparationResult,
   FailDeploymentJobCommand,
@@ -35,6 +41,8 @@ import type {
   ListWorkerHeartbeatsQuery,
   LoadDeploymentBuildInputCommand,
   LoadDeploymentBuildInputResult,
+  LoadDeploymentRuntimeInputCommand,
+  LoadDeploymentRuntimeInputResult,
   LoadDeploymentSourcePreparationCommand,
   LoadDeploymentSourcePreparationResult,
   LeaseMutationFailure,
@@ -51,6 +59,9 @@ import type {
 import {
   createDeploymentBuildFailureIdempotencyKey,
   createDeploymentBuildTransitionIdempotencyKey,
+  createDeploymentJobId,
+  createDeploymentRuntimeFailureIdempotencyKey,
+  createDeploymentRuntimeTransitionIdempotencyKey,
   createDeploymentClaimTransitionIdempotencyKey,
   createDeploymentSourceFailureIdempotencyKey,
   createDeploymentSourceTransitionIdempotencyKey,
@@ -78,12 +89,15 @@ import {
   deploymentJobs,
   deploymentSourcePreparations,
   deployments,
+  projects,
+  runtimeInstances,
   workerHeartbeats,
 } from "./schema.js";
 
 const deploymentClaimJobKind = "deployment.claim" as const;
 const deploymentPrepareSourceJobKind = "deployment.prepare_source" as const;
 const deploymentBuildJobKind = "deployment.build" as const;
+const deploymentStartRuntimeJobKind = "deployment.start_runtime" as const;
 const deploymentJobContractVersion = 1;
 const maximumBatchSize = 1_000;
 const maximumAttempts = 100;
@@ -182,7 +196,8 @@ function assertDeploymentJobKind(value: string): DeploymentJobKind {
   if (
     value === deploymentClaimJobKind ||
     value === deploymentPrepareSourceJobKind ||
-    value === deploymentBuildJobKind
+    value === deploymentBuildJobKind ||
+    value === deploymentStartRuntimeJobKind
   ) {
     return value;
   }
@@ -366,6 +381,33 @@ function assertBuildFailure(command: FailDeploymentBuildCommand): void {
   }
 }
 
+function assertRuntimeMetadata(command: CompleteDeploymentRuntimeCommand): void {
+  if (!/^[0-9a-f]{64}$/.test(command.runtime.containerId)) {
+    throw new RangeError("containerId must be a lowercase Docker container ID");
+  }
+  if (!imageDigestPattern.test(command.runtime.imageDigest)) {
+    throw new RangeError("imageDigest must be a lowercase OCI digest");
+  }
+  assertIntegerInRange(command.runtime.hostPort, "hostPort", 1, 65_535);
+  if (!isRecord(command.runtime.resourceMetadata)) {
+    throw new RangeError("resourceMetadata must be an object");
+  }
+}
+
+function assertRuntimeFailure(command: FailDeploymentRuntimeCommand): void {
+  assertIntegerInRange(command.retryDelayMs, "retryDelayMs", 0, maximumRetryDelayMs);
+  assertSafeFailure(command.failure.category, command.failure.message);
+  if (
+    command.failure.category !== "runtime_policy_rejected" &&
+    command.failure.category !== "runtime_start_failed" &&
+    command.failure.category !== "runtime_timeout" &&
+    command.failure.category !== "infrastructure_unavailable" &&
+    command.failure.category !== "internal_invariant_violation"
+  ) {
+    throw new RangeError("failure category is not valid for runtime start");
+  }
+}
+
 function assertBuildLogCommand(command: AppendDeploymentBuildLogsCommand): void {
   const markerBytes = Buffer.byteLength(buildLogTruncationMarker, "utf8");
   assertIntegerInRange(
@@ -461,6 +503,24 @@ function toBuiltImageSummary(
     sourceRevision: row.sourceRevision,
     treeRevision: row.treeRevision,
     workItemId: row.workItemId,
+  };
+}
+
+function toRuntimeSummary(
+  row: typeof runtimeInstances.$inferSelect,
+): DeploymentRuntimeInstanceSummary {
+  if (row.containerId === null || row.hostPort === null) {
+    throw new Error("A completed runtime instance has incomplete Docker metadata");
+  }
+  return {
+    containerId: row.containerId,
+    createdAt: row.createdAt,
+    deploymentId: row.deploymentId,
+    hostPort: row.hostPort,
+    id: row.id,
+    imageDigest: row.imageDigest,
+    organizationId: row.organizationId,
+    resourceMetadata: row.resourceMetadata,
   };
 }
 
@@ -739,6 +799,26 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
                   ),
               ),
             ),
+            and(
+              eq(deployments.state, "deploying"),
+              exists(
+                transaction
+                  .select({ deploymentId: deploymentBuildArtifacts.deploymentId })
+                  .from(deploymentBuildArtifacts)
+                  .where(eq(deploymentBuildArtifacts.deploymentId, deployments.id)),
+              ),
+              notExists(
+                transaction
+                  .select({ id: deploymentJobs.id })
+                  .from(deploymentJobs)
+                  .where(
+                    and(
+                      eq(deploymentJobs.deploymentId, deployments.id),
+                      eq(deploymentJobs.kind, deploymentStartRuntimeJobKind),
+                    ),
+                  ),
+              ),
+            ),
           ),
         )
         .orderBy(asc(deployments.createdAt), asc(deployments.id))
@@ -761,7 +841,9 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
                 ? deploymentClaimJobKind
                 : candidate.state === "cloning"
                   ? deploymentPrepareSourceJobKind
-                  : deploymentBuildJobKind,
+                  : candidate.state === "building"
+                    ? deploymentBuildJobKind
+                    : deploymentStartRuntimeJobKind,
             maxAttempts: command.maxAttempts,
             organizationId: candidate.organizationId,
           })),
@@ -843,12 +925,16 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
           ? "queued"
           : actualKind === deploymentPrepareSourceJobKind
             ? "cloning"
-            : "building";
+            : actualKind === deploymentBuildJobKind
+              ? "building"
+              : "deploying";
       if (deployment.state !== eligibleState) {
         if (
           (actualKind === deploymentPrepareSourceJobKind && deployment.state === "queued") ||
           (actualKind === deploymentBuildJobKind &&
-            (deployment.state === "queued" || deployment.state === "cloning"))
+            (deployment.state === "queued" || deployment.state === "cloning")) ||
+          (actualKind === deploymentStartRuntimeJobKind &&
+            (deployment.state === "queued" || deployment.state === "cloning" || deployment.state === "building"))
         ) {
           return { kind: "state_mismatch", state: deployment.state };
         }
@@ -926,6 +1012,14 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
             idempotencyKey: createDeploymentBuildFailureIdempotencyKey(job.id),
             organizationId: job.organizationId,
             to: "build_failed",
+          });
+        } else if (actualKind === deploymentStartRuntimeJobKind && deployment.state === "deploying") {
+          await transitionDeploymentInTransaction(transaction, {
+            deploymentId: job.deploymentId,
+            failure: { category: "infrastructure_unavailable", message: "Runtime start stopped before it could complete" },
+            idempotencyKey: createDeploymentRuntimeFailureIdempotencyKey(job.id),
+            organizationId: job.organizationId,
+            to: "deployment_failed",
           });
         }
         const deadLetterClock = transaction
@@ -1299,6 +1393,43 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
         return { kind: "source_not_prepared" };
       }
       return { build: toBuildInput(job, deployment, source), kind: "loaded" };
+    });
+  }
+
+  public async loadRuntimeInput(
+    command: LoadDeploymentRuntimeInputCommand,
+  ): Promise<LoadDeploymentRuntimeInputResult> {
+    return this.db.transaction(async (transaction) => {
+      const [job] = await transaction.select().from(deploymentJobs).where(eq(deploymentJobs.id, command.workItemId)).for("update");
+      if (job === undefined) return { kind: "not_found" };
+      const actualKind = assertDeploymentJobKind(job.kind);
+      if (actualKind !== deploymentStartRuntimeJobKind) return { actualKind, kind: "kind_mismatch" };
+      if (job.status !== "running") return { kind: "not_running", status: job.status };
+      if (job.leaseToken !== command.leaseToken) return { kind: "lease_mismatch" };
+      const [lease] = await transaction.select({ id: deploymentJobs.id }).from(deploymentJobs).where(and(
+        eq(deploymentJobs.id, command.workItemId), eq(deploymentJobs.status, "running"),
+        eq(deploymentJobs.leaseToken, command.leaseToken), gt(deploymentJobs.leaseExpiresAt, sql`clock_timestamp()`),
+      ));
+      if (lease === undefined) return { kind: "lease_expired" };
+      const [deployment] = await transaction.select().from(deployments).where(and(
+        eq(deployments.id, job.deploymentId), eq(deployments.organizationId, job.organizationId),
+      )).for("update");
+      if (deployment === undefined) return { kind: "not_found" };
+      if (deployment.state !== "deploying") return { kind: "state_mismatch", state: deployment.state };
+      const [project] = await transaction.select().from(projects).where(and(
+        eq(projects.id, deployment.projectId), eq(projects.organizationId, deployment.organizationId),
+      )).for("update");
+      const [artifact] = await transaction.select().from(deploymentBuildArtifacts).where(and(
+        eq(deploymentBuildArtifacts.deploymentId, deployment.id),
+        eq(deploymentBuildArtifacts.organizationId, deployment.organizationId),
+      )).for("update");
+      if (project === undefined || artifact === undefined) return { kind: "build_not_ready" };
+      return { kind: "loaded", runtime: {
+        deploymentId: deployment.id, healthCheckPort: project.healthCheckPort, imageId: artifact.imageId,
+        imageReference: artifact.imageReference, manifestDigest: artifact.manifestDigest,
+        organizationId: deployment.organizationId, platform: artifact.platform, projectId: project.id,
+        runtimeConfig: project.runtimeConfig, workItemId: job.id,
+      } };
     });
   }
 
@@ -1759,6 +1890,21 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
           organizationId: deployment.organizationId,
           to: "deploying",
         });
+        await transaction
+          .insert(deploymentJobs)
+          .values({
+            availableAt: sql<Date>`clock_timestamp()`,
+            contractVersion: deploymentJobContractVersion,
+            deploymentId: deployment.id,
+            id: createDeploymentJobId({
+              kind: deploymentStartRuntimeJobKind,
+              workItemId: deployment.id,
+            }),
+            kind: deploymentStartRuntimeJobKind,
+            maxAttempts: job.maxAttempts,
+            organizationId: deployment.organizationId,
+          })
+          .onConflictDoNothing({ target: [deploymentJobs.deploymentId, deploymentJobs.kind] });
 
         const completionClock = transaction
           .select({ now: sql<Date>`clock_timestamp()`.as("now") })
@@ -1921,6 +2067,85 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
       if (error instanceof AtomicLeaseFailure) {
         return error.result;
       }
+      throw error;
+    }
+  }
+
+  public async completeRuntime(
+    command: CompleteDeploymentRuntimeCommand,
+  ): Promise<CompleteDeploymentRuntimeResult> {
+    assertRuntimeMetadata(command);
+    try {
+      return await this.db.transaction(async (transaction) => {
+        const [job] = await transaction.select().from(deploymentJobs).where(eq(deploymentJobs.id, command.workItemId)).for("update");
+        if (job === undefined) return { kind: "not_found" };
+        const actualKind = assertDeploymentJobKind(job.kind);
+        if (actualKind !== deploymentStartRuntimeJobKind) return { actualKind, kind: "kind_mismatch" };
+        if (job.status !== "running") return { kind: "not_running", status: job.status };
+        if (job.leaseToken !== command.leaseToken) return { kind: "lease_mismatch" };
+        const [lease] = await transaction.select({ id: deploymentJobs.id }).from(deploymentJobs).where(and(
+          eq(deploymentJobs.id, job.id), eq(deploymentJobs.status, "running"), eq(deploymentJobs.leaseToken, command.leaseToken), gt(deploymentJobs.leaseExpiresAt, sql`clock_timestamp()`),
+        ));
+        if (lease === undefined) return { kind: "lease_expired" };
+        const [deployment] = await transaction.select().from(deployments).where(and(eq(deployments.id, job.deploymentId), eq(deployments.organizationId, job.organizationId))).for("update");
+        if (deployment === undefined) return { kind: "not_found" };
+        if (deployment.state !== "deploying") return { kind: "state_mismatch", state: deployment.state };
+        const [artifact] = await transaction.select().from(deploymentBuildArtifacts).where(eq(deploymentBuildArtifacts.deploymentId, deployment.id)).for("update");
+        if (artifact === undefined || artifact.manifestDigest !== command.runtime.imageDigest) return { kind: "build_mismatch" };
+        const [existing] = await transaction.select().from(runtimeInstances).where(eq(runtimeInstances.deploymentId, deployment.id)).for("update");
+        let runtime: DeploymentRuntimeInstanceSummary;
+        if (existing !== undefined) {
+          runtime = toRuntimeSummary(existing);
+          if (runtime.containerId !== command.runtime.containerId || runtime.hostPort !== command.runtime.hostPort || runtime.imageDigest !== command.runtime.imageDigest) return { kind: "runtime_mismatch" };
+        } else {
+          const [created] = await transaction.insert(runtimeInstances).values({
+            cleanupState: "not_required", containerId: command.runtime.containerId, deploymentId: deployment.id,
+            hostPort: command.runtime.hostPort, imageDigest: command.runtime.imageDigest, organizationId: deployment.organizationId,
+            resourceMetadata: command.runtime.resourceMetadata, state: "running",
+          }).returning();
+          if (created === undefined) throw new Error("Runtime instance insert returned no row");
+          runtime = toRuntimeSummary(created);
+        }
+        const transition = await transitionDeploymentInTransaction(transaction, {
+          deploymentId: deployment.id, idempotencyKey: createDeploymentRuntimeTransitionIdempotencyKey(job.id), organizationId: deployment.organizationId, to: "health_checking",
+        });
+        const completionClock = transaction.select({ now: sql<Date>`clock_timestamp()`.as("now") }).from(sql`(select 1) as clock_source`).as("runtime_completion_clock");
+        const [completed] = await transaction.update(deploymentJobs).set({ completedAt: sql<Date>`${completionClock.now}`, deadLetteredAt: null, heartbeatAt: null, lastErrorCode: null, lastErrorMessage: null, leaseExpiresAt: null, leaseToken: null, status: "completed", updatedAt: sql<Date>`${completionClock.now}`, workerId: null }).from(completionClock).where(and(eq(deploymentJobs.id, job.id), eq(deploymentJobs.status, "running"), eq(deploymentJobs.leaseToken, command.leaseToken), gt(deploymentJobs.leaseExpiresAt, completionClock.now))).returning({ id: deploymentJobs.id });
+        if (completed === undefined) throw new AtomicLeaseFailure({ kind: "lease_expired" });
+        return { kind: "completed", runtime, transition };
+      });
+    } catch (error) {
+      if (error instanceof AtomicLeaseFailure) return error.result;
+      throw error;
+    }
+  }
+
+  public async failRuntime(command: FailDeploymentRuntimeCommand): Promise<FailDeploymentRuntimeResult> {
+    assertRuntimeFailure(command);
+    try {
+      return await this.db.transaction(async (transaction) => {
+        const [job] = await transaction.select().from(deploymentJobs).where(eq(deploymentJobs.id, command.workItemId)).for("update");
+        if (job === undefined) return { kind: "not_found" };
+        const actualKind = assertDeploymentJobKind(job.kind);
+        if (actualKind !== deploymentStartRuntimeJobKind) return { actualKind, kind: "kind_mismatch" };
+        if (job.status !== "running") return { kind: "not_running", status: job.status };
+        if (job.leaseToken !== command.leaseToken) return { kind: "lease_mismatch" };
+        const [deployment] = await transaction.select({ state: deployments.state }).from(deployments).where(and(eq(deployments.id, job.deploymentId), eq(deployments.organizationId, job.organizationId))).for("update");
+        if (deployment === undefined) return { kind: "not_found" };
+        if (deployment.state !== "deploying") return { kind: "state_mismatch", state: deployment.state };
+        const terminal = !command.retryable || job.attemptCount >= job.maxAttempts;
+        const clock = transaction.select({ now: sql<Date>`clock_timestamp()`.as("now") }).from(sql`(select 1) as clock_source`).as("runtime_failure_clock");
+        if (!terminal) {
+          const [updated] = await transaction.update(deploymentJobs).set({ availableAt: sql<Date>`${clock.now} + (${command.retryDelayMs}::bigint * interval '1 millisecond')`, deadLetteredAt: null, heartbeatAt: null, lastErrorCode: command.failure.category, lastErrorMessage: command.failure.message, leaseExpiresAt: null, leaseToken: null, status: "retry_wait", updatedAt: sql<Date>`${clock.now}`, workerId: null }).from(clock).where(and(eq(deploymentJobs.id, job.id), eq(deploymentJobs.status, "running"), eq(deploymentJobs.leaseToken, command.leaseToken), gt(deploymentJobs.leaseExpiresAt, clock.now))).returning({ availableAt: deploymentJobs.availableAt });
+          return updated === undefined ? { kind: "lease_expired" } : { attemptCount: job.attemptCount, availableAt: updated.availableAt, kind: "retry_scheduled" };
+        }
+        const transition = await transitionDeploymentInTransaction(transaction, { deploymentId: job.deploymentId, failure: command.failure, idempotencyKey: createDeploymentRuntimeFailureIdempotencyKey(job.id), organizationId: job.organizationId, to: "deployment_failed" });
+        const [updated] = await transaction.update(deploymentJobs).set({ availableAt: sql<Date>`${clock.now}`, deadLetteredAt: sql<Date>`${clock.now}`, heartbeatAt: null, lastErrorCode: command.failure.category, lastErrorMessage: command.failure.message, leaseExpiresAt: null, leaseToken: null, status: "dead_lettered", updatedAt: sql<Date>`${clock.now}`, workerId: null }).from(clock).where(and(eq(deploymentJobs.id, job.id), eq(deploymentJobs.status, "running"), eq(deploymentJobs.leaseToken, command.leaseToken), gt(deploymentJobs.leaseExpiresAt, clock.now))).returning({ id: deploymentJobs.id });
+        if (updated === undefined) throw new AtomicLeaseFailure({ kind: "lease_expired" });
+        return { attemptCount: job.attemptCount, kind: "dead_lettered", transition };
+      });
+    } catch (error) {
+      if (error instanceof AtomicLeaseFailure) return error.result;
       throw error;
     }
   }
@@ -2124,7 +2349,7 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
         const jobKind = assertDeploymentJobKind(job.kind);
         if (
           deadLettered &&
-          (jobKind === deploymentPrepareSourceJobKind || jobKind === deploymentBuildJobKind)
+          (jobKind === deploymentPrepareSourceJobKind || jobKind === deploymentBuildJobKind || jobKind === deploymentStartRuntimeJobKind)
         ) {
           const [deployment] = await transaction
             .select({ state: deployments.state })
@@ -2137,7 +2362,8 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
             );
           if (
             (jobKind === deploymentPrepareSourceJobKind && deployment?.state === "cloning") ||
-            (jobKind === deploymentBuildJobKind && deployment?.state === "building")
+            (jobKind === deploymentBuildJobKind && deployment?.state === "building") ||
+            (jobKind === deploymentStartRuntimeJobKind && deployment?.state === "deploying")
           ) {
             await transitionDeploymentInTransaction(transaction, {
               deploymentId: job.deploymentId,
@@ -2146,14 +2372,18 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
                 message:
                   jobKind === deploymentPrepareSourceJobKind
                     ? "Source preparation stopped before it could complete"
-                    : "Image build stopped before it could complete",
+                    : jobKind === deploymentBuildJobKind
+                      ? "Image build stopped before it could complete"
+                      : "Runtime start stopped before it could complete",
               },
               idempotencyKey:
                 jobKind === deploymentPrepareSourceJobKind
                   ? createDeploymentSourceFailureIdempotencyKey(job.id)
-                  : createDeploymentBuildFailureIdempotencyKey(job.id),
+                  : jobKind === deploymentBuildJobKind
+                    ? createDeploymentBuildFailureIdempotencyKey(job.id)
+                    : createDeploymentRuntimeFailureIdempotencyKey(job.id),
               organizationId: job.organizationId,
-              to: "build_failed",
+              to: jobKind === deploymentStartRuntimeJobKind ? "deployment_failed" : "build_failed",
             });
           }
         }

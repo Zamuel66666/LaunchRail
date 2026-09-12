@@ -271,7 +271,7 @@ describeWithServices("deployment worker restart recovery", () => {
       throw new Error("Expected a durable source preparation job");
     }
 
-    // Fresh duplicate deliveries after all three effects must remain harmless and removable.
+    // Fresh duplicate deliveries after the completed source/build effects remain harmless and removable.
     await components.publisher.enqueue({
       contractVersion: 1,
       kind: "deployment.build",
@@ -347,10 +347,13 @@ describeWithServices("deployment worker restart recovery", () => {
         }),
       ]),
     );
-    expect(jobs).toHaveLength(3);
+    expect(jobs).toHaveLength(4);
     expect(jobs.find(({ kind }) => kind === "deployment.build")).toMatchObject({
       status: "completed",
       attemptCount: 1,
+    });
+    expect(jobs.find(({ kind }) => kind === "deployment.start_runtime")).toMatchObject({
+      status: expect.stringMatching(/^(pending|retry_wait)$/),
     });
     expect(deployment).toMatchObject({ attempt: 4, eventSequence: 3, state: "deploying" });
     expect(preparedSources).toEqual([

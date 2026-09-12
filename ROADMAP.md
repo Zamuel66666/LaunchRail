@@ -16,10 +16,11 @@ The roadmap reports verified repository state, not aspirations as completed feat
 - **Phase 5 — Queue and worker foundation:** strict identifier-only wake-ups, PostgreSQL-authoritative attempts/leases/dead letters, restart reconciliation, operational heartbeats, and bounded graceful draining.
 - **Phase 6 — Repository preparation:** public GitHub revision verification, isolated exact-SHA checkout, source limits and containment, immutable preparation metadata, and restart-safe source jobs.
 - **Phase 7 — Build pipeline:** constrained BuildKit execution, immutable image identity, bounded redacted logs, cancellation, cleanup, build-failure handling, and clean-CI acceptance proof.
+- **Phase 8 — Runtime deployment:** restricted idempotent Docker lifecycle, durable runtime handoff, bounded log reads, and clean-CI lifecycle acceptance.
 
 ### Planned next
 
-- **Phase 8 — Runtime deployment:** restricted container creation, port discovery, stop/removal, runtime logs, and reconciliation labels.
+- **Phase 9 — Routing and preview URLs:** collision-resistant local preview routing and observed-state reconciliation.
 
 ### Planned later
 
@@ -174,11 +175,16 @@ Exit gate: healthy/failing applications exercise success, failure, timeout, canc
 
 ### Phase 8 — Runtime deployment
 
-**Status:** Planned
+**Status:** Available
 
-Add the runtime port and Docker adapter, restricted container creation, port discovery, stop/removal, runtime logs, and reconciliation labels.
+Delivered:
 
-Exit gate: lifecycle tests inspect resource limits and prove idempotent start/stop/cleanup behavior.
+- A restricted Docker runtime adapter with private client state, argument-only commands, deadlines/output bounds, stable ownership labels, and exact-label adoption after duplicate delivery or worker restart.
+- Loopback-only dynamic port publication, non-root execution, dropped capabilities, no-new-privileges, process/memory/CPU limits, optional read-only roots, isolated tmpfs, bounded timestamped log reads, and controlled stop/removal.
+- A durable `deployment.start_runtime` work item that loads only immutable image/project metadata, lease-fences runtime start, records one runtime instance, and advances `deploying` to `health_checking`; retries and terminal runtime failures remain PostgreSQL-authoritative.
+- A migration that constrains runtime instance ownership to one deployment plus real PostgreSQL recovery coverage and a real Docker lifecycle acceptance test in CI.
+
+Exit evidence: [GitHub Actions run 34690600740](https://github.com/Zamuel66666/LaunchRail/actions/runs/34690600740) passed formatting, docs, lint, types, unit/integration/build/health checks, clean PostgreSQL/Redis recovery, constrained BuildKit acceptance, and a real Docker lifecycle test that inspects resource policy and proves create/adopt/stop/removal.
 
 ### Phase 9 — Routing and preview URLs
 

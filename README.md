@@ -2,7 +2,7 @@
 
 **A self-hosted platform that turns a GitHub repository into a health-checked application deployment with live logs, preview URLs, release history, and safe rollback.**
 
-> **Phase 6 is Available.** Clean CI verifies public GitHub revision integrity, isolated exact-SHA checkout, bounded source inspection, Dockerfile containment, immutable preparation metadata, and restart-safe worker handoff through `building`.
+> **Phase 8 is Available.** Clean CI verifies exact source preparation, constrained local image builds, and restricted idempotent Docker runtime creation through `health_checking`.
 
 ## What LaunchRail does
 
@@ -77,12 +77,13 @@ LaunchRail will use a modular monolith for the web/API boundary and a separate w
 - Post-checkout inspection verifies Git blob identities, enforces file/byte/path/depth limits, rejects unsupported files/LFS/unsafe symlinks, and stores a contained Dockerfile path and digest.
 - Immutable portable source-preparation metadata and revalidated checkout adoption make duplicate delivery and worker restart safe without storing absolute host paths.
 - Clean disposable PostgreSQL/Redis acceptance, source fixtures, code-quality, build, and health checks are verified by [GitHub Actions run 31414001234](https://github.com/Zamuel66666/LaunchRail/actions/runs/31414001234).
+- Restricted Docker runtimes use stable ownership labels, loopback-only dynamic ports, a non-root user, dropped Linux capabilities, no-new-privileges, resource limits, optional read-only root filesystems, bounded timestamped log reads, and idempotent adoption/removal.
+- Clean PostgreSQL/Redis recovery plus real constrained BuildKit and Docker lifecycle acceptance are verified by [GitHub Actions run 34690600740](https://github.com/Zamuel66666/LaunchRail/actions/runs/34690600740).
 
 ### Planned next
 
-- Build the prepared checkout through a constrained BuildKit adapter.
-- Persist immutable image identity and bounded, redacted live build logs.
-- Prove build success, rejection, failure, timeout, cancellation, cache behavior, and cleanup with included fixture applications.
+- Register loopback runtime ports with collision-safe preview routing.
+- Run HTTP health checks before promoting a deployment to the active release.
 
 ### Not currently planned
 
@@ -139,7 +140,7 @@ See the [development guide](docs/development.md) for verification, configuration
 
 ## Current limitations
 
-LaunchRail is not production-ready. Authentication remains local-password only without password reset, invitations, MFA, SSO, or session administration. There is no deployment-start HTTP endpoint or deployment UI yet, so the resolver bridge and source worker operate only for an already-persisted immutable deployment. Source preparation supports unauthenticated public GitHub repositories only; private repositories, Git LFS, submodules, and external-network smoke tests are intentionally unsupported. Checkouts and local images remain on the trusted worker host; broad hard-crash orphan cleanup remains Phase 14 work. Saved secrets are not placed in Redis or injected into workloads, and automated key re-encryption is not implemented. Application runtimes, preview routing, activation, browser log streaming, deployment controls, webhooks, registry publication/signing/scanning, and full telemetry remain later phases. The BuildKit daemon is trusted infrastructure, so source limits and disabled build-step networking do not make a single-host worker a hostile multi-tenant sandbox. Application health endpoints and `pnpm smoke:health` prove process liveness only, not queue/database readiness.
+LaunchRail is not production-ready. Authentication remains local-password only without password reset, invitations, MFA, SSO, or session administration. There is no deployment-start HTTP endpoint or deployment UI yet, so the worker operates only for an already-persisted immutable deployment. Source preparation supports unauthenticated public GitHub repositories only; private repositories, Git LFS, submodules, and external-network smoke tests are intentionally unsupported. Checkouts and local images/runtimes remain on a trusted worker host; broad hard-crash orphan cleanup remains Phase 14 work. Saved secrets are not placed in Redis or injected into workloads, and automated key re-encryption is not implemented. Preview routing, HTTP health activation, browser log streaming, deployment controls, webhooks, registry publication/signing/scanning, and full telemetry remain later phases. The BuildKit daemon and Docker host are trusted infrastructure, so current limits do not make a single-host worker a hostile multi-tenant sandbox. Application health endpoints and `pnpm smoke:health` prove process liveness only, not queue/database readiness.
 
 ## License
 

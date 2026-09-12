@@ -55,6 +55,9 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 - Durable `deployment.build` work items with PostgreSQL-authoritative leases, lease-fenced bounded build logs, immutable local image artifacts, and atomic `building` to `deploying` completion.
 - Private sealed build-context snapshots, constrained BuildKit execution, stable local image adoption, safe process-tree cancellation, and source-checkout cleanup.
 - Pinned BuildKit CI acceptance coverage for healthy/failing builds, cache reuse, log redaction, deadline/cancellation, output limits, and cleanup.
+- Durable runtime-start work with lease fencing, immutable image-to-runtime handoff, one runtime instance per deployment, retries/dead letters, and `deploying` to `health_checking` completion.
+- Restricted Docker lifecycle adapter with label-verified adoption, loopback-only dynamic ports, least privilege, resource limits, bounded runtime log reads, and explicit stop/removal.
+- Real Docker CI acceptance for create/adopt/policy-inspection/stop/removal, alongside PostgreSQL/Redis runtime-handoff recovery coverage.
 
 ### Changed
 
@@ -66,7 +69,7 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 - Source preparation supports public GitHub repositories only; private-repository authentication, Git LFS, and submodules are intentionally unsupported.
 - Project configuration and encrypted variables are not yet injected into deployment jobs or application runtimes, and key re-encryption is manual/not yet automated.
 - No deployment-start HTTP endpoint or deployment UI exists yet; source preparation currently begins only for an internally persisted immutable deployment.
-- Application runtimes, activation, browser log streaming, preview URLs, deployment controls, webhooks, registry publication/signing/scanning, and full telemetry are not implemented.
+- Preview routing, activation, browser log streaming, deployment controls, webhooks, registry publication/signing/scanning, and full telemetry are not implemented. Runtime log reads are worker-side only and not retained or exposed through the browser.
 - Application health endpoints and the health smoke test report process liveness rather than queue/database readiness; durable heartbeats are operational records, not an HTTP readiness claim.
 - Repository checkouts are retained on the trusted worker host for the next build phase; hard-crash staging/orphan cleanup and hostile multi-tenant isolation are not complete.
 - The Phase 4 migration intentionally rejects databases containing legacy environment-variable rows because those rows have no AES-GCM authentication tag; back up and re-enter those values before migration.

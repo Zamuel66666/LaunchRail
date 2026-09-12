@@ -9,6 +9,7 @@ const milestoneItems = [
   "Private BuildKit contexts sealed against source changes before image construction",
   "Immutable local image records and bounded redacted build logs",
   "Pinned BuildKit acceptance tests for build success, failure, cache, timeout, cancellation, and cleanup",
+  "Restricted Docker runtimes with loopback-only ports, least privilege, resource bounds, logs, and idempotent adoption",
 ];
 
 export default function HomePage() {
@@ -23,7 +24,7 @@ export default function HomePage() {
         </p>
         <div className="status" role="status">
           <span className="status-dot" aria-hidden="true" />
-          Source preparation and image builds verified on clean services
+          Source preparation, image builds, and restricted runtimes verified on clean services
         </div>
         <div className="hero-actions">
           <Link className="primary-link" href="/projects">
@@ -37,7 +38,9 @@ export default function HomePage() {
 
       <section className="panel" aria-labelledby="milestone-title">
         <p className="section-label">Current milestone</p>
-        <h2 id="milestone-title">Exact source preparation and image builds are verified</h2>
+        <h2 id="milestone-title">
+          Exact source preparation, image builds, and runtimes are verified
+        </h2>
         <ul>
           {milestoneItems.map((item) => (
             <li key={item}>{item}</li>
@@ -47,10 +50,10 @@ export default function HomePage() {
 
       <section className="next" aria-labelledby="next-title">
         <p className="section-label">Next milestone</p>
-        <h2 id="next-title">Run the built image safely</h2>
+        <h2 id="next-title">Route and health-check the candidate runtime</h2>
         <p>
-          The next phase creates restricted application containers from the verified local image,
-          discovers their ports, and proves idempotent runtime start, stop, logs, and cleanup.
+          The next phase registers the restricted loopback runtime behind a preview URL and promotes
+          it only after an explicit HTTP health check succeeds.
         </p>
       </section>
     </main>

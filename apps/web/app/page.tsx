@@ -6,6 +6,9 @@ const milestoneItems = [
   "Bounded source manifests with blob integrity, symlink containment, and LFS rejection",
   "Contained Dockerfile validation with portable immutable preparation metadata",
   "Restart-safe source jobs verified on disposable PostgreSQL and Redis services",
+  "Private BuildKit contexts sealed against source changes before image construction",
+  "Immutable local image records and bounded redacted build logs",
+  "Pinned BuildKit acceptance tests for build success, failure, cache, timeout, cancellation, and cleanup",
 ];
 
 export default function HomePage() {
@@ -20,7 +23,7 @@ export default function HomePage() {
         </p>
         <div className="status" role="status">
           <span className="status-dot" aria-hidden="true" />
-          Repository preparation verified on clean services
+          Source preparation and image builds verified on clean services
         </div>
         <div className="hero-actions">
           <Link className="primary-link" href="/projects">
@@ -34,7 +37,7 @@ export default function HomePage() {
 
       <section className="panel" aria-labelledby="milestone-title">
         <p className="section-label">Current milestone</p>
-        <h2 id="milestone-title">Exact-source preparation is verified</h2>
+        <h2 id="milestone-title">Exact source preparation and image builds are verified</h2>
         <ul>
           {milestoneItems.map((item) => (
             <li key={item}>{item}</li>
@@ -44,11 +47,10 @@ export default function HomePage() {
 
       <section className="next" aria-labelledby="next-title">
         <p className="section-label">Next milestone</p>
-        <h2 id="next-title">Build prepared source safely</h2>
+        <h2 id="next-title">Run the built image safely</h2>
         <p>
-          The next phase sends the verified checkout to a constrained BuildKit adapter, records an
-          immutable image identity, streams bounded redacted logs, and proves failure, timeout,
-          cancellation, cache, and cleanup behavior.
+          The next phase creates restricted application containers from the verified local image,
+          discovers their ports, and proves idempotent runtime start, stop, logs, and cleanup.
         </p>
       </section>
     </main>

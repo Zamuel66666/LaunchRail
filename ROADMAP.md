@@ -15,14 +15,15 @@ The roadmap reports verified repository state, not aspirations as completed feat
 - **Phase 4 — Project management:** validated organization-scoped project configuration, encrypted environment variables, optimistic archival, audited APIs, and a permission-aware project UI.
 - **Phase 5 — Queue and worker foundation:** strict identifier-only wake-ups, PostgreSQL-authoritative attempts/leases/dead letters, restart reconciliation, operational heartbeats, and bounded graceful draining.
 - **Phase 6 — Repository preparation:** public GitHub revision verification, isolated exact-SHA checkout, source limits and containment, immutable preparation metadata, and restart-safe source jobs.
+- **Phase 7 — Build pipeline:** constrained BuildKit execution, immutable image identity, bounded redacted logs, cancellation, cleanup, build-failure handling, and clean-CI acceptance proof.
 
 ### Planned next
 
-- **Phase 7 — Build pipeline:** constrained BuildKit execution, immutable image identity, bounded logs, cancellation, cleanup, and build-failure handling.
+- **Phase 8 — Runtime deployment:** restricted container creation, port discovery, stop/removal, runtime logs, and reconciliation labels.
 
 ### Planned later
 
-- Phases 8–16 below.
+- Phases 9–16 below.
 
 ### Not currently planned
 
@@ -156,11 +157,20 @@ Exit evidence: [GitHub Actions run 31414001234](https://github.com/Zamuel66666/L
 
 ### Phase 7 — Build pipeline
 
-**Status:** Planned
+**Status:** Available
 
-Add BuildKit integration, immutable image tags, context preparation, cache behavior, live build logs, cancellation, cleanup, timeouts, and failed-build handling.
+Constrained BuildKit execution creates a private verified context snapshot, builds a stable labeled local image, persists immutable image metadata and bounded redacted logs, and advances `building` to `deploying` under a fenced lease. The worker adopts a verified image after a retry, cleans consumed source checkouts, and records terminal build failures as `build_failed`.
 
-Exit gate: included healthy/failing applications exercise success, failure, timeout, cancellation, cache, redaction, and cleanup paths.
+Delivered:
+
+- A typed image-builder port and constrained Buildx adapter that runs argument-based commands with isolated Docker client state, bounded output, deterministic log redaction, deadlines, process-group cancellation, verified image inspection, and exact owned-image removal.
+- Stable identity labels and a local image marker that let a retry adopt only an image matching the deployment, source/tree/context/Dockerfile digests, platform, and worker work item.
+- Private source snapshots that re-hash their canonical manifest and Dockerfile before build, reject changed source, remove sealed read-only directories safely, and restrict Dockerfile frontends to the frontend bundled with the pinned BuildKit daemon.
+- A `deployment.build` work item with PostgreSQL leases, retry/dead-letter handling, bounded lease-fenced logs, immutable artifact records, reconciliation, and an atomic `building` to `deploying` transition.
+
+Exit evidence: [GitHub Actions run 34689195299](https://github.com/Zamuel66666/LaunchRail/actions/runs/34689195299) passed formatting, documentation, lint, types, unit/integration/build/health checks, clean PostgreSQL migrations and worker recovery, plus a real pinned BuildKit acceptance suite. The BuildKit suite verifies healthy and failed Dockerfiles, cache reuse, redaction, adapter deadline, worker cancellation, raw-output limits, stable image adoption, source-seal failures, and cleanup.
+
+Exit gate: healthy/failing applications exercise success, failure, timeout, cancellation, cache, redaction, output limits, source-seal validation, and cleanup against a pinned constrained BuildKit daemon in CI.
 
 ### Phase 8 — Runtime deployment
 

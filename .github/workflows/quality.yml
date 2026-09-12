@@ -98,6 +98,9 @@ jobs:
       - name: Verify Redis
         run: test "$(docker compose exec -T redis redis-cli ping)" = PONG
 
+      - name: Verify Traefik
+        run: docker compose exec -T traefik traefik healthcheck --ping
+
       - name: Apply clean PostgreSQL migrations
         run: pnpm db:migrate
 
@@ -106,6 +109,11 @@ jobs:
 
       - name: Test durable queue and worker recovery
         run: pnpm test:queue
+
+      - name: Test Traefik preview routing
+        env:
+          TRAEFIK_DYNAMIC_CONFIG_DIR: ${{ github.workspace }}/.launchrail/traefik
+        run: pnpm test:routing
 
       - name: Show service logs after failure
         if: failure()

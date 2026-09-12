@@ -30,6 +30,7 @@
     "test:integration": "pnpm build:packages && vitest run --config vitest.integration.config.ts",
     "test:queue": "pnpm build:packages && node --env-file-if-exists=.env -e \"if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required for queue tests'); if (!process.env.REDIS_URL) throw new Error('REDIS_URL is required for queue tests')\" && node --env-file-if-exists=.env ./node_modules/vitest/vitest.mjs run --config vitest.queue.config.ts",
     "test:runtime": "pnpm build:packages && vitest run --config vitest.runtime.config.ts",
+    "test:routing": "pnpm build:packages && vitest run --config vitest.routing.config.ts",
     "typecheck": "pnpm build:packages && pnpm --filter './packages/*' --parallel typecheck && pnpm --filter './apps/*' --parallel typecheck"
   },
   "devDependencies": {

@@ -176,6 +176,9 @@ jobs:
       - name: Exercise real BuildKit boundary
         run: pnpm test:buildkit
 
+      - name: Exercise restricted Docker runtime lifecycle
+        run: pnpm test:runtime
+
       - name: Show builder diagnostics after failure
         if: failure()
         run: |

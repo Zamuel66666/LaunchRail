@@ -138,3 +138,14 @@ export {
   type ResolvedRepositoryRevision,
   type SourcePreparationErrorCode,
 } from "./sources.js";
+export {
+  RuntimeStartError,
+  runtimeStartErrorCodes,
+  type DeploymentRuntimeIdentity,
+  type DeploymentRuntimeManager,
+  type RuntimeImage,
+  type RuntimeStartErrorCode,
+  type StartedDeploymentRuntime,
+  type StartDeploymentRuntimeCommand,
+  type StopDeploymentRuntimeCommand,
+} from "./runtimes.js";

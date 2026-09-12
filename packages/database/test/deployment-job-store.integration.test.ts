@@ -240,7 +240,11 @@ describeWithDatabase("PostgresDeploymentJobStore", () => {
   async function claim(
     workItemId: string,
     options: {
-      readonly expectedKind?: "deployment.build" | "deployment.claim" | "deployment.prepare_source";
+      readonly expectedKind?:
+        | "deployment.build"
+        | "deployment.claim"
+        | "deployment.prepare_source"
+        | "deployment.start_runtime";
       readonly leaseDurationMs?: number;
       readonly workerId?: string;
     } = {},

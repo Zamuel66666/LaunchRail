@@ -118,7 +118,7 @@ const workerSchema = sharedServiceSchema.extend({
   WORKER_QUEUE_PREFIX: workerIdentifierSchema.default("launchrail"),
   WORKER_RECONCILIATION_BATCH_SIZE: positiveIntegerSchema.max(1_000).default(100),
   WORKER_RECONCILIATION_INTERVAL_MS: positiveIntegerSchema.max(3_600_000).default(15_000),
-  WORKER_RUNTIME_TIMEOUT_MS: positiveIntegerSchema.max(3_600_000).default(120_000),
+  WORKER_RUNTIME_TIMEOUT_MS: positiveIntegerSchema.max(3_600_000).default(5_000),
   WORKER_SHUTDOWN_GRACE_MS: positiveIntegerSchema.max(3_600_000).default(30_000),
   WORKER_SOURCE_CLONE_TIMEOUT_MS: positiveIntegerSchema.max(3_600_000).default(120_000),
   WORKER_SOURCE_GIT_DIRECTORY_BYTES: positiveIntegerSchema.max(10_737_418_240).default(402_653_184),

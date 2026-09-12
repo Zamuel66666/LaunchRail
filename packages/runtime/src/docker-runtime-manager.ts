@@ -295,12 +295,12 @@ export class DockerDeploymentRuntimeManager implements DeploymentRuntimeManager 
       `${command.runtimeConfig.memoryMegabytes}m`,
       "--cpus",
       String(command.runtimeConfig.cpuMillicores / 1000),
-      "--read-only",
       "--tmpfs",
       `/tmp:rw,noexec,nosuid,size=${this.limits.tmpfsMegabytes}m`,
       "--restart",
       "no",
     ];
+    if (command.runtimeConfig.readOnlyRootFilesystem) args.push("--read-only");
     for (const [key, value] of Object.entries(labels(command)).sort(([left], [right]) =>
       left.localeCompare(right),
     ))
@@ -308,7 +308,7 @@ export class DockerDeploymentRuntimeManager implements DeploymentRuntimeManager 
     args.push(command.image.imageId);
     try {
       await this.execute(args, command.signal);
-    } catch (error) {
+    } catch {
       if ((await this.inspect(name, command.signal)) === undefined)
         throw fail("runtime_start_failed", "The runtime container could not be created", true);
     }

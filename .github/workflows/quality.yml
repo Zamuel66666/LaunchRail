@@ -89,6 +89,11 @@ jobs:
       - name: Validate Compose model
         run: docker compose --env-file .env.example config --quiet
 
+      - name: Prepare private Traefik dynamic configuration
+        run: |
+          mkdir --parents .launchrail/traefik
+          chmod 0700 .launchrail/traefik
+
       - name: Start development services
         run: docker compose --env-file .env.example up -d --wait
 

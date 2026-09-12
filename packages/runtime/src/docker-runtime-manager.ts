@@ -4,6 +4,7 @@ import { isAbsolute, join, parse, resolve } from "node:path";
 import {
   RuntimeStartError,
   type DeploymentRuntimeManager,
+  type ReadDeploymentRuntimeLogsCommand,
   type StartDeploymentRuntimeCommand,
   type StartedDeploymentRuntime,
   type StopDeploymentRuntimeCommand,
@@ -63,6 +64,7 @@ interface DockerInspection {
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const shaPattern = /^sha256:[0-9a-f]{64}$/;
 const idPattern = /^[0-9a-f]{64}$/;
+const maximumLogTail = 10_000;
 
 function fail(
   code: ConstructorParameters<typeof RuntimeStartError>[0]["code"],
@@ -332,6 +334,22 @@ export class DockerDeploymentRuntimeManager implements DeploymentRuntimeManager 
         true,
       );
     return this.validateInspection(inspected, command);
+  }
+
+  public async readLogs(command: ReadDeploymentRuntimeLogsCommand): Promise<string> {
+    if (!uuidPattern.test(command.identity.deploymentId) || !idPattern.test(command.containerId)) {
+      throw new RangeError("Runtime log identity is invalid");
+    }
+    if (!Number.isSafeInteger(command.tail) || command.tail < 1 || command.tail > maximumLogTail) {
+      throw new RangeError("Runtime log tail must be between 1 and 10000 lines");
+    }
+    await this.prepareDockerConfiguration();
+    return (
+      await this.execute(
+        ["logs", "--timestamps", "--tail", String(command.tail), command.containerId],
+        command.signal,
+      )
+    ).stdout;
   }
 
   public async stop(command: StopDeploymentRuntimeCommand): Promise<void> {

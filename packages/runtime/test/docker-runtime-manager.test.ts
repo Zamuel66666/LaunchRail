@@ -174,4 +174,32 @@ describe("DockerDeploymentRuntimeManager", () => {
       await rm(root, { force: true, recursive: true });
     }
   });
+
+  it("reads a bounded timestamped runtime log tail without a shell", async () => {
+    const root = await mkdtemp(join(tmpdir(), "launchrail-runtime-test-"));
+    const requests: string[][] = [];
+    try {
+      const manager = new DockerDeploymentRuntimeManager({
+        dockerConfigDirectory: root,
+        executor: {
+          execute: async (request) => {
+            requests.push([...request.arguments]);
+            return { exitCode: 0, stderr: "", stdout: "2026-01-01T00:00:00Z application ready\n" };
+          },
+        },
+        timeoutMs: 1_000,
+      });
+      await expect(
+        manager.readLogs({
+          containerId: "c".repeat(64),
+          identity,
+          signal: command.signal,
+          tail: 25,
+        }),
+      ).resolves.toContain("application ready");
+      expect(requests).toEqual([["logs", "--timestamps", "--tail", "25", "c".repeat(64)]]);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
 });

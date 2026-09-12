@@ -153,6 +153,7 @@ export {
   runtimeStartErrorCodes,
   type DeploymentRuntimeIdentity,
   type DeploymentRuntimeManager,
+  type ReadDeploymentRuntimeLogsCommand,
   type RuntimeImage,
   type RuntimeStartErrorCode,
   type StartedDeploymentRuntime,

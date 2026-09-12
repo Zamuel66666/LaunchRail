@@ -45,7 +45,15 @@ export interface StopDeploymentRuntimeCommand {
   readonly signal: AbortSignal;
 }
 
+export interface ReadDeploymentRuntimeLogsCommand {
+  readonly containerId: string;
+  readonly identity: DeploymentRuntimeIdentity;
+  readonly signal: AbortSignal;
+  readonly tail: number;
+}
+
 export interface DeploymentRuntimeManager {
+  readLogs(command: ReadDeploymentRuntimeLogsCommand): Promise<string>;
   start(command: StartDeploymentRuntimeCommand): Promise<StartedDeploymentRuntime>;
   stop(command: StopDeploymentRuntimeCommand): Promise<void>;
 }

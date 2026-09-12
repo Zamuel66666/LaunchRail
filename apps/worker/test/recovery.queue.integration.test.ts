@@ -186,6 +186,7 @@ describeWithServices("deployment worker restart recovery", () => {
       WORKER_QUEUE_PREFIX: `launchrail_${suffix}`,
       WORKER_RECONCILIATION_BATCH_SIZE: "10",
       WORKER_RECONCILIATION_INTERVAL_MS: "25",
+      WORKER_RUNTIME_TIMEOUT_MS: "400",
       WORKER_SHUTDOWN_GRACE_MS: "500",
       WORKER_SOURCE_CLONE_TIMEOUT_MS: "400",
       WORKER_SOURCE_RESOLVE_TIMEOUT_MS: "100",

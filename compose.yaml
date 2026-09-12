@@ -44,6 +44,28 @@ services:
     volumes:
       - redis-data:/data
 
+  traefik:
+    image: traefik:v3.3.6@sha256:5809533c5b3fdfd961aa20af1cfbbc7d0e8ce3c4c3b1ee9acb0da00b7871c53b
+    command:
+      - --providers.file.directory=/etc/traefik/dynamic
+      - --providers.file.watch=true
+      - --entrypoints.web.address=:80
+      - --accesslog=false
+      - --api=false
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    healthcheck:
+      test: [CMD, traefik, healthcheck, --ping]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+      start_period: 3s
+    ports:
+      - 127.0.0.1:${TRAEFIK_PORT:-8080}:80
+    restart: unless-stopped
+    volumes:
+      - ${TRAEFIK_DYNAMIC_CONFIG_DIR:-./.launchrail/traefik}:/etc/traefik/dynamic
+
 volumes:
   postgres-data:
   redis-data:

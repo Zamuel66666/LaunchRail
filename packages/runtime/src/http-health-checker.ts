@@ -17,7 +17,7 @@ export async function checkHttpHealth(
 ): Promise<HttpHealthCheckResult> {
   if (!Number.isSafeInteger(command.port) || command.port < 1 || command.port > 65_535)
     throw new RangeError("Health-check port must be between 1 and 65535");
-  if (!command.path.startsWith("/") || command.path.includes("?"))
+  if (!command.path.startsWith("/") || command.path.startsWith("//") || command.path.includes("?"))
     throw new RangeError("Health-check path must be an origin-form path");
   if (
     !Number.isSafeInteger(command.timeoutMs) ||

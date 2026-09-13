@@ -5,6 +5,7 @@ export {
   type PostgresDeploymentJobStoreOptions,
 } from "./deployment-job-store.js";
 export { PostgresDeploymentTransitionStore } from "./deployment-transition-store.js";
+export { PostgresDeploymentCreationStore } from "./deployment-creation-store.js";
 export { PostgresWebhookDeliveryStore } from "./webhook-delivery-store.js";
 export { PostgresIdentityStore } from "./identity-store.js";
 export { PasswordHasher, type ScryptParameters } from "./passwords.js";

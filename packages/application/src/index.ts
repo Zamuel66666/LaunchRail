@@ -162,6 +162,11 @@ export type {
   WebhookDeliverySummary,
   WebhookDeploymentTrigger,
 } from "./webhook-deliveries.js";
+export type {
+  CreateDeploymentCommand,
+  CreatedDeployment,
+  DeploymentCreationStore,
+} from "./deployment-creation.js";
 export {
   RuntimeStartError,
   runtimeStartErrorCodes,

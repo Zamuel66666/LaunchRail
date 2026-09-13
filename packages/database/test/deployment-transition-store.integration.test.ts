@@ -139,6 +139,33 @@ describeWithDatabase("PostgresDeploymentTransitionStore", () => {
     expect(audits).toHaveLength(1);
   });
 
+  it("removes the active release pointer when stopping the active deployment", async () => {
+    const seeded = await seedDeployment({ state: "active" });
+    await client.db.insert(schema.activeReleases).values({
+      activatedAt: new Date(),
+      deploymentId: seeded.deploymentId,
+      organizationId: seeded.organizationId,
+      projectId: seeded.projectId,
+      updatedAt: new Date(),
+    });
+
+    await expect(
+      store.transition({
+        deploymentId: seeded.deploymentId,
+        idempotencyKey: "stop-active-1",
+        organizationId: seeded.organizationId,
+        to: "stopped",
+      }),
+    ).resolves.toMatchObject({ from: "active", to: "stopped" });
+
+    await expect(
+      client.db
+        .select()
+        .from(schema.activeReleases)
+        .where(eq(schema.activeReleases.projectId, seeded.projectId)),
+    ).resolves.toEqual([]);
+  });
+
   it("returns the stored result when an idempotency key is replayed", async () => {
     const seeded = await seedDeployment();
     const command = {

@@ -148,7 +148,7 @@ export async function transitionDeploymentInTransaction(
 
   if (
     deployment.state === "active" &&
-    (command.to === "rolling_back" || command.to === "stopped" || command.to === "superseded")
+    (command.to === "rolling_back" || command.to === "superseded")
   ) {
     throw new DeploymentPersistenceConflictError(
       "Active-release transitions require an operation that updates the project pointer",
@@ -156,6 +156,18 @@ export async function transitionDeploymentInTransaction(
   }
 
   assertDeploymentTransition(deployment.state, command.to);
+
+  if (deployment.state === "active" && command.to === "stopped") {
+    await transaction
+      .delete(activeReleases)
+      .where(
+        and(
+          eq(activeReleases.deploymentId, deployment.id),
+          eq(activeReleases.projectId, deployment.projectId),
+          eq(activeReleases.organizationId, deployment.organizationId),
+        ),
+      );
+  }
 
   const eventSequence = deployment.eventSequence + 1;
   const version = deployment.version + 1;

@@ -99,7 +99,7 @@ describe("deployment health history", () => {
           },
         ];
       },
-    } as DeploymentJobStore;
+    } as unknown as DeploymentJobStore;
     const server = buildServer({ identityStore, deploymentStore });
     servers.push(server);
     const response = await server.inject({

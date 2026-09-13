@@ -6,6 +6,7 @@ import {
   PostgresIdentityStore,
   PostgresProjectManagementStore,
   PostgresDeploymentJobStore,
+  PostgresDeploymentTransitionStore,
 } from "@launchrail/database";
 
 import { buildServer } from "./server.js";
@@ -23,12 +24,14 @@ async function main(): Promise<void> {
   );
   const projectStore = new PostgresProjectManagementStore(databaseClient.db, secretCipher);
   const deploymentStore = new PostgresDeploymentJobStore(databaseClient.db);
+  const transitionStore = new PostgresDeploymentTransitionStore(databaseClient.db);
   const server = buildServer({
     cookieName: config.SESSION_COOKIE_NAME,
     identityStore,
     logger: serviceLoggerOptions("api", config.LOG_LEVEL),
     projectStore,
     deploymentStore,
+    transitionStore,
     secureCookies: config.NODE_ENV === "production",
     signInRateLimitMax: config.SIGN_IN_RATE_LIMIT_MAX,
     version: "0.1.0",

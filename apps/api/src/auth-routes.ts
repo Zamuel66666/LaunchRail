@@ -1,6 +1,7 @@
 import {
   MembershipUpdateConflictError,
   type DeploymentJobStore,
+  type DeploymentTransitionStore,
   type IdentityStore,
   type ProjectManagementStore,
   type SessionPrincipal,
@@ -20,6 +21,7 @@ interface RegisterAuthRoutesOptions {
   readonly now: () => Date;
   readonly projectStore?: ProjectManagementStore;
   readonly deploymentStore?: DeploymentJobStore;
+  readonly transitionStore?: DeploymentTransitionStore;
   readonly secureCookies: boolean;
   readonly signInRateLimitMax: number;
   readonly webOrigin: string;
@@ -369,6 +371,42 @@ export function registerAuthRoutes(
           limit,
         });
         return { checks: checks ?? [] };
+      },
+    );
+  }
+
+  if (options.transitionStore !== undefined) {
+    server.post<{ Params: { organizationId: string; deploymentId: string } }>(
+      "/v1/organizations/:organizationId/deployments/:deploymentId/promote",
+      {
+        schema: {
+          params: {
+            additionalProperties: false,
+            properties: {
+              deploymentId: { pattern: uuidPattern, type: "string" },
+              organizationId: { pattern: uuidPattern, type: "string" },
+            },
+            required: ["organizationId", "deploymentId"],
+            type: "object",
+          },
+        },
+      },
+      async (request, reply) => {
+        const authorization = await authorizeOrganization(
+          request,
+          reply,
+          request.params.organizationId,
+          "deployment:control",
+        );
+        if (authorization === null) return;
+        return {
+          deployment: await options.transitionStore?.promote({
+            actorUserId: authorization.principal.userId,
+            deploymentId: request.params.deploymentId,
+            idempotencyKey: `api-promote-${request.params.deploymentId}`,
+            organizationId: request.params.organizationId,
+          }),
+        };
       },
     );
   }

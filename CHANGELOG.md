@@ -19,6 +19,7 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 - Added a deduplicated webhook deployment-trigger hook for verified GitHub pushes.
 - Preserved exact raw webhook request bytes during API parsing for signature verification.
 - Verified pushes now create deployment snapshots for matching configured projects and branches.
+- Unsupported GitHub event types are rejected deterministically after signature verification.
 - Newly created webhook deployments now begin with an immutable queued lifecycle event.
 - Added API request correlation IDs and route-template labels to request metrics.
 - Added worker process uptime and resident-memory metrics to the health server.

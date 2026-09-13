@@ -524,17 +524,15 @@ export class PostgresDeploymentTransitionStore implements DeploymentTransitionSt
           version: current.version + 1,
         })
         .where(eq(deployments.id, current.id));
-      await transaction
-        .insert(deploymentEvents)
-        .values({
-          deploymentId: current.id,
-          fromState: current.state,
-          kind: "release_rolled_back",
-          metadata: { replacementDeploymentId: previous.id },
-          organizationId: current.organizationId,
-          sequence: currentSequence,
-          toState: "rolled_back",
-        });
+      await transaction.insert(deploymentEvents).values({
+        deploymentId: current.id,
+        fromState: current.state,
+        kind: "release_rolled_back",
+        metadata: { replacementDeploymentId: previous.id },
+        organizationId: current.organizationId,
+        sequence: currentSequence,
+        toState: "rolled_back",
+      });
       const previousSequence = previous.eventSequence + 1;
       await transaction
         .update(deployments)
@@ -546,17 +544,15 @@ export class PostgresDeploymentTransitionStore implements DeploymentTransitionSt
           version: previous.version + 1,
         })
         .where(eq(deployments.id, previous.id));
-      await transaction
-        .insert(deploymentEvents)
-        .values({
-          deploymentId: previous.id,
-          fromState: previous.state,
-          kind: "release_activated",
-          metadata: { rollbackOfDeploymentId: current.id },
-          organizationId: previous.organizationId,
-          sequence: previousSequence,
-          toState: "active",
-        });
+      await transaction.insert(deploymentEvents).values({
+        deploymentId: previous.id,
+        fromState: previous.state,
+        kind: "release_activated",
+        metadata: { rollbackOfDeploymentId: current.id },
+        organizationId: previous.organizationId,
+        sequence: previousSequence,
+        toState: "active",
+      });
       await transaction
         .insert(activeReleases)
         .values({
@@ -582,26 +578,22 @@ export class PostgresDeploymentTransitionStore implements DeploymentTransitionSt
         to: "active" as DeploymentState,
         version: current.version + 1,
       } satisfies PersistedTransitionResult;
-      await transaction
-        .insert(deploymentCommands)
-        .values({
-          deploymentId: current.id,
-          idempotencyKey: command.idempotencyKey,
-          organizationId: current.organizationId,
-          result,
-        });
-      await transaction
-        .insert(auditEvents)
-        .values({
-          action: "deployment.rollback",
-          ...(command.actorUserId === undefined ? {} : { actorUserId: command.actorUserId }),
-          correlationId: command.idempotencyKey,
-          metadata: { replacementDeploymentId: previous.id },
-          organizationId: current.organizationId,
-          outcome: "succeeded",
-          targetId: current.id,
-          targetType: "deployment",
-        });
+      await transaction.insert(deploymentCommands).values({
+        deploymentId: current.id,
+        idempotencyKey: command.idempotencyKey,
+        organizationId: current.organizationId,
+        result,
+      });
+      await transaction.insert(auditEvents).values({
+        action: "deployment.rollback",
+        ...(command.actorUserId === undefined ? {} : { actorUserId: command.actorUserId }),
+        correlationId: command.idempotencyKey,
+        metadata: { replacementDeploymentId: previous.id },
+        organizationId: current.organizationId,
+        outcome: "succeeded",
+        targetId: current.id,
+        targetType: "deployment",
+      });
       return freshResult(result);
     });
   }

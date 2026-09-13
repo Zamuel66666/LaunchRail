@@ -83,6 +83,25 @@ describe("configuration", () => {
     });
   });
 
+  it("treats blank optional webhook settings as disabled and rejects partial setup", () => {
+    expect(
+      loadApiConfig({
+        ...serviceEnvironment,
+        GITHUB_WEBHOOK_ORGANIZATION_ID: "",
+        GITHUB_WEBHOOK_SECRET: "",
+      }),
+    ).toMatchObject({
+      GITHUB_WEBHOOK_ORGANIZATION_ID: undefined,
+      GITHUB_WEBHOOK_SECRET: undefined,
+    });
+    expect(() =>
+      loadApiConfig({
+        ...serviceEnvironment,
+        GITHUB_WEBHOOK_SECRET: "configured-secret",
+      }),
+    ).toThrow("must be configured together");
+  });
+
   it("reports every missing service dependency without echoing environment values", () => {
     expect(() => loadApiConfig({ API_PORT: "not-a-port" })).toThrowError(ConfigurationError);
 

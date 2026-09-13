@@ -11,6 +11,8 @@ const positiveIntegerSchema = z.coerce.number().int().positive();
 const nonNegativeIntegerSchema = z.coerce.number().int().min(0);
 const urlSchema = z.string().url();
 const workerIdentifierSchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/);
+const optionalEnvironmentValue = (schema: z.ZodString) =>
+  z.preprocess((value) => (value === "" ? undefined : value), schema.optional());
 const defaultWorkerSourceRoot = resolve(process.cwd(), ".launchrail/sources");
 const defaultWorkerBuildRoot = resolve(process.cwd(), ".launchrail/builds");
 const defaultWorkerTraefikDirectory = resolve(process.cwd(), ".launchrail/traefik");
@@ -79,8 +81,8 @@ const sharedServiceSchema = z.object({
 const apiSchema = sharedServiceSchema.extend({
   API_HOST: z.string().min(1).default("127.0.0.1"),
   API_PORT: portSchema.default(4000),
-  GITHUB_WEBHOOK_SECRET: z.string().min(1).optional(),
-  GITHUB_WEBHOOK_ORGANIZATION_ID: z.string().uuid().optional(),
+  GITHUB_WEBHOOK_SECRET: optionalEnvironmentValue(z.string().min(1)),
+  GITHUB_WEBHOOK_ORGANIZATION_ID: optionalEnvironmentValue(z.string().uuid()),
   LAUNCHRAIL_ACTIVE_SECRET_KEY_VERSION: positiveIntegerSchema,
   LAUNCHRAIL_SECRET_KEYRING: secretKeyringSchema,
   SESSION_ABSOLUTE_TTL_HOURS: positiveIntegerSchema.max(168).default(24),
@@ -206,6 +208,14 @@ function validateApiSecurity(config: ApiConfig): void {
   }
   if (config.SESSION_IDLE_TTL_MINUTES > config.SESSION_ABSOLUTE_TTL_HOURS * 60) {
     issues.push("SESSION_IDLE_TTL_MINUTES: cannot exceed the absolute session lifetime");
+  }
+  if (
+    (config.GITHUB_WEBHOOK_SECRET === undefined) !==
+    (config.GITHUB_WEBHOOK_ORGANIZATION_ID === undefined)
+  ) {
+    issues.push(
+      "GITHUB_WEBHOOK_SECRET and GITHUB_WEBHOOK_ORGANIZATION_ID: must be configured together",
+    );
   }
   if (config.NODE_ENV === "production" && new URL(config.WEB_ORIGIN).protocol !== "https:") {
     issues.push("WEB_ORIGIN: production browser origin must use HTTPS");

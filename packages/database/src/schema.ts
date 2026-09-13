@@ -422,7 +422,7 @@ export const previewRoutes = pgTable(
       name: "preview_routes_deployment_organization_fk",
     }).onDelete("cascade"),
     unique("preview_routes_hostname_unique").on(table.hostname),
-    check("preview_routes_hostname_format", sql`${table.hostname} ~ '^d-[0-9a-f-]+\\.localhost$'`),
+    check("preview_routes_hostname_format", sql`${table.hostname} ~ '^d-[0-9a-f-]+[.]localhost$'`),
     check("preview_routes_host_port_range", sql`${table.hostPort} between 1 and 65535`),
   ],
 );

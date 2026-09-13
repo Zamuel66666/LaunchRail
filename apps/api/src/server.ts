@@ -1,5 +1,9 @@
 import { createHealthResponse } from "@launchrail/contracts";
-import type { IdentityStore, ProjectManagementStore } from "@launchrail/application";
+import type {
+  DeploymentJobStore,
+  IdentityStore,
+  ProjectManagementStore,
+} from "@launchrail/application";
 import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
@@ -14,6 +18,7 @@ interface BuildServerOptions {
   readonly logger?: FastifyServerOptions["logger"];
   readonly now?: () => Date;
   readonly projectStore?: ProjectManagementStore;
+  readonly deploymentStore?: DeploymentJobStore;
   readonly secureCookies?: boolean;
   readonly signInRateLimitMax?: number;
   readonly version?: string;
@@ -26,6 +31,7 @@ export function buildServer({
   logger = false,
   now,
   projectStore,
+  deploymentStore,
   secureCookies = false,
   signInRateLimitMax = 5,
   version = "0.1.0",
@@ -57,6 +63,7 @@ export function buildServer({
         identityStore,
         now: now ?? (() => new Date()),
         ...(projectStore === undefined ? {} : { projectStore }),
+        ...(deploymentStore === undefined ? {} : { deploymentStore }),
         secureCookies,
         signInRateLimitMax,
         webOrigin,

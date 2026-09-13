@@ -1,5 +1,6 @@
 import {
   MembershipUpdateConflictError,
+  type DeploymentJobStore,
   type IdentityStore,
   type ProjectManagementStore,
   type SessionPrincipal,
@@ -18,6 +19,7 @@ interface RegisterAuthRoutesOptions {
   readonly identityStore: IdentityStore;
   readonly now: () => Date;
   readonly projectStore?: ProjectManagementStore;
+  readonly deploymentStore?: DeploymentJobStore;
   readonly secureCookies: boolean;
   readonly signInRateLimitMax: number;
   readonly webOrigin: string;
@@ -324,5 +326,32 @@ export function registerAuthRoutes(
       authorizeOrganization,
       projectStore: options.projectStore,
     });
+  }
+
+  if (options.deploymentStore !== undefined) {
+    server.get<{
+      Params: { organizationId: string; deploymentId: string };
+      Querystring: { limit?: string };
+    }>(
+      "/v1/organizations/:organizationId/deployments/:deploymentId/health-checks",
+      async (request, reply) => {
+        const authorization = await authorizeOrganization(
+          request,
+          reply,
+          request.params.organizationId,
+          "project:read",
+        );
+        if (authorization === null) return;
+        const limit = request.query.limit === undefined ? 50 : Number(request.query.limit);
+        if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100)
+          return reply.code(400).send(errorBody("invalid_request", "Invalid history limit"));
+        const checks = await options.deploymentStore?.listHealthChecks?.({
+          deploymentId: request.params.deploymentId,
+          organizationId: request.params.organizationId,
+          limit,
+        });
+        return { checks: checks ?? [] };
+      },
+    );
   }
 }

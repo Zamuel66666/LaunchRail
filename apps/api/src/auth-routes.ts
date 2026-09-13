@@ -70,6 +70,11 @@ function errorBody(
   return { error: { code, message } };
 }
 
+function resolveIdempotencyKey(value: string | undefined, fallback: string): string | null {
+  const key = value ?? fallback;
+  return key.length >= 1 && key.length <= 128 && !/[\u0000-\u001f\u007f]/u.test(key) ? key : null;
+}
+
 function findMembership(
   principal: SessionPrincipal,
   organizationId: string,
@@ -402,12 +407,17 @@ export function registerAuthRoutes(
           "deployment:control",
         );
         if (authorization === null) return;
+        const idempotencyKey = resolveIdempotencyKey(
+          request.headers["idempotency-key"],
+          `api-promote-${request.params.deploymentId}`,
+        );
+        if (idempotencyKey === null)
+          return reply.code(400).send(errorBody("invalid_request", "Invalid idempotency key"));
         return {
           deployment: await options.transitionStore?.promote({
             actorUserId: authorization.principal.userId,
             deploymentId: request.params.deploymentId,
-            idempotencyKey:
-              request.headers["idempotency-key"] ?? `api-promote-${request.params.deploymentId}`,
+            idempotencyKey,
             organizationId: request.params.organizationId,
           }),
         };
@@ -440,12 +450,17 @@ export function registerAuthRoutes(
           "deployment:control",
         );
         if (authorization === null) return;
+        const idempotencyKey = resolveIdempotencyKey(
+          request.headers["idempotency-key"],
+          `api-cancel-${request.params.deploymentId}`,
+        );
+        if (idempotencyKey === null)
+          return reply.code(400).send(errorBody("invalid_request", "Invalid idempotency key"));
         return {
           deployment: await options.transitionStore?.transition({
             actorUserId: authorization.principal.userId,
             deploymentId: request.params.deploymentId,
-            idempotencyKey:
-              request.headers["idempotency-key"] ?? `api-cancel-${request.params.deploymentId}`,
+            idempotencyKey,
             organizationId: request.params.organizationId,
             to: "cancelling",
           }),

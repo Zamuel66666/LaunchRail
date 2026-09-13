@@ -224,6 +224,29 @@ describeWithDatabase("PostgresDeploymentTransitionStore", () => {
     });
   });
 
+  it("removes a preview route when a deployment fails", async () => {
+    const seeded = await seedDeployment({ state: "building" });
+    await client.db.insert(schema.previewRoutes).values({
+      deploymentId: seeded.deploymentId,
+      organizationId: seeded.organizationId,
+      hostname: `d-${seeded.deploymentId}.localhost`,
+      hostPort: 43_123,
+    });
+    await store.transition({
+      deploymentId: seeded.deploymentId,
+      failure: { category: "build_failed", message: "The build command failed safely" },
+      idempotencyKey: "route-cleanup-failure",
+      organizationId: seeded.organizationId,
+      to: "build_failed",
+    });
+    await expect(
+      client.db
+        .select()
+        .from(schema.previewRoutes)
+        .where(eq(schema.previewRoutes.deploymentId, seeded.deploymentId)),
+    ).resolves.toHaveLength(0);
+  });
+
   it("rejects promotion replay backed by a non-promotion result", async () => {
     const candidate = await seedDeployment({ healthChecked: true, state: "health_checking" });
     const idempotencyKey = "mismatched-promotion-replay";

@@ -288,6 +288,19 @@ describe("deployment health history", () => {
           },
         ];
       },
+      async listDeployments() {
+        return [
+          {
+            createdAt: new Date("2026-01-01T00:00:00Z"),
+            deploymentId,
+            finishedAt: null,
+            healthCheckedAt: null,
+            projectId: "55555555-5555-4555-8555-555555555555",
+            sourceRevision: "a".repeat(40),
+            state: "queued" as const,
+          },
+        ];
+      },
     } as unknown as DeploymentTransitionStore;
     const server = buildServer({
       deploymentCreationStore: {
@@ -352,6 +365,13 @@ describe("deployment health history", () => {
     });
     expect(events.statusCode).toBe(200);
     expect(events.json()).toMatchObject({ events: [{ kind: "state_changed", sequence: 1 }] });
+    const deployments = await server.inject({
+      cookies: { launchrail_session: "session-token" },
+      method: "GET",
+      url: `/v1/organizations/${organizationId}/projects/55555555-5555-4555-8555-555555555555/deployments`,
+    });
+    expect(deployments.statusCode).toBe(200);
+    expect(deployments.json()).toMatchObject({ deployments: [{ state: "queued" }] });
     const invalidKey = await server.inject({
       cookies: { launchrail_session: "session-token" },
       headers: { origin: "http://localhost:3000", "idempotency-key": "x".repeat(129) },

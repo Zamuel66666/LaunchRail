@@ -17,6 +17,7 @@ export {
   RollbackDeployment,
   TransitionDeployment,
   type DeploymentTransitionResult,
+  type DeploymentHistorySummary,
   type DeploymentTransitionStore,
   type PromoteDeploymentCommand,
   type RollbackDeploymentCommand,

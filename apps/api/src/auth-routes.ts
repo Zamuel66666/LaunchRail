@@ -384,6 +384,51 @@ export function registerAuthRoutes(
 
   if (options.transitionStore !== undefined) {
     server.get<{
+      Params: { organizationId: string; projectId: string };
+      Querystring: { limit?: string };
+    }>(
+      "/v1/organizations/:organizationId/projects/:projectId/deployments",
+      {
+        schema: {
+          params: {
+            additionalProperties: false,
+            properties: {
+              organizationId: { pattern: uuidPattern, type: "string" },
+              projectId: { pattern: uuidPattern, type: "string" },
+            },
+            required: ["organizationId", "projectId"],
+            type: "object",
+          },
+          querystring: {
+            additionalProperties: false,
+            properties: { limit: { pattern: "^[0-9]{1,3}$", type: "string" } },
+            type: "object",
+          },
+        },
+      },
+      async (request, reply) => {
+        const authorization = await authorizeOrganization(
+          request,
+          reply,
+          request.params.organizationId,
+          "project:read",
+        );
+        if (authorization === null) return;
+        const limit = request.query.limit === undefined ? 50 : Number(request.query.limit);
+        if (!Number.isSafeInteger(limit) || limit < 1 || limit > 200)
+          return reply.code(400).send(errorBody("invalid_request", "Invalid history limit"));
+        return {
+          deployments:
+            (await options.transitionStore?.listDeployments?.({
+              limit,
+              organizationId: request.params.organizationId,
+              projectId: request.params.projectId,
+            })) ?? [],
+        };
+      },
+    );
+
+    server.get<{
       Params: { organizationId: string; deploymentId: string };
       Querystring: { limit?: string };
     }>(

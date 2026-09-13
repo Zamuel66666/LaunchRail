@@ -26,6 +26,16 @@ export interface RollbackDeploymentCommand {
   readonly organizationId: string;
 }
 
+export interface DeploymentHistorySummary {
+  readonly createdAt: Date;
+  readonly deploymentId: string;
+  readonly finishedAt: Date | null;
+  readonly healthCheckedAt: Date | null;
+  readonly projectId: string;
+  readonly sourceRevision: string;
+  readonly state: DeploymentState;
+}
+
 export interface DeploymentTransitionResult {
   readonly deploymentId: string;
   readonly eventSequence: number;
@@ -36,6 +46,11 @@ export interface DeploymentTransitionResult {
 }
 
 export interface DeploymentTransitionStore {
+  listDeployments?(query: {
+    readonly limit: number;
+    readonly organizationId: string;
+    readonly projectId: string;
+  }): Promise<readonly DeploymentHistorySummary[]>;
   listEvents?(query: {
     readonly deploymentId: string;
     readonly organizationId: string;

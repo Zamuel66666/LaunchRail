@@ -12,6 +12,7 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 - Added authenticated, idempotent deployment stop control alongside promotion, cancellation, health history, and event history APIs.
 - Added transactional rollback from the active release to the latest superseded release, including pointer switching, ordered events, and audit records.
 - Added authenticated retry creation for terminal failed deployments, preserving the original source revision and linking the retry lineage.
+- Added bounded organization/project deployment history reads for timeline consumers.
 - Added worker-driven promotion after a successful bounded health check, preserving the atomic promotion path and idempotent command record.
 - Added shared GitHub webhook signature verification and strict push-event parsing contracts.
 - Added organization-scoped webhook delivery persistence with provider/delivery deduplication.

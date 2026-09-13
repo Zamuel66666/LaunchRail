@@ -215,7 +215,7 @@ Exit gate: delayed and unhealthy examples prove that only healthy candidates bec
 
 **Status:** In progress
 
-Organization-scoped event history, idempotent promotion, cancellation, stop controls, transactional rollback, and authenticated retry creation are now available with permission checks and bounded inputs. Confirmations, timeline UI, and broader audit presentation remain to be implemented.
+Organization-scoped deployment listing/event history, idempotent promotion, cancellation, stop controls, transactional rollback, and authenticated retry creation are now available with permission checks and bounded inputs. Confirmations, timeline UI, and broader audit presentation remain to be implemented.
 
 Exit gate: concurrency and failure-injection tests prove safe control races and route switching.
 

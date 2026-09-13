@@ -4,7 +4,9 @@ import type {
   DeploymentTransitionStore,
   IdentityStore,
   ProjectManagementStore,
+  WebhookDeliveryStore,
 } from "@launchrail/application";
+import { parseGitHubPushEvent, verifyGitHubSignature } from "@launchrail/application";
 import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
@@ -25,6 +27,9 @@ interface BuildServerOptions {
   readonly signInRateLimitMax?: number;
   readonly version?: string;
   readonly webOrigin?: string;
+  readonly webhookSecret?: string;
+  readonly webhookStore?: WebhookDeliveryStore;
+  readonly webhookOrganizationId?: string;
 }
 
 export function buildServer({
@@ -39,6 +44,9 @@ export function buildServer({
   signInRateLimitMax = 5,
   version = "0.1.0",
   webOrigin = "http://localhost:3000",
+  webhookSecret,
+  webhookStore,
+  webhookOrganizationId,
 }: BuildServerOptions = {}): FastifyInstance {
   // A 16 KiB secret can expand substantially when JSON escapes control characters.
   // Route schemas and domain validation still enforce the decoded field limits.
@@ -58,6 +66,49 @@ export function buildServer({
   void server.register(rateLimit, { global: false });
 
   server.get("/health", async () => createHealthResponse({ now, service: "api", version }));
+
+  if (
+    webhookSecret !== undefined &&
+    webhookStore !== undefined &&
+    webhookOrganizationId !== undefined
+  ) {
+    server.post<{ Body: unknown; Headers: Record<string, string | undefined> }>(
+      "/v1/webhooks/github",
+      async (request, reply) => {
+        const signature = request.headers["x-hub-signature-256"];
+        const deliveryId = request.headers["x-github-delivery"];
+        const eventName = request.headers["x-github-event"];
+        if (deliveryId === undefined || eventName === undefined)
+          return reply.code(400).send({
+            error: { code: "invalid_request", message: "Missing GitHub delivery headers" },
+          });
+        const raw = new TextEncoder().encode(JSON.stringify(request.body ?? null));
+        const verified = await verifyGitHubSignature(raw, signature, webhookSecret);
+        const payloadDigest = Array.from(
+          new Uint8Array(await globalThis.crypto.subtle.digest("SHA-256", raw)),
+          (byte) => byte.toString(16).padStart(2, "0"),
+        ).join("");
+        const parsed = verified && eventName === "push" ? parseGitHubPushEvent(request.body) : null;
+        const organizationId = webhookOrganizationId;
+        if (organizationId === undefined)
+          return reply
+            .code(400)
+            .send({ error: { code: "invalid_request", message: "Missing organization header" } });
+        const delivery = await webhookStore.record({
+          deliveryId,
+          eventName,
+          organizationId,
+          payloadDigest,
+          provider: "github",
+          verificationState:
+            verified && (eventName !== "push" || parsed !== null) ? "verified" : "rejected",
+        });
+        return reply
+          .code(delivery.duplicate ? 200 : 202)
+          .send({ delivery, ...(parsed === null ? {} : { push: parsed }) });
+      },
+    );
+  }
 
   if (identityStore !== undefined) {
     void server.register(async (authServer) => {

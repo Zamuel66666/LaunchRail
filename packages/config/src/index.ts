@@ -79,6 +79,8 @@ const sharedServiceSchema = z.object({
 const apiSchema = sharedServiceSchema.extend({
   API_HOST: z.string().min(1).default("127.0.0.1"),
   API_PORT: portSchema.default(4000),
+  GITHUB_WEBHOOK_SECRET: z.string().min(1).optional(),
+  GITHUB_WEBHOOK_ORGANIZATION_ID: z.string().uuid().optional(),
   LAUNCHRAIL_ACTIVE_SECRET_KEY_VERSION: positiveIntegerSchema,
   LAUNCHRAIL_SECRET_KEYRING: secretKeyringSchema,
   SESSION_ABSOLUTE_TTL_HOURS: positiveIntegerSchema.max(168).default(24),

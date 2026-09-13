@@ -353,6 +353,7 @@ export interface DeploymentRuntimeInstanceSummary extends StartedDeploymentRunti
 }
 
 export interface CompleteDeploymentRuntimeCommand {
+  readonly healthCheckedAt?: Date;
   readonly leaseToken: string;
   readonly runtime: StartedDeploymentRuntimeMetadata;
   readonly workItemId: string;

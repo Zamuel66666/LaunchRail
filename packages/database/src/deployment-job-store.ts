@@ -2202,6 +2202,12 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
           organizationId: deployment.organizationId,
           to: "health_checking",
         });
+        if (command.healthCheckedAt !== undefined) {
+          await transaction
+            .update(deployments)
+            .set({ healthCheckedAt: command.healthCheckedAt, updatedAt: command.healthCheckedAt })
+            .where(eq(deployments.id, deployment.id));
+        }
         const completionClock = transaction
           .select({ now: sql<Date>`clock_timestamp()`.as("now") })
           .from(sql`(select 1) as clock_source`)

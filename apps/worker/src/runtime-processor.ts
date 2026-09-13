@@ -208,7 +208,7 @@ export class DeploymentRuntimeProcessor {
           signal,
         );
       }
-      return await this.completeRuntime(lease, loaded, started);
+      return await this.completeRuntime(lease, loaded, started, new Date());
     } catch (error) {
       if (signal.aborted) return "interrupted";
       return await this.persistFailure(lease, safeFailure(error), signal);
@@ -229,11 +229,13 @@ export class DeploymentRuntimeProcessor {
       hostPort: number;
       resourceMetadata: Readonly<Record<string, unknown>>;
     },
+    healthCheckedAt?: Date,
   ): Promise<DeploymentJobProcessingOutcome> {
     const completion = await this.options.store.completeRuntime({
       leaseToken: lease.leaseToken,
       runtime: { ...started, imageDigest: loaded.runtime.manifestDigest },
       workItemId: lease.workItemId,
+      ...(healthCheckedAt === undefined ? {} : { healthCheckedAt }),
     });
     if (completion.kind !== "completed") return "interrupted";
     this.options.logger.info(

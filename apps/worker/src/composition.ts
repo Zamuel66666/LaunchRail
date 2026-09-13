@@ -17,7 +17,7 @@ import {
   type QueueInfrastructureEvent,
 } from "@launchrail/queue";
 import { GitHubRepositoryProvider, HardenedGitRepositoryCheckout } from "@launchrail/source";
-import { DockerDeploymentRuntimeManager } from "@launchrail/runtime";
+import { checkHttpHealth, DockerDeploymentRuntimeManager } from "@launchrail/runtime";
 
 import { DeploymentJobProcessor } from "./job-processor.js";
 import { DeploymentBuildProcessor } from "./build-processor.js";
@@ -164,6 +164,7 @@ export function createDeploymentWorkerComponents({
     jobTimeoutMs: config.WORKER_RUNTIME_TIMEOUT_MS,
     leaseDurationMs: config.WORKER_LEASE_MS,
     logger,
+    healthCheck: checkHttpHealth,
     runtimeManager:
       runtimeManager ??
       new DockerDeploymentRuntimeManager({

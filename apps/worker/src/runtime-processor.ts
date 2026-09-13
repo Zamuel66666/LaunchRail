@@ -8,7 +8,7 @@ import type {
 import { RuntimeStartError } from "@launchrail/application";
 import type { DeploymentStartRuntimeJob } from "@launchrail/contracts";
 import { computeDeploymentJobBackoffMs } from "@launchrail/queue";
-import { checkHttpHealth } from "@launchrail/runtime";
+import type { HttpHealthCheckResult } from "@launchrail/runtime";
 
 import type { DeploymentJobProcessingOutcome, WorkerEventLogger } from "./processor.js";
 
@@ -22,6 +22,12 @@ export interface DeploymentRuntimeProcessorOptions {
   readonly runtimeManager: DeploymentRuntimeManager;
   readonly store: DeploymentJobStore;
   readonly workerId: string;
+  readonly healthCheck?: (command: {
+    readonly host: string;
+    readonly path: string;
+    readonly port: number;
+    readonly timeoutMs: number;
+  }) => Promise<HttpHealthCheckResult>;
 }
 
 interface SafeRuntimeFailure {
@@ -168,7 +174,9 @@ export class DeploymentRuntimeProcessor {
         return await this.persistFailure(lease, safeFailure(error), signal);
       }
       try {
-        const health = await checkHttpHealth({
+        if (this.options.healthCheck === undefined)
+          return await this.completeRuntime(lease, loaded, started);
+        const health = await this.options.healthCheck({
           host: "127.0.0.1",
           path: loaded.runtime.healthCheckPath,
           port: started.hostPort,
@@ -200,22 +208,7 @@ export class DeploymentRuntimeProcessor {
           signal,
         );
       }
-      const completion = await this.options.store.completeRuntime({
-        leaseToken: lease.leaseToken,
-        runtime: { ...started, imageDigest: loaded.runtime.manifestDigest },
-        workItemId: lease.workItemId,
-      });
-      if (completion.kind !== "completed") return "interrupted";
-      this.options.logger.info(
-        {
-          containerId: started.containerId,
-          event: "deployment_runtime_started",
-          hostPort: started.hostPort,
-          workItemId: lease.workItemId,
-        },
-        "Deployment runtime started and recorded",
-      );
-      return "completed";
+      return await this.completeRuntime(lease, loaded, started);
     } catch (error) {
       if (signal.aborted) return "interrupted";
       return await this.persistFailure(lease, safeFailure(error), signal);
@@ -223,6 +216,36 @@ export class DeploymentRuntimeProcessor {
       stopHeartbeat();
       this.finish();
     }
+  }
+
+  private async completeRuntime(
+    lease: DeploymentJobLease,
+    loaded: Extract<
+      Awaited<ReturnType<DeploymentJobStore["loadRuntimeInput"]>>,
+      { kind: "loaded" }
+    >,
+    started: {
+      containerId: string;
+      hostPort: number;
+      resourceMetadata: Readonly<Record<string, unknown>>;
+    },
+  ): Promise<DeploymentJobProcessingOutcome> {
+    const completion = await this.options.store.completeRuntime({
+      leaseToken: lease.leaseToken,
+      runtime: { ...started, imageDigest: loaded.runtime.manifestDigest },
+      workItemId: lease.workItemId,
+    });
+    if (completion.kind !== "completed") return "interrupted";
+    this.options.logger.info(
+      {
+        containerId: started.containerId,
+        event: "deployment_runtime_started",
+        hostPort: started.hostPort,
+        workItemId: lease.workItemId,
+      },
+      "Deployment runtime started and recorded",
+    );
+    return "completed";
   }
 
   private async persistFailure(

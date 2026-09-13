@@ -160,6 +160,21 @@ describe("deployment health history", () => {
           version: 5,
         };
       },
+      async rollback(command: {
+        deploymentId: string;
+        organizationId: string;
+        actorUserId?: string;
+        idempotencyKey: string;
+      }) {
+        return {
+          deploymentId: command.deploymentId,
+          eventSequence: 6,
+          from: "active" as const,
+          idempotentReplay: false,
+          to: "active" as const,
+          version: 7,
+        };
+      },
       async transition(command: {
         deploymentId: string;
         organizationId: string;
@@ -209,6 +224,13 @@ describe("deployment health history", () => {
     });
     expect(cancelled.statusCode).toBe(200);
     expect(cancelled.json()).toMatchObject({ deployment: { to: "cancelling" } });
+    const rollback = await server.inject({
+      cookies: { launchrail_session: "session-token" },
+      headers: { origin: "http://localhost:3000" },
+      method: "POST",
+      url: `/v1/organizations/${organizationId}/deployments/${deploymentId}/rollback`,
+    });
+    expect(rollback.statusCode).toBe(200);
     const stopped = await server.inject({
       cookies: { launchrail_session: "session-token" },
       headers: { origin: "http://localhost:3000" },

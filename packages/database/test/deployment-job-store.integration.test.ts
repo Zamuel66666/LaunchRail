@@ -1441,6 +1441,13 @@ describeWithDatabase("PostgresDeploymentJobStore", () => {
         state: "running",
       }),
     ]);
+    await expect(client.db.select().from(schema.previewRoutes)).resolves.toEqual([
+      expect.objectContaining({
+        deploymentId: deployment.deploymentId,
+        hostname: `d-${deployment.deploymentId}.localhost`,
+        hostPort: 43_123,
+      }),
+    ]);
 
     let mutationError: unknown;
     try {

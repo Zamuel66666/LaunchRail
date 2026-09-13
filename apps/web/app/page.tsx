@@ -10,6 +10,8 @@ const milestoneItems = [
   "Immutable local image records and bounded redacted build logs",
   "Pinned BuildKit acceptance tests for build success, failure, cache, timeout, cancellation, and cleanup",
   "Restricted Docker runtimes with loopback-only ports, least privilege, resource bounds, logs, and idempotent adoption",
+  "Bounded HTTP health checks with durable attempt history and atomic promotion",
+  "Organization-scoped deployment events with idempotent promote, cancel, stop, and rollback controls",
 ];
 
 export default function HomePage() {
@@ -24,7 +26,8 @@ export default function HomePage() {
         </p>
         <div className="status" role="status">
           <span className="status-dot" aria-hidden="true" />
-          Source preparation, image builds, and restricted runtimes verified on clean services
+          Health-checked deployments, durable history, and release controls verified on clean
+          services
         </div>
         <div className="hero-actions">
           <Link className="primary-link" href="/projects">
@@ -39,7 +42,7 @@ export default function HomePage() {
       <section className="panel" aria-labelledby="milestone-title">
         <p className="section-label">Current milestone</p>
         <h2 id="milestone-title">
-          Exact source preparation, image builds, and runtimes are verified
+          Health-checked releases and safe deployment controls are verified
         </h2>
         <ul>
           {milestoneItems.map((item) => (
@@ -50,10 +53,10 @@ export default function HomePage() {
 
       <section className="next" aria-labelledby="next-title">
         <p className="section-label">Next milestone</p>
-        <h2 id="next-title">Persist route ownership and restore it from the worker</h2>
+        <h2 id="next-title">Complete retry orchestration and operator timeline</h2>
         <p>
-          The next phase registers the restricted loopback runtime behind a preview URL and promotes
-          it only after an explicit HTTP health check succeeds.
+          The next phase adds safe retry creation, runtime reconciliation after stop and rollback,
+          and a recruiter-readable deployment timeline backed by the event history API.
         </p>
       </section>
     </main>

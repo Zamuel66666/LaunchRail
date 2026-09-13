@@ -418,5 +418,49 @@ export function registerAuthRoutes(
         };
       },
     );
+
+    server.post<{
+      Headers: { "idempotency-key"?: string };
+      Params: { organizationId: string; deploymentId: string };
+    }>(
+      "/v1/organizations/:organizationId/deployments/:deploymentId/cancel",
+      {
+        schema: {
+          headers: {
+            additionalProperties: false,
+            properties: { "idempotency-key": { maxLength: 128, minLength: 1, type: "string" } },
+            type: "object",
+          },
+          params: {
+            additionalProperties: false,
+            properties: {
+              deploymentId: { pattern: uuidPattern, type: "string" },
+              organizationId: { pattern: uuidPattern, type: "string" },
+            },
+            required: ["organizationId", "deploymentId"],
+            type: "object",
+          },
+        },
+      },
+      async (request, reply) => {
+        const authorization = await authorizeOrganization(
+          request,
+          reply,
+          request.params.organizationId,
+          "deployment:control",
+        );
+        if (authorization === null) return;
+        return {
+          deployment: await options.transitionStore?.transition({
+            actorUserId: authorization.principal.userId,
+            deploymentId: request.params.deploymentId,
+            idempotencyKey:
+              request.headers["idempotency-key"] ?? `api-cancel-${request.params.deploymentId}`,
+            organizationId: request.params.organizationId,
+            to: "cancelling",
+          }),
+        };
+      },
+    );
   }
 }

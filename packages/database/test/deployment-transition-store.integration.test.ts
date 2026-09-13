@@ -273,6 +273,29 @@ describeWithDatabase("PostgresDeploymentTransitionStore", () => {
     await expect(client.db.select().from(schema.activeReleases)).resolves.toHaveLength(0);
   });
 
+  it("preserves a healthy candidate preview route through promotion", async () => {
+    const candidate = await seedDeployment({ healthChecked: true, state: "health_checking" });
+    await client.db.insert(schema.previewRoutes).values({
+      deploymentId: candidate.deploymentId,
+      organizationId: candidate.organizationId,
+      hostname: `d-${candidate.deploymentId}.localhost`,
+      hostPort: 43_124,
+    });
+    await expect(
+      store.promote({
+        deploymentId: candidate.deploymentId,
+        idempotencyKey: "promote-route-preservation",
+        organizationId: candidate.organizationId,
+      }),
+    ).resolves.toMatchObject({ to: "active" });
+    await expect(
+      client.db
+        .select()
+        .from(schema.previewRoutes)
+        .where(eq(schema.previewRoutes.deploymentId, candidate.deploymentId)),
+    ).resolves.toHaveLength(1);
+  });
+
   it("rolls back the state update when event persistence fails", async () => {
     const seeded = await seedDeployment();
     await client.db.insert(schema.deploymentEvents).values({

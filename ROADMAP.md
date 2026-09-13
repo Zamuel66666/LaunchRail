@@ -226,7 +226,7 @@ Exit gate: concurrency and failure-injection tests prove safe control races and 
 
 **Status:** In progress
 
-Signature verification, strict push-event parsing, safe wildcard branch filtering, organization-scoped delivery persistence with provider/delivery deduplication, and configured-organization API ingestion now create queued deployments for matching project branches. Queue publication and richer delivery processing remain to be implemented.
+Signature verification, strict push-event parsing, safe wildcard branch filtering, organization-scoped delivery persistence with provider/delivery deduplication, and configured-organization API ingestion create queued deployments for matching project branches. Each durable deployment now immediately publishes its deterministic claim wake-up; worker reconciliation remains the safe fallback if Redis is unavailable. Richer delivery processing remains to be implemented.
 
 Exit gate: invalid, duplicate, unsupported, oversized, and valid deliveries have deterministic tested outcomes.
 

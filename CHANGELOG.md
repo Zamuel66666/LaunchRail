@@ -23,6 +23,7 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 - Added an optional authenticated GitHub webhook ingestion endpoint bound to a configured organization.
 - Added a low-cardinality Prometheus-compatible API request counter endpoint.
 - Added a deduplicated webhook deployment-trigger hook for verified GitHub pushes.
+- Verified matching GitHub pushes now publish their durable deployment-claim wake-up immediately, with worker reconciliation retained as a Redis-failure fallback.
 - Preserved exact raw webhook request bytes during API parsing for signature verification.
 - Verified pushes now create deployment snapshots for matching configured projects and branches.
 - Unsupported GitHub event types are rejected deterministically after signature verification.

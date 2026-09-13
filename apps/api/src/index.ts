@@ -1,6 +1,5 @@
 import { ConfigurationError, loadApiConfig } from "@launchrail/config";
 import { serviceLoggerOptions } from "@launchrail/observability";
-import { matchesGitHubBranchFilter, type WebhookDeploymentTrigger } from "@launchrail/application";
 import {
   AesGcmSecretCipher,
   createDatabaseClient,
@@ -11,8 +10,10 @@ import {
   PostgresWebhookDeliveryStore,
   PostgresDeploymentCreationStore,
 } from "@launchrail/database";
+import { BullMqDeploymentQueuePublisher } from "@launchrail/queue";
 
 import { buildServer } from "./server.js";
+import { createGitHubWebhookDeploymentTrigger } from "./webhook-trigger.js";
 
 async function main(): Promise<void> {
   const config = loadApiConfig();
@@ -30,29 +31,30 @@ async function main(): Promise<void> {
   const transitionStore = new PostgresDeploymentTransitionStore(databaseClient.db);
   const webhookStore = new PostgresWebhookDeliveryStore(databaseClient.db);
   const deploymentCreationStore = new PostgresDeploymentCreationStore(databaseClient.db);
-  const webhookTrigger: WebhookDeploymentTrigger = {
-    async trigger(event) {
-      const projects = await projectStore.listProjects({
-        actorUserId: "webhook",
-        organizationId: event.organizationId,
-      });
-      for (const project of projects) {
-        const repository = new URL(project.repositoryUrl);
-        const [owner, name] = repository.pathname.slice(1).split("/");
-        if (
-          owner === event.push.repositoryOwner &&
-          name === event.push.repositoryName &&
-          matchesGitHubBranchFilter(event.push.branch, project.defaultBranch)
-        ) {
-          await deploymentCreationStore.createDeployment({
-            organizationId: event.organizationId,
-            projectId: project.id,
-            sourceRevision: event.push.revision,
-          });
-        }
-      }
-    },
-  };
+  const webhookPublisher =
+    config.GITHUB_WEBHOOK_SECRET === undefined
+      ? undefined
+      : new BullMqDeploymentQueuePublisher({
+          onInfrastructureEvent: (event) => {
+            process.stderr.write(`LaunchRail webhook queue ${event.component}: ${event.code}\n`);
+          },
+          prefix: config.WORKER_QUEUE_PREFIX,
+          queueName: config.WORKER_QUEUE_NAME,
+          redisUrl: config.REDIS_URL,
+        });
+  const webhookTrigger =
+    webhookPublisher === undefined
+      ? undefined
+      : createGitHubWebhookDeploymentTrigger({
+          deploymentCreationStore,
+          deploymentJobStore: deploymentStore,
+          maxAttempts: config.GITHUB_WEBHOOK_MAX_ATTEMPTS,
+          onDispatchFailure: ({ deploymentId }) => {
+            process.stderr.write(`LaunchRail webhook dispatch deferred for ${deploymentId}\n`);
+          },
+          projectStore,
+          publisher: webhookPublisher,
+        });
   const server = buildServer({
     cookieName: config.SESSION_COOKIE_NAME,
     identityStore,
@@ -72,9 +74,10 @@ async function main(): Promise<void> {
     ...(config.GITHUB_WEBHOOK_ORGANIZATION_ID === undefined
       ? {}
       : { webhookOrganizationId: config.GITHUB_WEBHOOK_ORGANIZATION_ID }),
-    webhookTrigger,
+    ...(webhookTrigger === undefined ? {} : { webhookTrigger }),
   });
   server.addHook("onClose", async () => databaseClient.close());
+  server.addHook("onClose", async () => webhookPublisher?.close());
 
   const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
     server.log.info({ signal }, "API shutdown requested");

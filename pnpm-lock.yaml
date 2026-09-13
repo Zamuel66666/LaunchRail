@@ -83,6 +83,9 @@ importers:
       '@launchrail/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@launchrail/queue':
+        specifier: workspace:*
+        version: link:../../packages/queue
       fastify:
         specifier: 5.11.3
         version: 5.11.3

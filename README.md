@@ -82,13 +82,12 @@ LaunchRail will use a modular monolith for the web/API boundary and a separate w
 - Pinned Traefik file-provider routing uses collision-resistant deployment hostnames, atomic private configuration files, bounded targets, and observed-state reconciliation; real proxy acceptance is verified by [GitHub Actions run 34769727393](https://github.com/Zamuel66666/LaunchRail/actions/runs/34769727393).
 - Runtime startup can gate completion on bounded loopback-only HTTP health checks, configurable grace periods, durable history, and worker-driven idempotent activation.
 - Authenticated deployment controls expose bounded health/event history, retry lineage, promote, cancel, stop, and rollback operations. The project timeline has confirmations and client-safe conflict feedback for release-changing actions.
-- Verified GitHub push webhooks are signature-checked, deduplicated, filtered to configured project branches, and create immutable queued deployment snapshots.
+- Verified GitHub push webhooks are signature-checked, deduplicated, filtered to configured project branches, create immutable queued deployment snapshots, and immediately publish durable claim wake-ups; reconciliation remains the safe fallback if Redis is unavailable.
 - API request counters and correlation IDs plus worker process metrics are available at Prometheus-compatible metrics endpoints.
 
 ### Planned next
 
-- Publish matching verified webhook deployments directly to the durable queue and complete richer delivery processing.
-- Add deployment/queue/health metrics, trace evidence, and a broader operator audit view.
+- Complete richer webhook delivery processing and add deployment/queue/health metrics, trace evidence, and a broader operator audit view.
 
 ### Not currently planned
 
@@ -145,7 +144,7 @@ See the [development guide](docs/development.md) for verification, configuration
 
 ## Current limitations
 
-LaunchRail is not production-ready. Authentication remains local-password only without password reset, invitations, MFA, SSO, or session administration. There is no deployment-start HTTP endpoint or deployment UI yet, so the worker operates only for an already-persisted immutable deployment. Source preparation supports unauthenticated public GitHub repositories only; private repositories, Git LFS, submodules, and external-network smoke tests are intentionally unsupported. Checkouts and local images/runtimes remain on a trusted worker host; broad hard-crash orphan cleanup remains Phase 14 work. Saved secrets are not placed in Redis or injected into workloads, and automated key re-encryption is not implemented. Preview routing, HTTP health activation, browser log streaming, deployment controls, webhooks, registry publication/signing/scanning, and full telemetry remain later phases. The BuildKit daemon and Docker host are trusted infrastructure, so current limits do not make a single-host worker a hostile multi-tenant sandbox. Application health endpoints and `pnpm smoke:health` prove process liveness only, not queue/database readiness.
+LaunchRail is not production-ready. Authentication remains local-password only without password reset, invitations, MFA, SSO, or session administration. Source preparation supports unauthenticated public GitHub repositories only; private repositories, Git LFS, submodules, and external-network smoke tests are intentionally unsupported. Checkouts and local images/runtimes remain on a trusted worker host; broad hard-crash orphan cleanup remains Phase 14 work. Saved secrets are not placed in Redis or injected into workloads, and automated key re-encryption is not implemented. Browser log streaming, registry publication/signing/scanning, traces, dashboards, and full telemetry remain later phases. The BuildKit daemon and Docker host are trusted infrastructure, so current limits do not make a single-host worker a hostile multi-tenant sandbox. Application health endpoints and `pnpm smoke:health` prove process liveness only, not queue/database readiness.
 
 ## License
 

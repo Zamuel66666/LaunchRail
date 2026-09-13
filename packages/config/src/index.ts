@@ -83,6 +83,7 @@ const apiSchema = sharedServiceSchema.extend({
   API_PORT: portSchema.default(4000),
   GITHUB_WEBHOOK_SECRET: optionalEnvironmentValue(z.string().min(1)),
   GITHUB_WEBHOOK_ORGANIZATION_ID: optionalEnvironmentValue(z.string().uuid()),
+  GITHUB_WEBHOOK_MAX_ATTEMPTS: positiveIntegerSchema.max(20).default(5),
   LAUNCHRAIL_ACTIVE_SECRET_KEY_VERSION: positiveIntegerSchema,
   LAUNCHRAIL_SECRET_KEYRING: secretKeyringSchema,
   SESSION_ABSOLUTE_TTL_HOURS: positiveIntegerSchema.max(168).default(24),
@@ -93,6 +94,8 @@ const apiSchema = sharedServiceSchema.extend({
   SESSION_IDLE_TTL_MINUTES: positiveIntegerSchema.max(1_440).default(30),
   SIGN_IN_RATE_LIMIT_MAX: positiveIntegerSchema.max(100).default(5),
   WEB_ORIGIN: urlSchema.default("http://localhost:3000"),
+  WORKER_QUEUE_NAME: workerIdentifierSchema.default("launchrail-deployments"),
+  WORKER_QUEUE_PREFIX: workerIdentifierSchema.default("launchrail"),
 });
 
 const workerSchema = sharedServiceSchema.extend({

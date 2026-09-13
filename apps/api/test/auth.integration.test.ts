@@ -165,7 +165,7 @@ describe("deployment health history", () => {
         organizationId: string;
         actorUserId?: string;
         idempotencyKey: string;
-        to: "cancelling";
+        to: "cancelling" | "stopped";
       }) {
         return {
           deploymentId: command.deploymentId,
@@ -209,6 +209,14 @@ describe("deployment health history", () => {
     });
     expect(cancelled.statusCode).toBe(200);
     expect(cancelled.json()).toMatchObject({ deployment: { to: "cancelling" } });
+    const stopped = await server.inject({
+      cookies: { launchrail_session: "session-token" },
+      headers: { origin: "http://localhost:3000" },
+      method: "POST",
+      url: `/v1/organizations/${organizationId}/deployments/${deploymentId}/stop`,
+    });
+    expect(stopped.statusCode).toBe(200);
+    expect(stopped.json()).toMatchObject({ deployment: { to: "stopped" } });
     const events = await server.inject({
       cookies: { launchrail_session: "session-token" },
       method: "GET",

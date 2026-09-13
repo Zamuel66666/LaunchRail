@@ -81,6 +81,7 @@ LaunchRail will use a modular monolith for the web/API boundary and a separate w
 - Clean PostgreSQL/Redis recovery plus real constrained BuildKit and Docker lifecycle acceptance are verified by [GitHub Actions run 34690600740](https://github.com/Zamuel66666/LaunchRail/actions/runs/34690600740).
 - Pinned Traefik file-provider routing uses collision-resistant deployment hostnames, atomic private configuration files, bounded targets, and observed-state reconciliation; real proxy acceptance is verified by [GitHub Actions run 34769727393](https://github.com/Zamuel66666/LaunchRail/actions/runs/34769727393).
 - Runtime startup can gate completion on a bounded loopback-only HTTP health check; durable health jobs, retries, and activation remain in progress.
+- Authenticated deployment controls currently expose bounded health/event history plus idempotent promote, cancel, and stop operations; retry and rollback orchestration remain in progress.
 
 ### Planned next
 

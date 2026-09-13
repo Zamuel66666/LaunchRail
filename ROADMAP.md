@@ -213,9 +213,9 @@ Exit gate: delayed and unhealthy examples prove that only healthy candidates bec
 
 ### Phase 11 — Deployment controls
 
-**Status:** Planned
+**Status:** In progress
 
-Add history, retry, stop, cancellation, rollback, superseded release handling, confirmations, timeline UI, and audit events.
+Organization-scoped event history, idempotent promotion, cancellation, and stop controls are now available with permission checks and bounded inputs. Retry, rollback, confirmations, timeline UI, and broader audit presentation remain to be implemented.
 
 Exit gate: concurrency and failure-injection tests prove safe control races and route switching.
 

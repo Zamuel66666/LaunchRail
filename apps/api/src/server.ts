@@ -60,6 +60,17 @@ export function buildServer({
     logger,
   });
   const metrics = new MetricsRegistry();
+  server.addHook("preParsing", async (request, _reply, payload) => {
+    if (request.url !== "/v1/webhooks/github") return payload;
+    const chunks: Buffer[] = [];
+    for await (const chunk of payload)
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    const rawBody = Buffer.concat(chunks);
+    (request as typeof request & { rawBody?: Uint8Array }).rawBody = rawBody;
+    const replay = Readable.from(rawBody) as Readable & { receivedEncodedLength?: number };
+    replay.receivedEncodedLength = rawBody.length;
+    return replay;
+  });
   server.addHook("onRequest", async (request, reply) => {
     reply.header("x-request-id", request.id);
   });
@@ -100,10 +111,17 @@ export function buildServer({
           return reply.code(400).send({
             error: { code: "invalid_request", message: "Missing GitHub delivery headers" },
           });
-        const raw = new TextEncoder().encode(JSON.stringify(request.body ?? null));
+        const raw =
+          (request as typeof request & { rawBody?: Uint8Array }).rawBody ??
+          new TextEncoder().encode(JSON.stringify(request.body ?? null));
         const verified = await verifyGitHubSignature(raw, signature, webhookSecret);
         const payloadDigest = Array.from(
-          new Uint8Array(await globalThis.crypto.subtle.digest("SHA-256", raw)),
+          new Uint8Array(
+            await globalThis.crypto.subtle.digest(
+              "SHA-256",
+              new Uint8Array(raw).buffer as ArrayBuffer,
+            ),
+          ),
           (byte) => byte.toString(16).padStart(2, "0"),
         ).join("");
         const parsed = verified && eventName === "push" ? parseGitHubPushEvent(request.body) : null;
@@ -186,3 +204,4 @@ export function buildServer({
 
   return server;
 }
+import { Readable } from "node:stream";

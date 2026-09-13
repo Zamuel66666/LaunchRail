@@ -72,6 +72,19 @@ describe("Traefik file-provider routing", () => {
     }
     expect(result).toEqual({ body: "launchrail-routing-fixture", statusCode: 200 });
     await manager.remove({ deploymentId, hostname });
-    await expect(request(hostname)).resolves.toMatchObject({ statusCode: 404 });
+    let removed = false;
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+      try {
+        const candidate = await request(hostname);
+        if (candidate.statusCode === 404) {
+          removed = true;
+          break;
+        }
+      } catch {
+        // Traefik may briefly close the entrypoint while reloading the provider.
+      }
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 100));
+    }
+    expect(removed).toBe(true);
   });
 });

@@ -376,10 +376,18 @@ export function registerAuthRoutes(
   }
 
   if (options.transitionStore !== undefined) {
-    server.post<{ Params: { organizationId: string; deploymentId: string } }>(
+    server.post<{
+      Headers: { "idempotency-key"?: string };
+      Params: { organizationId: string; deploymentId: string };
+    }>(
       "/v1/organizations/:organizationId/deployments/:deploymentId/promote",
       {
         schema: {
+          headers: {
+            additionalProperties: false,
+            properties: { "idempotency-key": { maxLength: 128, minLength: 1, type: "string" } },
+            type: "object",
+          },
           params: {
             additionalProperties: false,
             properties: {
@@ -403,7 +411,8 @@ export function registerAuthRoutes(
           deployment: await options.transitionStore?.promote({
             actorUserId: authorization.principal.userId,
             deploymentId: request.params.deploymentId,
-            idempotencyKey: `api-promote-${request.params.deploymentId}`,
+            idempotencyKey:
+              request.headers["idempotency-key"] ?? `api-promote-${request.params.deploymentId}`,
             organizationId: request.params.organizationId,
           }),
         };

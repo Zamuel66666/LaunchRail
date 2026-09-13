@@ -184,6 +184,14 @@ export class DeploymentRuntimeProcessor {
           port: started.hostPort,
           timeoutMs: Math.min(this.options.jobTimeoutMs, 5_000),
         });
+        await this.options.store.recordHealthCheck?.({
+          checkedAt: new Date(),
+          deploymentId: loaded.runtime.deploymentId,
+          durationMs: health.durationMs,
+          organizationId: loaded.runtime.organizationId,
+          outcome: health.statusCode >= 200 && health.statusCode < 400 ? "passed" : "failed",
+          statusCode: health.statusCode,
+        });
         if (health.statusCode < 200 || health.statusCode >= 400)
           throw new Error(`Health check returned HTTP ${health.statusCode}`);
       } catch (error) {

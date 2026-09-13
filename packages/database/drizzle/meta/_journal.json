@@ -64,6 +64,13 @@
       "when": 1789300800000,
       "tag": "0008_preview_routes",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1789304400000,
+      "tag": "0009_health_check_attempts",
+      "breakpoints": true
     }
   ]
 }

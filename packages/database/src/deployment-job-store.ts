@@ -89,6 +89,7 @@ import {
   deployments,
   projects,
   previewRoutes,
+  healthCheckAttempts,
   runtimeInstances,
   workerHeartbeats,
 } from "./schema.js";
@@ -589,6 +590,17 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
     this.afterInitialClaimLeaseValidation = afterInitialClaimLeaseValidation;
     this.afterInitialSourceLeaseValidation = afterInitialSourceLeaseValidation;
     this.generateLeaseToken = generateLeaseToken;
+  }
+
+  public async recordHealthCheck(command: {
+    readonly deploymentId: string;
+    readonly organizationId: string;
+    readonly outcome: "passed" | "failed";
+    readonly statusCode: number | null;
+    readonly durationMs: number;
+    readonly checkedAt: Date;
+  }): Promise<void> {
+    await this.db.insert(healthCheckAttempts).values(command);
   }
 
   public async ensurePendingClaim(

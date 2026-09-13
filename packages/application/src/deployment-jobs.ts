@@ -492,6 +492,14 @@ export interface ListWorkerHeartbeatsQuery {
 }
 
 export interface DeploymentJobStore {
+  recordHealthCheck?: (command: {
+    readonly deploymentId: string;
+    readonly organizationId: string;
+    readonly outcome: "passed" | "failed";
+    readonly statusCode: number | null;
+    readonly durationMs: number;
+    readonly checkedAt: Date;
+  }) => Promise<void>;
   appendBuildLogs(
     command: AppendDeploymentBuildLogsCommand,
   ): Promise<AppendDeploymentBuildLogsResult>;

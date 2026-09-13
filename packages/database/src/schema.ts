@@ -427,6 +427,32 @@ export const previewRoutes = pgTable(
   ],
 );
 
+export const healthCheckAttempts = pgTable(
+  "health_check_attempts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    deploymentId: uuid("deployment_id").notNull(),
+    organizationId: uuid("organization_id").notNull(),
+    outcome: text("outcome").notNull(),
+    statusCode: integer("status_code"),
+    durationMs: integer("duration_ms").notNull(),
+    checkedAt: timestamp("checked_at", { mode: "date", withTimezone: true }).notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.deploymentId, table.organizationId],
+      foreignColumns: [deployments.id, deployments.organizationId],
+      name: "health_check_attempts_deployment_organization_fk",
+    }).onDelete("cascade"),
+    check("health_check_attempts_outcome", sql`${table.outcome} in ('passed', 'failed')`),
+    check(
+      "health_check_attempts_status_code",
+      sql`${table.statusCode} is null or ${table.statusCode} between 100 and 599`,
+    ),
+    check("health_check_attempts_duration", sql`${table.durationMs} between 0 and 30000`),
+  ],
+);
+
 export const activeReleases = pgTable(
   "active_releases",
   {

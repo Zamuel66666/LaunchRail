@@ -156,6 +156,22 @@ describe("deployment health history", () => {
           version: 5,
         };
       },
+      async transition(command: {
+        deploymentId: string;
+        organizationId: string;
+        actorUserId?: string;
+        idempotencyKey: string;
+        to: "cancelling";
+      }) {
+        return {
+          deploymentId: command.deploymentId,
+          eventSequence: 2,
+          from: "deploying" as const,
+          idempotentReplay: false,
+          to: command.to,
+          version: 3,
+        };
+      },
     } as unknown as import("@launchrail/application").DeploymentTransitionStore;
     const server = buildServer({ identityStore, transitionStore });
     servers.push(server);
@@ -168,5 +184,14 @@ describe("deployment health history", () => {
     });
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({ deployment: { to: "active" } });
+    const cancelled = await server.inject({
+      cookies: { launchrail_session: "session-token" },
+      headers: { origin: "http://localhost:3000" },
+      method: "POST",
+      payload: {},
+      url: `/v1/organizations/${organizationId}/deployments/${deploymentId}/cancel`,
+    });
+    expect(cancelled.statusCode).toBe(200);
+    expect(cancelled.json()).toMatchObject({ deployment: { to: "cancelling" } });
   });
 });

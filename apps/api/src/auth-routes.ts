@@ -383,11 +383,6 @@ export function registerAuthRoutes(
       "/v1/organizations/:organizationId/deployments/:deploymentId/promote",
       {
         schema: {
-          headers: {
-            additionalProperties: false,
-            properties: { "idempotency-key": { maxLength: 128, minLength: 1, type: "string" } },
-            type: "object",
-          },
           params: {
             additionalProperties: false,
             properties: {
@@ -426,11 +421,6 @@ export function registerAuthRoutes(
       "/v1/organizations/:organizationId/deployments/:deploymentId/cancel",
       {
         schema: {
-          headers: {
-            additionalProperties: false,
-            properties: { "idempotency-key": { maxLength: 128, minLength: 1, type: "string" } },
-            type: "object",
-          },
           params: {
             additionalProperties: false,
             properties: {

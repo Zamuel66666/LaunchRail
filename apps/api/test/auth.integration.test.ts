@@ -176,6 +176,18 @@ describe("deployment health history", () => {
           version: 3,
         };
       },
+      async listEvents() {
+        return [
+          {
+            createdAt: new Date("2026-01-01T00:00:00Z"),
+            fromState: "deploying" as const,
+            kind: "state_changed",
+            metadata: {},
+            sequence: 1,
+            toState: "health_checking" as const,
+          },
+        ];
+      },
     } as unknown as DeploymentTransitionStore;
     const server = buildServer({ identityStore, transitionStore });
     servers.push(server);
@@ -197,6 +209,13 @@ describe("deployment health history", () => {
     });
     expect(cancelled.statusCode).toBe(200);
     expect(cancelled.json()).toMatchObject({ deployment: { to: "cancelling" } });
+    const events = await server.inject({
+      cookies: { launchrail_session: "session-token" },
+      method: "GET",
+      url: `/v1/organizations/${organizationId}/deployments/${deploymentId}/events?limit=10`,
+    });
+    expect(events.statusCode).toBe(200);
+    expect(events.json()).toMatchObject({ events: [{ kind: "state_changed", sequence: 1 }] });
     const invalidKey = await server.inject({
       cookies: { launchrail_session: "session-token" },
       headers: { origin: "http://localhost:3000", "idempotency-key": "x".repeat(129) },

@@ -60,10 +60,14 @@ export function buildServer({
     logger,
   });
   const metrics = new MetricsRegistry();
+  server.addHook("onRequest", async (request, reply) => {
+    reply.header("x-request-id", request.id);
+  });
   server.addHook("onResponse", async (request, reply) => {
     metrics.increment("launchrail_http_requests_total", {
       method: request.method,
       status_class: `${Math.floor(reply.statusCode / 100)}xx`,
+      route: request.routeOptions.url ?? "unknown",
     });
   });
   server.get("/metrics", async (_request, reply) =>

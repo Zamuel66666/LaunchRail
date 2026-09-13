@@ -79,6 +79,7 @@ describe("metrics endpoint", () => {
     expect(response.statusCode).toBe(200);
     expect(response.body).toContain("launchrail_http_requests_total");
     expect(response.body).toContain('method="GET"');
+    expect(response.headers["x-request-id"]).toBeTypeOf("string");
   });
 });
 

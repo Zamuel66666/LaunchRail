@@ -231,7 +231,7 @@ Exit gate: invalid, duplicate, unsupported, oversized, and valid deliveries have
 
 **Status:** In progress
 
-Structured logs and worker health are available, and the API plus worker now expose bounded Prometheus-compatible process/request metrics. Correlation IDs, queue/deployment/health metrics, distributed traces, and Grafana evidence remain to be implemented.
+Structured logs and worker health are available, and the API plus worker now expose bounded Prometheus-compatible process/request metrics with API request correlation IDs. Queue/deployment/health metrics, distributed traces, and Grafana evidence remain to be implemented.
 
 Exit gate: an operator can explain a sample deployment and failure across logs, metrics, traces, events, and worker state without exposing canary secrets.
 

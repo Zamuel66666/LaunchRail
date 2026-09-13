@@ -17,6 +17,7 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 - Added an optional authenticated GitHub webhook ingestion endpoint bound to a configured organization.
 - Added a low-cardinality Prometheus-compatible API request counter endpoint.
 - Added a deduplicated webhook deployment-trigger hook for verified GitHub pushes.
+- Added API request correlation IDs and route-template labels to request metrics.
 - Added worker process uptime and resident-memory metrics to the health server.
 
 - Plain-language product scope, target users, core workflow, success criteria, and explicit non-goals.

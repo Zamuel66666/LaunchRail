@@ -2,7 +2,7 @@
 
 **A self-hosted platform that turns a GitHub repository into a health-checked application deployment with live logs, preview URLs, release history, and safe rollback.**
 
-> **Phase 8 is Available.** Clean CI verifies exact source preparation, constrained local image builds, and restricted idempotent Docker runtime creation through `health_checking`.
+> **Phase 9 is Available.** Clean CI verifies restricted runtimes, persisted preview-route ownership, organization-fenced reconciliation, and safe promotion/terminal cleanup.
 
 ## What LaunchRail does
 

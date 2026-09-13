@@ -8,6 +8,7 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 
 - Pinned Traefik file-provider routing with collision-resistant deployment hostnames, atomic private route files, bounded targets, stale-file reconciliation, and real proxy acceptance coverage.
 - Added a loopback-only HTTP health-check adapter with strict path, port, timeout bounds, and worker runtime-completion gating.
+- Completed the routing milestone with persisted preview-route ownership, restart reconciliation, organization fencing, promotion preservation, and terminal cleanup.
 
 - Plain-language product scope, target users, core workflow, success criteria, and explicit non-goals.
 - Initial architecture for the web application, API, worker, persistence, queue, build/runtime, routing, and observability boundaries.

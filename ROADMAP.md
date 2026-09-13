@@ -205,7 +205,7 @@ Exit gate: local preview routing works after proxy/worker restart and cannot cro
 
 **Status:** In progress
 
-The runtime boundary now includes a bounded loopback-only HTTP checker with strict path, port, and timeout validation, and worker composition can gate runtime completion on a successful response. Durable health jobs, grace periods, and promotion orchestration remain to be implemented.
+The runtime boundary now includes a bounded loopback-only HTTP checker with strict path, port, and timeout validation. Durable health attempts and worker-driven promotion after a successful check are available; configurable grace periods and richer health presentation remain to be implemented.
 
 Add configurable HTTP checks, grace periods, atomic healthy promotion, previous-release preservation, and detailed health presentation.
 

@@ -612,7 +612,11 @@ export function ProjectWorkspace() {
               <div className="projects-heading">
                 <div>
                   <h2>{projects.length === 1 ? "1 project" : `${projects.length} projects`}</h2>
-                  <p>Configuration is authoritative; deployment execution arrives in Phase 5.</p>
+                  <p>
+                    Configuration is authoritative; health-checked deployment controls and release
+                    history are available through the API while the operator timeline is being
+                    completed.
+                  </p>
                 </div>
                 {canCreate ? (
                   <button onClick={() => openEditor(null)} type="button">

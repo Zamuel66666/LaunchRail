@@ -142,6 +142,15 @@ describe("GitHub webhook ingestion", () => {
     expect((await server.inject(request)).statusCode).toBe(202);
     expect((await server.inject(request)).statusCode).toBe(200);
     expect(triggered).toEqual(["a".repeat(40)]);
+    const unsupported = await server.inject({
+      ...request,
+      headers: {
+        ...request.headers,
+        "x-github-delivery": "delivery-unsupported",
+        "x-github-event": "issues",
+      },
+    });
+    expect(unsupported.statusCode).toBe(400);
   });
 });
 

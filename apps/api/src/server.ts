@@ -143,6 +143,10 @@ export function buildServer({
           return reply.code(401).send({
             error: { code: "invalid_signature", message: "GitHub signature verification failed" },
           });
+        if (eventName !== "push")
+          return reply.code(400).send({
+            error: { code: "unsupported_event", message: "GitHub event is not supported" },
+          });
         if (eventName === "push" && parsed === null)
           return reply.code(400).send({
             error: { code: "invalid_request", message: "Invalid GitHub push payload" },

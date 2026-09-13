@@ -3,6 +3,7 @@ import type {
   DeploymentJobStore,
   DeploymentRuntimeFailureCategory,
   DeploymentRuntimeManager,
+  DeploymentTransitionStore,
   FailDeploymentRuntimeCommand,
 } from "@launchrail/application";
 import { RuntimeStartError } from "@launchrail/application";
@@ -22,6 +23,7 @@ export interface DeploymentRuntimeProcessorOptions {
   readonly logger: WorkerEventLogger;
   readonly runtimeManager: DeploymentRuntimeManager;
   readonly store: DeploymentJobStore;
+  readonly transitionStore?: DeploymentTransitionStore;
   readonly workerId: string;
   readonly healthCheck?: (command: {
     readonly host: string;
@@ -282,6 +284,13 @@ export class DeploymentRuntimeProcessor {
       ...(healthCheckedAt === undefined ? {} : { healthCheckedAt }),
     });
     if (completion.kind !== "completed") return "interrupted";
+    if (healthCheckedAt !== undefined && this.options.transitionStore !== undefined) {
+      await this.options.transitionStore.promote({
+        deploymentId: loaded.runtime.deploymentId,
+        idempotencyKey: `worker-health-promote-${loaded.runtime.deploymentId}`,
+        organizationId: loaded.runtime.organizationId,
+      });
+    }
     this.options.logger.info(
       {
         containerId: started.containerId,

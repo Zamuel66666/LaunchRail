@@ -10,7 +10,11 @@ import {
 } from "@launchrail/application";
 import { BuildKitImageBuilder } from "@launchrail/build";
 import type { WorkerConfig } from "@launchrail/config";
-import { PostgresDeploymentJobStore, type LaunchRailDatabase } from "@launchrail/database";
+import {
+  PostgresDeploymentJobStore,
+  PostgresDeploymentTransitionStore,
+  type LaunchRailDatabase,
+} from "@launchrail/database";
 import {
   BullMqDeploymentQueueConsumer,
   BullMqDeploymentQueuePublisher,
@@ -65,6 +69,7 @@ export function createDeploymentWorkerComponents({
   workerId,
 }: CreateDeploymentWorkerComponentsOptions): DeploymentWorkerComponents {
   const store = new PostgresDeploymentJobStore(database);
+  const transitionStore = new PostgresDeploymentTransitionStore(database);
   const queueOptions = {
     onInfrastructureEvent: (event: QueueInfrastructureEvent): void => {
       logger.error(
@@ -176,6 +181,7 @@ export function createDeploymentWorkerComponents({
         timeoutMs: config.WORKER_RUNTIME_TIMEOUT_MS,
       }),
     store,
+    transitionStore,
     workerId,
   });
   const processor = new DeploymentJobProcessor({

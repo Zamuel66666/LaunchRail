@@ -203,7 +203,9 @@ Exit gate: local preview routing works after proxy/worker restart and cannot cro
 
 ### Phase 10 — Health checks and activation
 
-**Status:** Planned
+**Status:** In progress
+
+The runtime boundary now includes a bounded loopback-only HTTP checker with strict path, port, and timeout validation. Durable health jobs, grace periods, and promotion orchestration remain to be implemented.
 
 Add configurable HTTP checks, grace periods, atomic healthy promotion, previous-release preservation, and detailed health presentation.
 

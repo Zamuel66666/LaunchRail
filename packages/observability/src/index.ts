@@ -1,5 +1,27 @@
 import pino, { type Logger, type LoggerOptions } from "pino";
 
+export class MetricsRegistry {
+  private readonly counters = new Map<string, number>();
+
+  public increment(name: string, labels: Readonly<Record<string, string>> = {}): void {
+    const suffix = Object.entries(labels)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, value]) => `${key}="${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`)
+      .join(",");
+    const key = suffix.length === 0 ? name : `${name}{${suffix}}`;
+    this.counters.set(key, (this.counters.get(key) ?? 0) + 1);
+  }
+
+  public renderPrometheus(): string {
+    return (
+      [...this.counters.entries()]
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, value]) => `${key} ${value}`)
+        .join("\n") + (this.counters.size === 0 ? "" : "\n")
+    );
+  }
+}
+
 export type LogLevel = "fatal" | "error" | "warn" | "info" | "debug" | "trace" | "silent";
 
 const redactPaths = [

@@ -15,6 +15,7 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 - Added shared GitHub webhook signature verification and strict push-event parsing contracts.
 - Added organization-scoped webhook delivery persistence with provider/delivery deduplication.
 - Added an optional authenticated GitHub webhook ingestion endpoint bound to a configured organization.
+- Added a low-cardinality Prometheus-compatible API request counter endpoint.
 
 - Plain-language product scope, target users, core workflow, success criteria, and explicit non-goals.
 - Initial architecture for the web application, API, worker, persistence, queue, build/runtime, routing, and observability boundaries.

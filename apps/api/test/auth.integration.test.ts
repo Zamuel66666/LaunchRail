@@ -69,6 +69,18 @@ describe("sign-in request hardening", () => {
   });
 });
 
+describe("metrics endpoint", () => {
+  it("renders low-cardinality request counters", async () => {
+    const server = buildServer();
+    servers.push(server);
+    expect((await server.inject({ method: "GET", url: "/health" })).statusCode).toBe(200);
+    const response = await server.inject({ method: "GET", url: "/metrics" });
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain("launchrail_http_requests_total");
+    expect(response.body).toContain('method="GET"');
+  });
+});
+
 describe("deployment health history", () => {
   it("requires membership and bounds history limits", async () => {
     const organizationId = "11111111-1111-4111-8111-111111111111";

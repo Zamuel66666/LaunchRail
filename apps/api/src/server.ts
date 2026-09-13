@@ -7,6 +7,7 @@ import type {
   WebhookDeliveryStore,
 } from "@launchrail/application";
 import { parseGitHubPushEvent, verifyGitHubSignature } from "@launchrail/application";
+import { MetricsRegistry } from "@launchrail/observability";
 import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
@@ -55,6 +56,16 @@ export function buildServer({
     bodyLimit: 131_072,
     logger,
   });
+  const metrics = new MetricsRegistry();
+  server.addHook("onResponse", async (request, reply) => {
+    metrics.increment("launchrail_http_requests_total", {
+      method: request.method,
+      status_class: `${Math.floor(reply.statusCode / 100)}xx`,
+    });
+  });
+  server.get("/metrics", async (_request, reply) =>
+    reply.type("text/plain; version=0.0.4").send(metrics.renderPrometheus()),
+  );
 
   void server.register(cookie);
   void server.register(cors, {

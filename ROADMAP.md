@@ -229,9 +229,9 @@ Exit gate: invalid, duplicate, unsupported, oversized, and valid deliveries have
 
 ### Phase 13 — Observability
 
-**Status:** Planned
+**Status:** In progress
 
-Add structured logs, correlation/deployment IDs, request/queue/deployment/health metrics, worker health, distributed traces, and Grafana evidence.
+Structured logs and worker health are available, and the API now exposes a bounded low-cardinality Prometheus request counter. Correlation IDs, queue/deployment/health metrics, distributed traces, and Grafana evidence remain to be implemented.
 
 Exit gate: an operator can explain a sample deployment and failure across logs, metrics, traces, events, and worker state without exposing canary secrets.
 

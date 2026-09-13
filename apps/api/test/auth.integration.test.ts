@@ -117,4 +117,56 @@ describe("deployment health history", () => {
     expect(successful.statusCode).toBe(200);
     expect(successful.json()).toMatchObject({ checks: [{ outcome: "passed", statusCode: 204 }] });
   });
+
+  it("allows deployment control members to promote idempotently", async () => {
+    const organizationId = "11111111-1111-4111-8111-111111111111";
+    const deploymentId = "22222222-2222-4222-8222-222222222222";
+    const identityStore: IdentityStore = {
+      ...rejectingIdentityStore,
+      async resolveSession() {
+        return {
+          displayName: "Developer",
+          email: "developer@example.test",
+          memberships: [
+            {
+              organizationId,
+              organizationName: "Org",
+              organizationSlug: "org",
+              permissions: ["organization:read", "deployment:control"],
+              role: "developer",
+            },
+          ],
+          userId: "33333333-3333-4333-8333-333333333333",
+        };
+      },
+    };
+    const transitionStore = {
+      async promote(command: {
+        deploymentId: string;
+        organizationId: string;
+        actorUserId?: string;
+        idempotencyKey: string;
+      }) {
+        return {
+          deploymentId: command.deploymentId,
+          eventSequence: 4,
+          from: "health_checking" as const,
+          idempotentReplay: false,
+          to: "active" as const,
+          version: 5,
+        };
+      },
+    } as unknown as import("@launchrail/application").DeploymentTransitionStore;
+    const server = buildServer({ identityStore, transitionStore });
+    servers.push(server);
+    const response = await server.inject({
+      cookies: { launchrail_session: "session-token" },
+      headers: { origin: "http://localhost:3000" },
+      method: "POST",
+      payload: {},
+      url: `/v1/organizations/${organizationId}/deployments/${deploymentId}/promote`,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ deployment: { to: "active" } });
+  });
 });

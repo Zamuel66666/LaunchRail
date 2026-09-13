@@ -289,7 +289,20 @@ describe("deployment health history", () => {
         ];
       },
     } as unknown as DeploymentTransitionStore;
-    const server = buildServer({ identityStore, transitionStore });
+    const server = buildServer({
+      deploymentCreationStore: {
+        async createDeployment(command: { organizationId: string; retryOfDeploymentId?: string }) {
+          return {
+            deploymentId: "44444444-4444-4444-8444-444444444444",
+            organizationId: command.organizationId,
+            projectId: "55555555-5555-4555-8555-555555555555",
+            sourceRevision: "a".repeat(40),
+          };
+        },
+      },
+      identityStore,
+      transitionStore,
+    });
     servers.push(server);
     const response = await server.inject({
       cookies: { launchrail_session: "session-token" },
@@ -309,6 +322,14 @@ describe("deployment health history", () => {
     });
     expect(cancelled.statusCode).toBe(200);
     expect(cancelled.json()).toMatchObject({ deployment: { to: "cancelling" } });
+    const retry = await server.inject({
+      cookies: { launchrail_session: "session-token" },
+      headers: { origin: "http://localhost:3000" },
+      method: "POST",
+      url: `/v1/organizations/${organizationId}/deployments/${deploymentId}/retry`,
+    });
+    expect(retry.statusCode).toBe(200);
+    expect(retry.json()).toMatchObject({ deployment: { sourceRevision: "a".repeat(40) } });
     const rollback = await server.inject({
       cookies: { launchrail_session: "session-token" },
       headers: { origin: "http://localhost:3000" },

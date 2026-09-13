@@ -1,5 +1,6 @@
 import {
   MembershipUpdateConflictError,
+  type DeploymentCreationStore,
   type DeploymentJobStore,
   type DeploymentTransitionStore,
   type IdentityStore,
@@ -21,6 +22,7 @@ interface RegisterAuthRoutesOptions {
   readonly now: () => Date;
   readonly projectStore?: ProjectManagementStore;
   readonly deploymentStore?: DeploymentJobStore;
+  readonly deploymentCreationStore?: DeploymentCreationStore;
   readonly transitionStore?: DeploymentTransitionStore;
   readonly secureCookies: boolean;
   readonly signInRateLimitMax: number;
@@ -598,6 +600,43 @@ export function registerAuthRoutes(
             deploymentId: request.params.deploymentId,
             idempotencyKey,
             organizationId: request.params.organizationId,
+          }),
+        };
+      },
+    );
+  }
+
+  if (options.deploymentCreationStore !== undefined) {
+    server.post<{
+      Params: { organizationId: string; deploymentId: string };
+    }>(
+      "/v1/organizations/:organizationId/deployments/:deploymentId/retry",
+      {
+        schema: {
+          params: {
+            additionalProperties: false,
+            properties: {
+              deploymentId: { pattern: uuidPattern, type: "string" },
+              organizationId: { pattern: uuidPattern, type: "string" },
+            },
+            required: ["organizationId", "deploymentId"],
+            type: "object",
+          },
+        },
+      },
+      async (request, reply) => {
+        const authorization = await authorizeOrganization(
+          request,
+          reply,
+          request.params.organizationId,
+          "deployment:control",
+        );
+        if (authorization === null) return;
+        return {
+          deployment: await options.deploymentCreationStore?.createDeployment({
+            actorUserId: authorization.principal.userId,
+            organizationId: request.params.organizationId,
+            retryOfDeploymentId: request.params.deploymentId,
           }),
         };
       },

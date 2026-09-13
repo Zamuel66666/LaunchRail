@@ -59,6 +59,7 @@ async function main(): Promise<void> {
     logger: serviceLoggerOptions("api", config.LOG_LEVEL),
     projectStore,
     deploymentStore,
+    deploymentCreationStore,
     transitionStore,
     secureCookies: config.NODE_ENV === "production",
     signInRateLimitMax: config.SIGN_IN_RATE_LIMIT_MAX,

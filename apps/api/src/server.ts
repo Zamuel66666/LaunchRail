@@ -1,6 +1,7 @@
 import { createHealthResponse } from "@launchrail/contracts";
 import type {
   DeploymentJobStore,
+  DeploymentCreationStore,
   DeploymentTransitionStore,
   IdentityStore,
   ProjectManagementStore,
@@ -24,6 +25,7 @@ interface BuildServerOptions {
   readonly now?: () => Date;
   readonly projectStore?: ProjectManagementStore;
   readonly deploymentStore?: DeploymentJobStore;
+  readonly deploymentCreationStore?: DeploymentCreationStore;
   readonly transitionStore?: DeploymentTransitionStore;
   readonly secureCookies?: boolean;
   readonly signInRateLimitMax?: number;
@@ -42,6 +44,7 @@ export function buildServer({
   now,
   projectStore,
   deploymentStore,
+  deploymentCreationStore,
   transitionStore,
   secureCookies = false,
   signInRateLimitMax = 5,
@@ -173,6 +176,7 @@ export function buildServer({
         now: now ?? (() => new Date()),
         ...(projectStore === undefined ? {} : { projectStore }),
         ...(deploymentStore === undefined ? {} : { deploymentStore }),
+        ...(deploymentCreationStore === undefined ? {} : { deploymentCreationStore }),
         ...(transitionStore === undefined ? {} : { transitionStore }),
         secureCookies,
         signInRateLimitMax,

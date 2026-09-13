@@ -25,4 +25,9 @@ describe("checkHttpHealth", () => {
       checkHttpHealth({ host: "127.0.0.1", port, path: "//other", timeoutMs: 1000 }),
     ).rejects.toThrow(RangeError);
   });
+  it("rejects non-loopback targets", async () => {
+    await expect(
+      checkHttpHealth({ host: "example.com", port, path: "/health", timeoutMs: 1000 }),
+    ).rejects.toThrow(RangeError);
+  });
 });

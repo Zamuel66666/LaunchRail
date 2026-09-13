@@ -15,6 +15,8 @@ export interface HttpHealthCheckResult {
 export async function checkHttpHealth(
   command: HttpHealthCheckCommand,
 ): Promise<HttpHealthCheckResult> {
+  if (command.host !== "127.0.0.1" && command.host !== "::1")
+    throw new RangeError("Health checks may target only the local runtime bridge");
   if (!Number.isSafeInteger(command.port) || command.port < 1 || command.port > 65_535)
     throw new RangeError("Health-check port must be between 1 and 65535");
   if (!command.path.startsWith("/") || command.path.startsWith("//") || command.path.includes("?"))

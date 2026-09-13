@@ -221,9 +221,9 @@ Exit gate: concurrency and failure-injection tests prove safe control races and 
 
 ### Phase 12 — GitHub webhooks
 
-**Status:** Planned
+**Status:** In progress
 
-Add signature verification, push parsing, branch filters, delivery persistence/deduplication, and automatic deployment triggering.
+Signature verification and strict push-event parsing are now available as shared contracts. API delivery persistence, branch filters, deduplication, and automatic deployment triggering remain to be implemented.
 
 Exit gate: invalid, duplicate, unsupported, oversized, and valid deliveries have deterministic tested outcomes.
 

@@ -1,4 +1,5 @@
 import type { DeploymentJobStore } from "@launchrail/application";
+import { MetricsRegistry } from "@launchrail/observability";
 import { describe, expect, it, vi } from "vitest";
 
 import { DeploymentJobReconciler } from "../src/reconciler.js";
@@ -64,10 +65,12 @@ describe("DeploymentJobReconciler", () => {
       ]),
     });
     const enqueue = vi.fn(async () => ({ jobId: "stable-job-id" }));
+    const metrics = new MetricsRegistry();
     const reconciler = new DeploymentJobReconciler({
       batchSize: 100,
       logger,
       maxAttempts: 5,
+      metrics,
       publisher: { enqueue },
       store,
     });
@@ -84,6 +87,7 @@ describe("DeploymentJobReconciler", () => {
       kind: "deployment.claim",
       workItemId,
     });
+    expect(metrics.renderPrometheus()).toContain("launchrail_worker_jobs_dispatched_total 2");
     expect(enqueue).toHaveBeenCalledWith({
       contractVersion: 1,
       kind: "deployment.prepare_source",

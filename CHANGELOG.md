@@ -31,6 +31,7 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 - Newly created webhook deployments now begin with an immutable queued lifecycle event.
 - Added API request correlation IDs and route-template labels to request metrics.
 - Added worker process uptime and resident-memory metrics to the health server.
+- Added worker reconciliation, dispatch, recovery, and dead-letter counters to the Prometheus metrics endpoint.
 - Blank optional GitHub webhook values in local configuration now correctly disable webhook ingestion.
 
 - Plain-language product scope, target users, core workflow, success criteria, and explicit non-goals.

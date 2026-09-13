@@ -15,6 +15,7 @@ import {
   PostgresDeploymentTransitionStore,
   type LaunchRailDatabase,
 } from "@launchrail/database";
+import type { MetricsRegistry } from "@launchrail/observability";
 import {
   BullMqDeploymentQueueConsumer,
   BullMqDeploymentQueuePublisher,
@@ -50,6 +51,7 @@ export interface CreateDeploymentWorkerComponentsOptions {
   readonly config: WorkerConfig;
   readonly database: LaunchRailDatabase;
   readonly logger: WorkerEventLogger;
+  readonly metrics?: MetricsRegistry;
   readonly repositoryCheckout?: RepositoryCheckout;
   readonly repositoryProvider?: RepositoryProvider;
   readonly runtimeManager?: DeploymentRuntimeManager;
@@ -61,6 +63,7 @@ export function createDeploymentWorkerComponents({
   config,
   database,
   logger,
+  metrics,
   imageBuilder,
   repositoryCheckout,
   repositoryProvider,
@@ -200,6 +203,7 @@ export function createDeploymentWorkerComponents({
     batchSize: config.WORKER_RECONCILIATION_BATCH_SIZE,
     logger,
     maxAttempts: config.WORKER_MAX_ATTEMPTS,
+    ...(metrics === undefined ? {} : { metrics }),
     publisher,
     store,
     routeManager: new TraefikFileRouteManager({

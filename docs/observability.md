@@ -4,7 +4,7 @@
 
 When a deployment is slow or fails, a user should see which stage failed and what they can do. An operator should be able to follow the same deployment across the browser request, queue job, worker steps, Docker resources, health checks, and route update without searching unrelated text logs.
 
-Phase 1 establishes structured Pino logging, shared credential redaction, and process-health endpoints. Phase 5 adds bounded completion, retry, dead-letter, fencing, reconciliation, infrastructure, heartbeat-failure, and shutdown control-plane events. Phase 6 adds safe source-prepared, source-retry/dead-letter, source-fencing, and source-failure-persistence events plus durable portable source metadata. End-to-end correlation, metrics, traces, dashboards, dependency-readiness endpoints, and successful enqueue/claim events remain planned.
+Phase 1 establishes structured Pino logging, shared credential redaction, and process-health endpoints. Phase 5 adds bounded completion, retry, dead-letter, fencing, reconciliation, infrastructure, heartbeat-failure, and shutdown control-plane events. Phase 6 adds safe source-prepared, source-retry/dead-letter, source-fencing, and source-failure-persistence events plus durable portable source metadata. API request metrics and correlation IDs plus worker process and reconciliation counters are scrapeable now; traces, dashboards, dependency-readiness endpoints, and richer stage metrics remain planned.
 
 ## Correlation model
 
@@ -38,6 +38,8 @@ Application build/runtime output is a separate bounded stream, not mixed into co
 ## Metrics
 
 Prometheus-compatible metrics will use low-cardinality labels such as service, route template, method, status class, job type, deployment stage, outcome, and failure category.
+
+The API exposes request counters at `/metrics` with route-template, method, and status-class labels. The worker `/metrics` exposes process uptime/RSS and cumulative reconciliation, dispatch, dispatch-failure, ensure, recovery, and dead-letter counters. These counters intentionally contain no repository, organization, or deployment identifiers.
 
 Planned measurements:
 

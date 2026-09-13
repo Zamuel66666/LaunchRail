@@ -1,5 +1,6 @@
 import type { DeploymentJobStore } from "@launchrail/application";
 import { parseDeploymentJob, type DeploymentJob } from "@launchrail/contracts";
+import type { MetricsRegistry } from "@launchrail/observability";
 
 import type { WorkerEventLogger } from "./processor.js";
 import type { RouteManager } from "@launchrail/routing";
@@ -12,6 +13,7 @@ export interface DeploymentJobReconcilerOptions {
   readonly batchSize: number;
   readonly logger: WorkerEventLogger;
   readonly maxAttempts: number;
+  readonly metrics?: MetricsRegistry;
   readonly publisher: DeploymentJobPublisher;
   readonly store: DeploymentJobStore;
   readonly routeManager?: RouteManager;
@@ -30,6 +32,7 @@ export class DeploymentJobReconciler {
   private inFlight: Promise<DeploymentJobReconciliationResult> | undefined;
   private readonly logger: WorkerEventLogger;
   private readonly maxAttempts: number;
+  private readonly metrics: MetricsRegistry | undefined;
   private readonly publisher: DeploymentJobPublisher;
   private readonly store: DeploymentJobStore;
   private readonly routeManager: RouteManager | undefined;
@@ -38,6 +41,7 @@ export class DeploymentJobReconciler {
     batchSize,
     logger,
     maxAttempts,
+    metrics,
     publisher,
     store,
     routeManager,
@@ -45,6 +49,7 @@ export class DeploymentJobReconciler {
     this.batchSize = batchSize;
     this.logger = logger;
     this.maxAttempts = maxAttempts;
+    this.metrics = metrics;
     this.publisher = publisher;
     this.store = store;
     this.routeManager = routeManager;
@@ -111,6 +116,22 @@ export class DeploymentJobReconciler {
       ensured: ensured.length,
       recovered: recovered.length,
     };
+    this.metrics?.increment("launchrail_worker_reconciliations_total");
+    for (let index = 0; index < deadLettered; index += 1) {
+      this.metrics?.increment("launchrail_worker_jobs_dead_lettered_total");
+    }
+    for (let index = 0; index < dispatchFailed; index += 1) {
+      this.metrics?.increment("launchrail_worker_job_dispatch_failures_total");
+    }
+    for (let index = 0; index < dispatched; index += 1) {
+      this.metrics?.increment("launchrail_worker_jobs_dispatched_total");
+    }
+    for (let index = 0; index < ensured.length; index += 1) {
+      this.metrics?.increment("launchrail_worker_jobs_ensured_total");
+    }
+    for (let index = 0; index < recovered.length; index += 1) {
+      this.metrics?.increment("launchrail_worker_jobs_recovered_total");
+    }
     this.logger.info(
       { event: "deployment_job_reconciliation", ...result },
       "Deployment job reconciliation pass completed",

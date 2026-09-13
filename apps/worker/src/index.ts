@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { ConfigurationError, loadWorkerConfig } from "@launchrail/config";
 import { createDatabaseClient, type DatabaseClient } from "@launchrail/database";
-import { createServiceLogger } from "@launchrail/observability";
+import { createServiceLogger, MetricsRegistry } from "@launchrail/observability";
 
 import { createDeploymentWorkerComponents } from "./composition.js";
 import {
@@ -16,7 +16,8 @@ const workerVersion = "0.1.0";
 async function main(): Promise<void> {
   const config = loadWorkerConfig();
   const logger = createServiceLogger("worker", config.LOG_LEVEL);
-  const healthServer = createWorkerHealthServer({ version: workerVersion });
+  const metrics = new MetricsRegistry();
+  const healthServer = createWorkerHealthServer({ metrics, version: workerVersion });
   let databaseClosePromise: Promise<void> | undefined;
   let databaseClient: DatabaseClient | undefined;
   let healthClosePromise: Promise<void> | undefined;
@@ -120,6 +121,7 @@ async function main(): Promise<void> {
         config,
         database: databaseClient.db,
         logger,
+        metrics,
         version: workerVersion,
         workerId: `worker-${randomUUID()}`,
       }).runtime;

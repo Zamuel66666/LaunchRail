@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import type {
   DeploymentJobStore,
   DeploymentTransitionStore,
@@ -78,6 +79,61 @@ describe("metrics endpoint", () => {
     expect(response.statusCode).toBe(200);
     expect(response.body).toContain("launchrail_http_requests_total");
     expect(response.body).toContain('method="GET"');
+  });
+});
+
+describe("GitHub webhook ingestion", () => {
+  it("rejects invalid signatures and deduplicates verified deliveries", async () => {
+    const organizationId = "11111111-1111-4111-8111-111111111111";
+    const payload = {
+      after: "a".repeat(40),
+      ref: "refs/heads/main",
+      repository: { name: "app", owner: { login: "octo" } },
+    };
+    const records: Array<{ deliveryId: string }> = [];
+    const server = buildServer({
+      webhookOrganizationId: organizationId,
+      webhookSecret: "secret",
+      webhookStore: {
+        async record(command) {
+          const duplicate = records.some((record) => record.deliveryId === command.deliveryId);
+          if (!duplicate) records.push({ deliveryId: command.deliveryId });
+          return {
+            ...command,
+            duplicate,
+            processingState: "pending" as const,
+            receivedAt: new Date("2026-01-01T00:00:00Z"),
+          };
+        },
+      },
+    });
+    servers.push(server);
+    const raw = JSON.stringify(payload);
+    const signature = `sha256=${createHmac("sha256", "secret").update(raw).digest("hex")}`;
+    const request = {
+      headers: {
+        "x-github-delivery": "delivery-1",
+        "x-github-event": "push",
+        "x-hub-signature-256": signature,
+      },
+      method: "POST" as const,
+      payload,
+      url: "/v1/webhooks/github",
+    };
+    expect(
+      (
+        await server.inject({
+          ...request,
+          headers: {
+            ...request.headers,
+            "x-github-delivery": "delivery-invalid",
+            "x-hub-signature-256": "sha256=bad",
+          },
+        })
+      ).statusCode,
+    ).toBe(401);
+    expect((await server.inject(request)).statusCode).toBe(202);
+    expect((await server.inject(request)).statusCode).toBe(200);
   });
 });
 

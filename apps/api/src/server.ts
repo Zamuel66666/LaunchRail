@@ -114,6 +114,14 @@ export function buildServer({
           verificationState:
             verified && (eventName !== "push" || parsed !== null) ? "verified" : "rejected",
         });
+        if (!verified)
+          return reply.code(401).send({
+            error: { code: "invalid_signature", message: "GitHub signature verification failed" },
+          });
+        if (eventName === "push" && parsed === null)
+          return reply.code(400).send({
+            error: { code: "invalid_request", message: "Invalid GitHub push payload" },
+          });
         return reply
           .code(delivery.duplicate ? 200 : 202)
           .send({ delivery, ...(parsed === null ? {} : { push: parsed }) });

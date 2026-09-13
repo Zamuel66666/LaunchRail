@@ -108,5 +108,13 @@ describe("deployment health history", () => {
       url: `/v1/organizations/${organizationId}/deployments/${deploymentId}/health-checks?limit=101`,
     });
     expect(response.statusCode).toBe(400);
+
+    const successful = await server.inject({
+      cookies: { launchrail_session: "session-token" },
+      method: "GET",
+      url: `/v1/organizations/${organizationId}/deployments/${deploymentId}/health-checks`,
+    });
+    expect(successful.statusCode).toBe(200);
+    expect(successful.json()).toMatchObject({ checks: [{ outcome: "passed", statusCode: 204 }] });
   });
 });

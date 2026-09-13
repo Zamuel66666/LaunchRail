@@ -334,6 +334,24 @@ export function registerAuthRoutes(
       Querystring: { limit?: string };
     }>(
       "/v1/organizations/:organizationId/deployments/:deploymentId/health-checks",
+      {
+        schema: {
+          params: {
+            additionalProperties: false,
+            properties: {
+              deploymentId: { pattern: uuidPattern, type: "string" },
+              organizationId: { pattern: uuidPattern, type: "string" },
+            },
+            required: ["organizationId", "deploymentId"],
+            type: "object",
+          },
+          querystring: {
+            additionalProperties: false,
+            properties: { limit: { pattern: "^[0-9]{1,3}$", type: "string" } },
+            type: "object",
+          },
+        },
+      },
       async (request, reply) => {
         const authorization = await authorizeOrganization(
           request,

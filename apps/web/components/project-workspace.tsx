@@ -12,6 +12,7 @@ import {
   getSession,
   listProjects,
   listDeployments,
+  retryDeployment,
   signOut,
   updateProject,
   type EnvironmentVariableSummary,
@@ -97,6 +98,7 @@ function ProjectCard({
 }>) {
   const repositoryUrl = safeRepositoryUrl(project.repositoryUrl);
   const [deployments, setDeployments] = useState<readonly DeploymentHistorySummary[]>([]);
+  const [retryingDeploymentId, setRetryingDeploymentId] = useState<string | null>(null);
   useEffect(() => {
     const controller = new AbortController();
     void listDeployments(organizationId, project.id, controller.signal)
@@ -167,6 +169,23 @@ function ProjectCard({
                 <strong>{deployment.state}</strong> · {formatDate(deployment.createdAt)}
                 <br />
                 <code>{deployment.sourceRevision.slice(0, 12)}</code>
+                {deployment.state === "build_failed" ||
+                deployment.state === "deployment_failed" ||
+                deployment.state === "cancelled" ? (
+                  <button
+                    className="button-secondary"
+                    disabled={retryingDeploymentId !== null}
+                    onClick={() => {
+                      setRetryingDeploymentId(deployment.deploymentId);
+                      void retryDeployment(organizationId, deployment.deploymentId)
+                        .then((retry) => setDeployments((current) => [retry, ...current]))
+                        .finally(() => setRetryingDeploymentId(null));
+                    }}
+                    type="button"
+                  >
+                    {retryingDeploymentId === deployment.deploymentId ? "Retrying…" : "Retry"}
+                  </button>
+                ) : null}
               </li>
             ))}
           </ol>

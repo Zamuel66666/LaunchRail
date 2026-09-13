@@ -14,6 +14,7 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 - Added authenticated retry creation for terminal failed deployments, preserving the original source revision and linking the retry lineage.
 - Added bounded organization/project deployment history reads for timeline consumers.
 - Added a basic project-workspace deployment timeline backed by the deployment history API.
+- Added retry actions for terminal failed deployments directly in the project timeline.
 - Added worker-driven promotion after a successful bounded health check, preserving the atomic promotion path and idempotent command record.
 - Added shared GitHub webhook signature verification and strict push-event parsing contracts.
 - Added organization-scoped webhook delivery persistence with provider/delivery deduplication.

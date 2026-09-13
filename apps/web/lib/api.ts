@@ -185,6 +185,17 @@ export async function listDeployments(
   return response.deployments;
 }
 
+export async function retryDeployment(
+  organizationId: string,
+  deploymentId: string,
+): Promise<DeploymentHistorySummary> {
+  const response = await apiRequest<{ readonly deployment: DeploymentHistorySummary }>(
+    `/v1/organizations/${encodeURIComponent(organizationId)}/deployments/${encodeURIComponent(deploymentId)}/retry`,
+    { method: "POST" },
+  );
+  return response.deployment;
+}
+
 export async function createProject(
   organizationId: string,
   input: ProjectInput,

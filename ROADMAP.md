@@ -223,7 +223,7 @@ Exit gate: concurrency and failure-injection tests prove safe control races and 
 
 **Status:** In progress
 
-Signature verification and strict push-event parsing are now available as shared contracts. API delivery persistence, branch filters, deduplication, and automatic deployment triggering remain to be implemented.
+Signature verification, strict push-event parsing, and safe wildcard branch filtering are now available as shared contracts. API delivery persistence, deduplication, and automatic deployment triggering remain to be implemented.
 
 Exit gate: invalid, duplicate, unsupported, oversized, and valid deliveries have deterministic tested outcomes.
 

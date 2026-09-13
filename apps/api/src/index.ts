@@ -1,5 +1,6 @@
 import { ConfigurationError, loadApiConfig } from "@launchrail/config";
 import { serviceLoggerOptions } from "@launchrail/observability";
+import { matchesGitHubBranchFilter, type WebhookDeploymentTrigger } from "@launchrail/application";
 import {
   AesGcmSecretCipher,
   createDatabaseClient,
@@ -8,6 +9,7 @@ import {
   PostgresDeploymentJobStore,
   PostgresDeploymentTransitionStore,
   PostgresWebhookDeliveryStore,
+  PostgresDeploymentCreationStore,
 } from "@launchrail/database";
 
 import { buildServer } from "./server.js";
@@ -27,6 +29,30 @@ async function main(): Promise<void> {
   const deploymentStore = new PostgresDeploymentJobStore(databaseClient.db);
   const transitionStore = new PostgresDeploymentTransitionStore(databaseClient.db);
   const webhookStore = new PostgresWebhookDeliveryStore(databaseClient.db);
+  const deploymentCreationStore = new PostgresDeploymentCreationStore(databaseClient.db);
+  const webhookTrigger: WebhookDeploymentTrigger = {
+    async trigger(event) {
+      const projects = await projectStore.listProjects({
+        actorUserId: "webhook",
+        organizationId: event.organizationId,
+      });
+      for (const project of projects) {
+        const repository = new URL(project.repositoryUrl);
+        const [owner, name] = repository.pathname.slice(1).split("/");
+        if (
+          owner === event.push.repositoryOwner &&
+          name === event.push.repositoryName &&
+          matchesGitHubBranchFilter(event.push.branch, project.defaultBranch)
+        ) {
+          await deploymentCreationStore.createDeployment({
+            organizationId: event.organizationId,
+            projectId: project.id,
+            sourceRevision: event.push.revision,
+          });
+        }
+      }
+    },
+  };
   const server = buildServer({
     cookieName: config.SESSION_COOKIE_NAME,
     identityStore,
@@ -45,6 +71,7 @@ async function main(): Promise<void> {
     ...(config.GITHUB_WEBHOOK_ORGANIZATION_ID === undefined
       ? {}
       : { webhookOrganizationId: config.GITHUB_WEBHOOK_ORGANIZATION_ID }),
+    webhookTrigger,
   });
   server.addHook("onClose", async () => databaseClient.close());
 

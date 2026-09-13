@@ -196,6 +196,17 @@ export async function retryDeployment(
   return response.deployment;
 }
 
+export async function controlDeployment(
+  organizationId: string,
+  deploymentId: string,
+  action: "cancel" | "promote" | "rollback" | "stop",
+): Promise<void> {
+  await apiRequest<void>(
+    `/v1/organizations/${encodeURIComponent(organizationId)}/deployments/${encodeURIComponent(deploymentId)}/${action}`,
+    { method: "POST" },
+  );
+}
+
 export async function createProject(
   organizationId: string,
   input: ProjectInput,

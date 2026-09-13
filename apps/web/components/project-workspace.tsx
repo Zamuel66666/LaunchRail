@@ -13,6 +13,7 @@ import {
   listProjects,
   listDeployments,
   retryDeployment,
+  controlDeployment,
   signOut,
   updateProject,
   type EnvironmentVariableSummary,
@@ -99,6 +100,7 @@ function ProjectCard({
   const repositoryUrl = safeRepositoryUrl(project.repositoryUrl);
   const [deployments, setDeployments] = useState<readonly DeploymentHistorySummary[]>([]);
   const [retryingDeploymentId, setRetryingDeploymentId] = useState<string | null>(null);
+  const [controllingDeploymentId, setControllingDeploymentId] = useState<string | null>(null);
   useEffect(() => {
     const controller = new AbortController();
     void listDeployments(organizationId, project.id, controller.signal)
@@ -184,6 +186,29 @@ function ProjectCard({
                     type="button"
                   >
                     {retryingDeploymentId === deployment.deploymentId ? "Retrying…" : "Retry"}
+                  </button>
+                ) : null}
+                {deployment.state === "active" ? (
+                  <button
+                    className="danger-link"
+                    disabled={controllingDeploymentId !== null}
+                    onClick={() => {
+                      setControllingDeploymentId(deployment.deploymentId);
+                      void controlDeployment(organizationId, deployment.deploymentId, "stop")
+                        .then(() =>
+                          setDeployments((current) =>
+                            current.map((item) =>
+                              item.deploymentId === deployment.deploymentId
+                                ? { ...item, state: "stopped" }
+                                : item,
+                            ),
+                          ),
+                        )
+                        .finally(() => setControllingDeploymentId(null));
+                    }}
+                    type="button"
+                  >
+                    {controllingDeploymentId === deployment.deploymentId ? "Stopping…" : "Stop"}
                   </button>
                 ) : null}
               </li>

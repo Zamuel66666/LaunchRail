@@ -150,7 +150,12 @@ export {
   type ResolvedRepositoryRevision,
   type SourcePreparationErrorCode,
 } from "./sources.js";
-export { parseGitHubPushEvent, verifyGitHubSignature, type GitHubPushEvent } from "./webhooks.js";
+export {
+  matchesGitHubBranchFilter,
+  parseGitHubPushEvent,
+  verifyGitHubSignature,
+  type GitHubPushEvent,
+} from "./webhooks.js";
 export {
   RuntimeStartError,
   runtimeStartErrorCodes,

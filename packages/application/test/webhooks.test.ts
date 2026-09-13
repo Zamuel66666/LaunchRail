@@ -1,7 +1,11 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
 
-import { parseGitHubPushEvent, verifyGitHubSignature } from "../src/index.js";
+import {
+  matchesGitHubBranchFilter,
+  parseGitHubPushEvent,
+  verifyGitHubSignature,
+} from "../src/index.js";
 
 describe("GitHub webhook contracts", () => {
   it("verifies signatures without accepting malformed or altered bodies", async () => {
@@ -28,5 +32,11 @@ describe("GitHub webhook contracts", () => {
       revision: "a".repeat(40),
     });
     expect(parseGitHubPushEvent({ after: "a", ref: "refs/tags/v1" })).toBeNull();
+  });
+
+  it("matches explicit branch filters without treating regex syntax as input", () => {
+    expect(matchesGitHubBranchFilter("main", "main")).toBe(true);
+    expect(matchesGitHubBranchFilter("release/2026", "release/*")).toBe(true);
+    expect(matchesGitHubBranchFilter("main", "ma.*")).toBe(false);
   });
 });

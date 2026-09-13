@@ -5,6 +5,12 @@ export interface GitHubPushEvent {
   readonly revision: string;
 }
 
+export function matchesGitHubBranchFilter(branch: string, filter: string): boolean {
+  if (branch.length === 0 || filter.length === 0 || filter.includes("\0")) return false;
+  const escaped = filter.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replaceAll("*", ".*");
+  return new RegExp(`^${escaped}$`).test(branch);
+}
+
 export async function verifyGitHubSignature(
   rawBody: Uint8Array,
   signatureHeader: string | undefined,

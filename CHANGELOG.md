@@ -17,6 +17,7 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 - Added retry actions for terminal failed deployments directly in the project timeline.
 - Added an active-release stop action to the project timeline.
 - Added confirmed cancel, stop, and rollback actions plus client-safe conflict feedback to the project deployment timeline.
+- Added on-demand recorded deployment activity to the project timeline.
 - Added worker-driven promotion after a successful bounded health check, preserving the atomic promotion path and idempotent command record.
 - Added shared GitHub webhook signature verification and strict push-event parsing contracts.
 - Added organization-scoped webhook delivery persistence with provider/delivery deduplication.

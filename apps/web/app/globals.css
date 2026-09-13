@@ -903,6 +903,27 @@ button:disabled {
   font-size: 0.85rem;
 }
 
+.deployment-activity {
+  margin-top: 0.65rem;
+}
+
+.deployment-activity > summary {
+  color: #9fc9da;
+  cursor: pointer;
+  font-size: 0.82rem;
+}
+
+.deployment-activity p,
+.deployment-activity ol {
+  margin: 0.55rem 0 0;
+  color: #a9c1cf;
+  font-size: 0.8rem;
+}
+
+.deployment-activity li + li {
+  margin-top: 0.45rem;
+}
+
 .environment-panel {
   margin-top: 1rem;
   padding: 1.2rem;

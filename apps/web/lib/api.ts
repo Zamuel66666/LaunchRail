@@ -80,6 +80,15 @@ export interface DeploymentHistorySummary {
   readonly state: string;
 }
 
+export interface DeploymentEventSummary {
+  readonly createdAt: string;
+  readonly fromState: string | null;
+  readonly kind: string;
+  readonly metadata: Readonly<Record<string, unknown>>;
+  readonly sequence: number;
+  readonly toState: string | null;
+}
+
 interface ApiErrorBody {
   readonly error?: {
     readonly code?: string;
@@ -183,6 +192,18 @@ export async function listDeployments(
     signal === undefined ? {} : { signal },
   );
   return response.deployments;
+}
+
+export async function listDeploymentEvents(
+  organizationId: string,
+  deploymentId: string,
+  signal?: AbortSignal,
+): Promise<readonly DeploymentEventSummary[]> {
+  const response = await apiRequest<{ readonly events: readonly DeploymentEventSummary[] }>(
+    `/v1/organizations/${encodeURIComponent(organizationId)}/deployments/${encodeURIComponent(deploymentId)}/events?limit=50`,
+    signal === undefined ? {} : { signal },
+  );
+  return response.events;
 }
 
 export async function retryDeployment(

@@ -218,7 +218,7 @@ Exit gate: delayed and unhealthy examples prove that only healthy candidates bec
 
 **Status:** In progress
 
-Organization-scoped deployment listing/event history, idempotent promotion, cancellation, stop controls, transactional rollback, authenticated retry creation, and a recruiter-readable timeline are available with permission checks and bounded inputs. Browser controls now require confirmation and surface actionable client-safe errors. Broader audit presentation and control-race failure injection remain to be implemented.
+Organization-scoped deployment listing/event history, idempotent promotion, cancellation, stop controls, transactional rollback, authenticated retry creation, and a recruiter-readable timeline are available with permission checks and bounded inputs. Browser controls require confirmation, surface actionable client-safe errors, and reveal recorded activity on demand. Control-race failure injection remains to be implemented.
 
 Exit gate: concurrency and failure-injection tests prove safe control races and route switching.
 

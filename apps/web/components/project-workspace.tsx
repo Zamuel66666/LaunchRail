@@ -12,11 +12,13 @@ import {
   getSession,
   listProjects,
   listDeployments,
+  listDeploymentEvents,
   retryDeployment,
   controlDeployment,
   signOut,
   updateProject,
   type EnvironmentVariableSummary,
+  type DeploymentEventSummary,
   type DeploymentHistorySummary,
   type Membership,
   type ProjectInput,
@@ -136,6 +138,11 @@ function ProjectCard({
   const [retryingDeploymentId, setRetryingDeploymentId] = useState<string | null>(null);
   const [controllingDeploymentId, setControllingDeploymentId] = useState<string | null>(null);
   const [deploymentActionError, setDeploymentActionError] = useState("");
+  const [deploymentEvents, setDeploymentEvents] = useState<
+    Readonly<Record<string, readonly DeploymentEventSummary[]>>
+  >({});
+  const [deploymentEventsError, setDeploymentEventsError] = useState("");
+  const [loadingDeploymentEventsId, setLoadingDeploymentEventsId] = useState<string | null>(null);
   const [pendingDeploymentControl, setPendingDeploymentControl] =
     useState<PendingDeploymentControl | null>(null);
   useEffect(() => {
@@ -177,6 +184,18 @@ function ProjectCard({
         setControllingDeploymentId(null);
         setPendingDeploymentControl(null);
       });
+  }
+
+  function loadDeploymentEvents(deploymentId: string) {
+    if (deploymentEvents[deploymentId] !== undefined || loadingDeploymentEventsId !== null) return;
+    setDeploymentEventsError("");
+    setLoadingDeploymentEventsId(deploymentId);
+    void listDeploymentEvents(organizationId, deploymentId)
+      .then((events) => setDeploymentEvents((current) => ({ ...current, [deploymentId]: events })))
+      .catch((error: unknown) =>
+        setDeploymentEventsError(actionError(error, "Deployment activity could not be loaded.")),
+      )
+      .finally(() => setLoadingDeploymentEventsId(null));
   }
 
   return (
@@ -237,6 +256,11 @@ function ProjectCard({
             {deploymentActionError}
           </p>
         )}
+        {deploymentEventsError.length === 0 ? null : (
+          <p className="deployment-action-error" role="alert">
+            {deploymentEventsError}
+          </p>
+        )}
         {pendingDeploymentControl === null ? null : (
           <div className="deployment-control-confirmation" role="alertdialog">
             <p>
@@ -277,6 +301,34 @@ function ProjectCard({
                 <strong>{deployment.state}</strong> · {formatDate(deployment.createdAt)}
                 <br />
                 <code>{deployment.sourceRevision.slice(0, 12)}</code>
+                <details
+                  className="deployment-activity"
+                  onToggle={(event) => {
+                    if (event.currentTarget.open) loadDeploymentEvents(deployment.deploymentId);
+                  }}
+                >
+                  <summary>Activity</summary>
+                  {loadingDeploymentEventsId === deployment.deploymentId ? (
+                    <p>Loading activity…</p>
+                  ) : deploymentEvents[deployment.deploymentId] === undefined ? (
+                    <p>Open to load recorded deployment activity.</p>
+                  ) : deploymentEvents[deployment.deploymentId]?.length === 0 ? (
+                    <p>No activity events recorded.</p>
+                  ) : (
+                    <ol>
+                      {deploymentEvents[deployment.deploymentId]?.map((event) => (
+                        <li key={event.sequence}>
+                          <strong>{event.kind.replaceAll("_", " ")}</strong>
+                          {event.fromState === null || event.toState === null
+                            ? ""
+                            : ` · ${event.fromState} → ${event.toState}`}
+                          <br />
+                          <span>{formatDate(event.createdAt)}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                </details>
                 {deployment.state === "build_failed" ||
                 deployment.state === "deployment_failed" ||
                 deployment.state === "cancelled" ? (

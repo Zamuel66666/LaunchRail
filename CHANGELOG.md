@@ -13,6 +13,7 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 - Added transactional rollback from the active release to the latest superseded release, including pointer switching, ordered events, and audit records.
 - Added worker-driven promotion after a successful bounded health check, preserving the atomic promotion path and idempotent command record.
 - Added shared GitHub webhook signature verification and strict push-event parsing contracts.
+- Added organization-scoped webhook delivery persistence with provider/delivery deduplication.
 
 - Plain-language product scope, target users, core workflow, success criteria, and explicit non-goals.
 - Initial architecture for the web application, API, worker, persistence, queue, build/runtime, routing, and observability boundaries.

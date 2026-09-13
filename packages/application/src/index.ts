@@ -156,6 +156,11 @@ export {
   verifyGitHubSignature,
   type GitHubPushEvent,
 } from "./webhooks.js";
+export type {
+  RecordWebhookDeliveryCommand,
+  WebhookDeliveryStore,
+  WebhookDeliverySummary,
+} from "./webhook-deliveries.js";
 export {
   RuntimeStartError,
   runtimeStartErrorCodes,

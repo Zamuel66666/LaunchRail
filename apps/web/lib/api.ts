@@ -70,6 +70,16 @@ export interface ProjectInput {
   readonly runtimeConfig: RuntimeConfig;
 }
 
+export interface DeploymentHistorySummary {
+  readonly createdAt: string;
+  readonly deploymentId: string;
+  readonly finishedAt: string | null;
+  readonly healthCheckedAt: string | null;
+  readonly projectId: string;
+  readonly sourceRevision: string;
+  readonly state: string;
+}
+
 interface ApiErrorBody {
   readonly error?: {
     readonly code?: string;
@@ -161,6 +171,18 @@ export async function listProjects(
     signal === undefined ? {} : { signal },
   );
   return response.projects;
+}
+
+export async function listDeployments(
+  organizationId: string,
+  projectId: string,
+  signal?: AbortSignal,
+): Promise<readonly DeploymentHistorySummary[]> {
+  const response = await apiRequest<{ readonly deployments: readonly DeploymentHistorySummary[] }>(
+    `/v1/organizations/${encodeURIComponent(organizationId)}/projects/${encodeURIComponent(projectId)}/deployments`,
+    signal === undefined ? {} : { signal },
+  );
+  return response.deployments;
 }
 
 export async function createProject(

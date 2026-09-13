@@ -11,9 +11,11 @@ import {
   createProject,
   getSession,
   listProjects,
+  listDeployments,
   signOut,
   updateProject,
   type EnvironmentVariableSummary,
+  type DeploymentHistorySummary,
   type Membership,
   type ProjectInput,
   type ProjectSummary,
@@ -94,6 +96,14 @@ function ProjectCard({
   project: ProjectSummary;
 }>) {
   const repositoryUrl = safeRepositoryUrl(project.repositoryUrl);
+  const [deployments, setDeployments] = useState<readonly DeploymentHistorySummary[]>([]);
+  useEffect(() => {
+    const controller = new AbortController();
+    void listDeployments(organizationId, project.id, controller.signal)
+      .then(setDeployments)
+      .catch(() => setDeployments([]));
+    return () => controller.abort();
+  }, [organizationId, project.id]);
 
   return (
     <article className="project-card">
@@ -145,6 +155,23 @@ function ProjectCard({
           <dd>{formatDate(project.updatedAt)}</dd>
         </div>
       </dl>
+
+      <details className="project-details">
+        <summary>Deployment timeline</summary>
+        {deployments.length === 0 ? (
+          <p className="permission-note">No deployments recorded yet.</p>
+        ) : (
+          <ol>
+            {deployments.map((deployment) => (
+              <li key={deployment.deploymentId}>
+                <strong>{deployment.state}</strong> · {formatDate(deployment.createdAt)}
+                <br />
+                <code>{deployment.sourceRevision.slice(0, 12)}</code>
+              </li>
+            ))}
+          </ol>
+        )}
+      </details>
 
       {canEdit || canArchive ? (
         <div className="project-actions">

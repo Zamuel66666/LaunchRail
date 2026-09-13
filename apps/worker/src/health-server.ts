@@ -12,6 +12,14 @@ export function createWorkerHealthServer({
   version = "0.1.0",
 }: WorkerHealthServerOptions = {}): Server {
   return createServer((request, response) => {
+    if (request.method === "GET" && request.url === "/metrics") {
+      response.writeHead(200, { "content-type": "text/plain; version=0.0.4" });
+      response.end(
+        `launchrail_worker_process_uptime_seconds ${process.uptime()}\n` +
+          `launchrail_worker_process_resident_memory_bytes ${process.memoryUsage().rss}\n`,
+      );
+      return;
+    }
     if (request.method !== "GET" || request.url !== "/health") {
       response.writeHead(404, { "content-type": "application/json; charset=utf-8" });
       response.end(JSON.stringify({ error: "not_found" }));

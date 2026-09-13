@@ -46,4 +46,15 @@ describe("worker health server", () => {
     expect(response.status).toBe(404);
     expect(await response.json()).toEqual({ error: "not_found" });
   });
+
+  it("serves process metrics for scraping", async () => {
+    const server = createWorkerHealthServer();
+    servers.push(server);
+    await listenForWorkerHealth(server, "127.0.0.1", 0);
+    const address = server.address() as AddressInfo;
+    const response = await fetch(`http://127.0.0.1:${address.port}/metrics`);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/plain");
+    expect(await response.text()).toContain("launchrail_worker_process_uptime_seconds");
+  });
 });

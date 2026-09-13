@@ -9,6 +9,7 @@ import { RuntimeStartError } from "@launchrail/application";
 import type { DeploymentStartRuntimeJob } from "@launchrail/contracts";
 import { computeDeploymentJobBackoffMs } from "@launchrail/queue";
 import type { HttpHealthCheckResult } from "@launchrail/runtime";
+import type { RouteManager } from "@launchrail/routing";
 
 import type { DeploymentJobProcessingOutcome, WorkerEventLogger } from "./processor.js";
 
@@ -28,6 +29,7 @@ export interface DeploymentRuntimeProcessorOptions {
     readonly port: number;
     readonly timeoutMs: number;
   }) => Promise<HttpHealthCheckResult>;
+  readonly routeManager?: RouteManager;
 }
 
 interface SafeRuntimeFailure {
@@ -207,6 +209,40 @@ export class DeploymentRuntimeProcessor {
           },
           signal,
         );
+      }
+      if (this.options.routeManager !== undefined) {
+        try {
+          await this.options.routeManager.apply(
+            {
+              deploymentId: loaded.runtime.deploymentId,
+              hostname: `d-${loaded.runtime.deploymentId}.localhost`,
+            },
+            { hostPort: started.hostPort },
+          );
+        } catch (error) {
+          await this.options.runtimeManager
+            .stop({
+              containerId: started.containerId,
+              identity: {
+                deploymentId: loaded.runtime.deploymentId,
+                organizationId: loaded.runtime.organizationId,
+                projectId: loaded.runtime.projectId,
+                workItemId: loaded.runtime.workItemId,
+              },
+              signal,
+            })
+            .catch(() => undefined);
+          return await this.persistFailure(
+            lease,
+            {
+              category: "infrastructure_unavailable",
+              message:
+                error instanceof Error ? error.message : "Preview route could not be registered",
+              retryable: true,
+            },
+            signal,
+          );
+        }
       }
       return await this.completeRuntime(lease, loaded, started, new Date());
     } catch (error) {

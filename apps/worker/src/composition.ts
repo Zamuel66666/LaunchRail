@@ -18,6 +18,7 @@ import {
 } from "@launchrail/queue";
 import { GitHubRepositoryProvider, HardenedGitRepositoryCheckout } from "@launchrail/source";
 import { checkHttpHealth, DockerDeploymentRuntimeManager } from "@launchrail/runtime";
+import { TraefikFileRouteManager } from "@launchrail/routing";
 
 import { DeploymentJobProcessor } from "./job-processor.js";
 import { DeploymentBuildProcessor } from "./build-processor.js";
@@ -165,6 +166,9 @@ export function createDeploymentWorkerComponents({
     leaseDurationMs: config.WORKER_LEASE_MS,
     logger,
     healthCheck: checkHttpHealth,
+    routeManager: new TraefikFileRouteManager({
+      configurationDirectory: config.WORKER_TRAEFIK_DYNAMIC_CONFIG_DIR,
+    }),
     runtimeManager:
       runtimeManager ??
       new DockerDeploymentRuntimeManager({

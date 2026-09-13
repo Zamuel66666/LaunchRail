@@ -18,6 +18,7 @@
     "@launchrail/observability": "workspace:*",
     "@launchrail/queue": "workspace:*",
     "@launchrail/runtime": "workspace:*",
+    "@launchrail/routing": "workspace:*",
     "@launchrail/source": "workspace:*"
   },
   "devDependencies": {

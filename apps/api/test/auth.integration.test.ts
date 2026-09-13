@@ -1,4 +1,8 @@
-import type { DeploymentJobStore, IdentityStore } from "@launchrail/application";
+import type {
+  DeploymentJobStore,
+  DeploymentTransitionStore,
+  IdentityStore,
+} from "@launchrail/application";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { buildServer } from "../src/server.js";
@@ -172,7 +176,7 @@ describe("deployment health history", () => {
           version: 3,
         };
       },
-    } as unknown as import("@launchrail/application").DeploymentTransitionStore;
+    } as unknown as DeploymentTransitionStore;
     const server = buildServer({ identityStore, transitionStore });
     servers.push(server);
     const response = await server.inject({

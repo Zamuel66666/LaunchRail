@@ -53,10 +53,10 @@ export default function HomePage() {
 
       <section className="next" aria-labelledby="next-title">
         <p className="section-label">Next milestone</p>
-        <h2 id="next-title">Complete retry orchestration and operator timeline</h2>
+        <h2 id="next-title">Complete webhook dispatch and operator observability</h2>
         <p>
-          The next phase adds safe retry creation, runtime reconciliation after stop and rollback,
-          and a recruiter-readable deployment timeline backed by the event history API.
+          The next phase publishes verified matching pushes directly to the durable queue and makes
+          deployment health, queue progress, and recovery evidence easier for operators to inspect.
         </p>
       </section>
     </main>

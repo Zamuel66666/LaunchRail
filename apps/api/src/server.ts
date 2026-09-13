@@ -9,6 +9,7 @@ import type {
   WebhookDeploymentTrigger,
 } from "@launchrail/application";
 import { parseGitHubPushEvent, verifyGitHubSignature } from "@launchrail/application";
+import { DeploymentNotFoundError, DeploymentPersistenceConflictError } from "@launchrail/database";
 import { MetricsRegistry } from "@launchrail/observability";
 import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
@@ -186,6 +187,18 @@ export function buildServer({
   }
 
   server.setErrorHandler((error, request, reply) => {
+    if (error instanceof DeploymentNotFoundError) {
+      void reply.code(404).send({
+        error: { code: "deployment_not_found", message: "Deployment was not found" },
+      });
+      return;
+    }
+    if (error instanceof DeploymentPersistenceConflictError) {
+      void reply.code(409).send({
+        error: { code: "deployment_conflict", message: error.message },
+      });
+      return;
+    }
     if (typeof error === "object" && error !== null && "validation" in error) {
       void reply.code(400).send({
         error: { code: "invalid_request", message: "Request validation failed" },

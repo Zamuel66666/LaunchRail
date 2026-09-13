@@ -2,7 +2,7 @@
 
 **A self-hosted platform that turns a GitHub repository into a health-checked application deployment with live logs, preview URLs, release history, and safe rollback.**
 
-> **Phase 9 is Available.** Clean CI verifies restricted runtimes, persisted preview-route ownership, organization-fenced reconciliation, and safe promotion/terminal cleanup.
+> **Phases 0–9 are Available.** Health-checked activation, operator controls, verified webhook ingestion, and observability are progressing toward the next local demonstration release.
 
 ## What LaunchRail does
 
@@ -80,13 +80,15 @@ LaunchRail will use a modular monolith for the web/API boundary and a separate w
 - Restricted Docker runtimes use stable ownership labels, loopback-only dynamic ports, a non-root user, dropped Linux capabilities, no-new-privileges, resource limits, optional read-only root filesystems, bounded timestamped log reads, and idempotent adoption/removal.
 - Clean PostgreSQL/Redis recovery plus real constrained BuildKit and Docker lifecycle acceptance are verified by [GitHub Actions run 34690600740](https://github.com/Zamuel66666/LaunchRail/actions/runs/34690600740).
 - Pinned Traefik file-provider routing uses collision-resistant deployment hostnames, atomic private configuration files, bounded targets, and observed-state reconciliation; real proxy acceptance is verified by [GitHub Actions run 34769727393](https://github.com/Zamuel66666/LaunchRail/actions/runs/34769727393).
-- Runtime startup can gate completion on a bounded loopback-only HTTP health check; durable health history and idempotent activation are available, while grace periods and automated promotion remain in progress.
-- Authenticated deployment controls currently expose bounded health/event history plus idempotent promote, cancel, and stop operations; retry and rollback orchestration remain in progress.
+- Runtime startup can gate completion on bounded loopback-only HTTP health checks, configurable grace periods, durable history, and worker-driven idempotent activation.
+- Authenticated deployment controls expose bounded health/event history, retry lineage, promote, cancel, stop, and rollback operations. The project timeline has confirmations and client-safe conflict feedback for release-changing actions.
+- Verified GitHub push webhooks are signature-checked, deduplicated, filtered to configured project branches, and create immutable queued deployment snapshots.
+- API request counters and correlation IDs plus worker process metrics are available at Prometheus-compatible metrics endpoints.
 
 ### Planned next
 
-- Persisted running runtime metadata is reconciled into Traefik routes by the worker after restart.
-- Run HTTP health checks before promoting a deployment to the active release.
+- Publish matching verified webhook deployments directly to the durable queue and complete richer delivery processing.
+- Add deployment/queue/health metrics, trace evidence, and a broader operator audit view.
 
 ### Not currently planned
 

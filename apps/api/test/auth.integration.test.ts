@@ -5,6 +5,7 @@ import type {
   IdentityStore,
 } from "@launchrail/application";
 import { afterEach, describe, expect, it } from "vitest";
+import { DeploymentPersistenceConflictError } from "@launchrail/database";
 
 import { buildServer } from "../src/server.js";
 
@@ -236,6 +237,9 @@ describe("deployment health history", () => {
         actorUserId?: string;
         idempotencyKey: string;
       }) {
+        if (command.deploymentId === "66666666-6666-4666-8666-666666666666") {
+          throw new DeploymentPersistenceConflictError("Only healthy deployments can be promoted");
+        }
         return {
           deploymentId: command.deploymentId,
           eventSequence: 4,
@@ -380,5 +384,19 @@ describe("deployment health history", () => {
       url: `/v1/organizations/${organizationId}/deployments/${deploymentId}/promote`,
     });
     expect(invalidKey.statusCode).toBe(400);
+    const conflict = await server.inject({
+      cookies: { launchrail_session: "session-token" },
+      headers: { origin: "http://localhost:3000" },
+      method: "POST",
+      payload: {},
+      url: `/v1/organizations/${organizationId}/deployments/66666666-6666-4666-8666-666666666666/promote`,
+    });
+    expect(conflict.statusCode).toBe(409);
+    expect(conflict.json()).toEqual({
+      error: {
+        code: "deployment_conflict",
+        message: "Only healthy deployments can be promoted",
+      },
+    });
   });
 });

@@ -64,6 +64,40 @@ function actionError(error: unknown, fallback: string): string {
   return fallback;
 }
 
+type DeploymentControlAction = "cancel" | "rollback" | "stop";
+
+interface PendingDeploymentControl {
+  readonly action: DeploymentControlAction;
+  readonly deploymentId: string;
+}
+
+function deploymentControlCopy(action: DeploymentControlAction): {
+  readonly confirm: string;
+  readonly label: string;
+  readonly pending: string;
+} {
+  switch (action) {
+    case "cancel":
+      return {
+        confirm: "Cancel deployment",
+        label: "Cancel",
+        pending: "Cancelling…",
+      };
+    case "rollback":
+      return {
+        confirm: "Roll back release",
+        label: "Roll back",
+        pending: "Rolling back…",
+      };
+    case "stop":
+      return {
+        confirm: "Stop release",
+        label: "Stop",
+        pending: "Stopping…",
+      };
+  }
+}
+
 function LoadingState({ label }: Readonly<{ label: string }>) {
   return (
     <div className="workspace-state" role="status">
@@ -101,6 +135,9 @@ function ProjectCard({
   const [deployments, setDeployments] = useState<readonly DeploymentHistorySummary[]>([]);
   const [retryingDeploymentId, setRetryingDeploymentId] = useState<string | null>(null);
   const [controllingDeploymentId, setControllingDeploymentId] = useState<string | null>(null);
+  const [deploymentActionError, setDeploymentActionError] = useState("");
+  const [pendingDeploymentControl, setPendingDeploymentControl] =
+    useState<PendingDeploymentControl | null>(null);
   useEffect(() => {
     const controller = new AbortController();
     void listDeployments(organizationId, project.id, controller.signal)
@@ -108,6 +145,39 @@ function ProjectCard({
       .catch(() => setDeployments([]));
     return () => controller.abort();
   }, [organizationId, project.id]);
+
+  function requestDeploymentControl(deploymentId: string, action: DeploymentControlAction) {
+    setDeploymentActionError("");
+    setPendingDeploymentControl({ action, deploymentId });
+  }
+
+  function confirmDeploymentControl() {
+    if (pendingDeploymentControl === null) return;
+    const { action, deploymentId } = pendingDeploymentControl;
+    setControllingDeploymentId(deploymentId);
+    setDeploymentActionError("");
+    void controlDeployment(organizationId, deploymentId, action)
+      .then(() => {
+        if (action === "rollback") {
+          return listDeployments(organizationId, project.id).then(setDeployments);
+        }
+        const nextState = action === "cancel" ? "cancelling" : "stopped";
+        setDeployments((current) =>
+          current.map((item) =>
+            item.deploymentId === deploymentId ? { ...item, state: nextState } : item,
+          ),
+        );
+      })
+      .catch((error: unknown) =>
+        setDeploymentActionError(
+          actionError(error, "The deployment action could not be completed."),
+        ),
+      )
+      .finally(() => {
+        setControllingDeploymentId(null);
+        setPendingDeploymentControl(null);
+      });
+  }
 
   return (
     <article className="project-card">
@@ -162,6 +232,42 @@ function ProjectCard({
 
       <details className="project-details">
         <summary>Deployment timeline</summary>
+        {deploymentActionError.length === 0 ? null : (
+          <p className="deployment-action-error" role="alert">
+            {deploymentActionError}
+          </p>
+        )}
+        {pendingDeploymentControl === null ? null : (
+          <div className="deployment-control-confirmation" role="alertdialog">
+            <p>
+              {pendingDeploymentControl.action === "rollback"
+                ? "Restore the previous superseded release? The current release will be superseded."
+                : pendingDeploymentControl.action === "stop"
+                  ? "Stop this active release? Its preview route will be removed."
+                  : "Cancel this deployment? Work already in progress will be asked to stop."}
+            </p>
+            <div className="compact-actions">
+              <button
+                className="button-secondary"
+                disabled={controllingDeploymentId !== null}
+                onClick={() => setPendingDeploymentControl(null)}
+                type="button"
+              >
+                Keep running
+              </button>
+              <button
+                className="danger-button"
+                disabled={controllingDeploymentId !== null}
+                onClick={confirmDeploymentControl}
+                type="button"
+              >
+                {controllingDeploymentId === pendingDeploymentControl.deploymentId
+                  ? deploymentControlCopy(pendingDeploymentControl.action).pending
+                  : deploymentControlCopy(pendingDeploymentControl.action).confirm}
+              </button>
+            </div>
+          </div>
+        )}
         {deployments.length === 0 ? (
           <p className="permission-note">No deployments recorded yet.</p>
         ) : (
@@ -179,8 +285,14 @@ function ProjectCard({
                     disabled={retryingDeploymentId !== null}
                     onClick={() => {
                       setRetryingDeploymentId(deployment.deploymentId);
+                      setDeploymentActionError("");
                       void retryDeployment(organizationId, deployment.deploymentId)
                         .then((retry) => setDeployments((current) => [retry, ...current]))
+                        .catch((error: unknown) =>
+                          setDeploymentActionError(
+                            actionError(error, "The deployment could not be retried."),
+                          ),
+                        )
                         .finally(() => setRetryingDeploymentId(null));
                     }}
                     type="button"
@@ -188,28 +300,37 @@ function ProjectCard({
                     {retryingDeploymentId === deployment.deploymentId ? "Retrying…" : "Retry"}
                   </button>
                 ) : null}
-                {deployment.state === "active" ? (
+                {["queued", "cloning", "building", "deploying", "health_checking"].includes(
+                  deployment.state,
+                ) ? (
                   <button
                     className="danger-link"
                     disabled={controllingDeploymentId !== null}
-                    onClick={() => {
-                      setControllingDeploymentId(deployment.deploymentId);
-                      void controlDeployment(organizationId, deployment.deploymentId, "stop")
-                        .then(() =>
-                          setDeployments((current) =>
-                            current.map((item) =>
-                              item.deploymentId === deployment.deploymentId
-                                ? { ...item, state: "stopped" }
-                                : item,
-                            ),
-                          ),
-                        )
-                        .finally(() => setControllingDeploymentId(null));
-                    }}
+                    onClick={() => requestDeploymentControl(deployment.deploymentId, "cancel")}
                     type="button"
                   >
-                    {controllingDeploymentId === deployment.deploymentId ? "Stopping…" : "Stop"}
+                    Cancel
                   </button>
+                ) : null}
+                {deployment.state === "active" ? (
+                  <>
+                    <button
+                      className="button-secondary"
+                      disabled={controllingDeploymentId !== null}
+                      onClick={() => requestDeploymentControl(deployment.deploymentId, "rollback")}
+                      type="button"
+                    >
+                      Roll back
+                    </button>
+                    <button
+                      className="danger-link"
+                      disabled={controllingDeploymentId !== null}
+                      onClick={() => requestDeploymentControl(deployment.deploymentId, "stop")}
+                      type="button"
+                    >
+                      Stop
+                    </button>
+                  </>
                 ) : null}
               </li>
             ))}

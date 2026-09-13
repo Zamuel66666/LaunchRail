@@ -18,13 +18,16 @@ The roadmap reports verified repository state, not aspirations as completed feat
 - **Phase 7 — Build pipeline:** constrained BuildKit execution, immutable image identity, bounded redacted logs, cancellation, cleanup, build-failure handling, and clean-CI acceptance proof.
 - **Phase 8 — Runtime deployment:** restricted idempotent Docker lifecycle, durable runtime handoff, bounded log reads, and clean-CI lifecycle acceptance.
 
-### Planned next
+### In progress
 
-- **Phase 9 — Routing and preview URLs:** collision-resistant local preview routing and observed-state reconciliation.
+- **Phase 10 — Health checks and activation:** bounded checks, durable attempts, grace periods, and worker-driven healthy promotion are implemented; richer operator health presentation remains.
+- **Phase 11 — Deployment controls:** API controls, retry lineage, timeline history, confirmations, and actionable browser feedback are implemented; broader audit presentation and concurrency/failure-injection coverage remain.
+- **Phase 12 — GitHub webhooks:** signed push ingestion creates matching queued deployment snapshots; direct queue publication and richer delivery processing remain.
+- **Phase 13 — Observability:** request/process metrics and correlation IDs are available; deployment/queue/health metrics, traces, and dashboards remain.
 
 ### Planned later
 
-- Phases 9–16 below.
+- Phases 14–16 below.
 
 ### Not currently planned
 
@@ -215,7 +218,7 @@ Exit gate: delayed and unhealthy examples prove that only healthy candidates bec
 
 **Status:** In progress
 
-Organization-scoped deployment listing/event history, idempotent promotion, cancellation, stop controls, transactional rollback, authenticated retry creation, and a basic recruiter-readable timeline are now available with permission checks and bounded inputs. Confirmations and broader audit presentation remain to be implemented.
+Organization-scoped deployment listing/event history, idempotent promotion, cancellation, stop controls, transactional rollback, authenticated retry creation, and a recruiter-readable timeline are available with permission checks and bounded inputs. Browser controls now require confirmation and surface actionable client-safe errors. Broader audit presentation and control-race failure injection remain to be implemented.
 
 Exit gate: concurrency and failure-injection tests prove safe control races and route switching.
 

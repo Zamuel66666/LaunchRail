@@ -1,4 +1,3 @@
-import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -9,11 +8,21 @@ import {
 
 describe("GitHub webhook contracts", () => {
   it("verifies signatures without accepting malformed or altered bodies", async () => {
-    const body = Buffer.from('{"ok":true}');
-    const signature = `sha256=${createHmac("sha256", "secret").update(body).digest("hex")}`;
+    const body = new TextEncoder().encode('{"ok":true}');
+    const key = await crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode("secret"),
+      { hash: "SHA-256", name: "HMAC" },
+      false,
+      ["sign"],
+    );
+    const signature = `sha256=${Array.from(
+      new Uint8Array(await crypto.subtle.sign("HMAC", key, body)),
+      (byte) => byte.toString(16).padStart(2, "0"),
+    ).join("")}`;
     await expect(verifyGitHubSignature(body, signature, "secret")).resolves.toBe(true);
     await expect(
-      verifyGitHubSignature(Buffer.from('{"ok":false}'), signature, "secret"),
+      verifyGitHubSignature(new TextEncoder().encode('{"ok":false}'), signature, "secret"),
     ).resolves.toBe(false);
     await expect(verifyGitHubSignature(body, "sha1=bad", "secret")).resolves.toBe(false);
   });

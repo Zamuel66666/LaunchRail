@@ -21,6 +21,7 @@ export interface WebhookDeploymentTrigger {
   trigger(event: {
     readonly deliveryId: string;
     readonly organizationId: string;
-    readonly push: import("./webhooks.js").GitHubPushEvent;
+    readonly push: GitHubPushEvent;
   }): Promise<void>;
 }
+import type { GitHubPushEvent } from "./webhooks.js";

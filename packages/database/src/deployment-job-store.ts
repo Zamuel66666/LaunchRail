@@ -2729,8 +2729,20 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
     const rows = await this.db
       .select({ runtime: runtimeInstances })
       .from(runtimeInstances)
-      .innerJoin(previewRoutes, eq(previewRoutes.deploymentId, runtimeInstances.deploymentId))
-      .innerJoin(deployments, eq(deployments.id, runtimeInstances.deploymentId))
+      .innerJoin(
+        previewRoutes,
+        and(
+          eq(previewRoutes.deploymentId, runtimeInstances.deploymentId),
+          eq(previewRoutes.organizationId, runtimeInstances.organizationId),
+        ),
+      )
+      .innerJoin(
+        deployments,
+        and(
+          eq(deployments.id, runtimeInstances.deploymentId),
+          eq(deployments.organizationId, runtimeInstances.organizationId),
+        ),
+      )
       .where(
         and(
           eq(runtimeInstances.state, "running"),

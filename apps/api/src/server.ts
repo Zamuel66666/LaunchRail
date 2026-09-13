@@ -5,6 +5,7 @@ import type {
   IdentityStore,
   ProjectManagementStore,
   WebhookDeliveryStore,
+  WebhookDeploymentTrigger,
 } from "@launchrail/application";
 import { parseGitHubPushEvent, verifyGitHubSignature } from "@launchrail/application";
 import { MetricsRegistry } from "@launchrail/observability";
@@ -31,6 +32,7 @@ interface BuildServerOptions {
   readonly webhookSecret?: string;
   readonly webhookStore?: WebhookDeliveryStore;
   readonly webhookOrganizationId?: string;
+  readonly webhookTrigger?: WebhookDeploymentTrigger;
 }
 
 export function buildServer({
@@ -48,6 +50,7 @@ export function buildServer({
   webhookSecret,
   webhookStore,
   webhookOrganizationId,
+  webhookTrigger,
 }: BuildServerOptions = {}): FastifyInstance {
   // A 16 KiB secret can expand substantially when JSON escapes control characters.
   // Route schemas and domain validation still enforce the decoded field limits.
@@ -122,6 +125,13 @@ export function buildServer({
           return reply.code(400).send({
             error: { code: "invalid_request", message: "Invalid GitHub push payload" },
           });
+        if (
+          eventName === "push" &&
+          parsed !== null &&
+          !delivery.duplicate &&
+          webhookTrigger !== undefined
+        )
+          await webhookTrigger.trigger({ deliveryId, organizationId, push: parsed });
         return reply
           .code(delivery.duplicate ? 200 : 202)
           .send({ delivery, ...(parsed === null ? {} : { push: parsed }) });

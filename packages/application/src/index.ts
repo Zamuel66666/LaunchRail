@@ -160,6 +160,7 @@ export type {
   RecordWebhookDeliveryCommand,
   WebhookDeliveryStore,
   WebhookDeliverySummary,
+  WebhookDeploymentTrigger,
 } from "./webhook-deliveries.js";
 export {
   RuntimeStartError,

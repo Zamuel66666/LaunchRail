@@ -91,6 +91,7 @@ describe("GitHub webhook ingestion", () => {
       repository: { name: "app", owner: { login: "octo" } },
     };
     const records: Array<{ deliveryId: string }> = [];
+    const triggered: string[] = [];
     const server = buildServer({
       webhookOrganizationId: organizationId,
       webhookSecret: "secret",
@@ -104,6 +105,11 @@ describe("GitHub webhook ingestion", () => {
             processingState: "pending" as const,
             receivedAt: new Date("2026-01-01T00:00:00Z"),
           };
+        },
+      },
+      webhookTrigger: {
+        async trigger(event) {
+          triggered.push(event.push.revision);
         },
       },
     });
@@ -134,6 +140,7 @@ describe("GitHub webhook ingestion", () => {
     ).toBe(401);
     expect((await server.inject(request)).statusCode).toBe(202);
     expect((await server.inject(request)).statusCode).toBe(200);
+    expect(triggered).toEqual(["a".repeat(40)]);
   });
 });
 

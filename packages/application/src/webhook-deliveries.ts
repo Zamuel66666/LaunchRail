@@ -16,3 +16,11 @@ export interface WebhookDeliverySummary extends RecordWebhookDeliveryCommand {
 export interface WebhookDeliveryStore {
   record(command: RecordWebhookDeliveryCommand): Promise<WebhookDeliverySummary>;
 }
+
+export interface WebhookDeploymentTrigger {
+  trigger(event: {
+    readonly deliveryId: string;
+    readonly organizationId: string;
+    readonly push: import("./webhooks.js").GitHubPushEvent;
+  }): Promise<void>;
+}

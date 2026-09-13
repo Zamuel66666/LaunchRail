@@ -223,7 +223,7 @@ Exit gate: concurrency and failure-injection tests prove safe control races and 
 
 **Status:** In progress
 
-Signature verification, strict push-event parsing, safe wildcard branch filtering, organization-scoped delivery persistence with provider/delivery deduplication, and a configured-organization API ingestion endpoint are now available. Automatic deployment triggering remains to be implemented.
+Signature verification, strict push-event parsing, safe wildcard branch filtering, organization-scoped delivery persistence with provider/delivery deduplication, and a configured-organization API ingestion endpoint with a deduplicated trigger hook are now available. Queue-backed automatic deployment creation remains to be implemented.
 
 Exit gate: invalid, duplicate, unsupported, oversized, and valid deliveries have deterministic tested outcomes.
 

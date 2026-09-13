@@ -171,6 +171,7 @@ export function createDeploymentWorkerComponents({
     leaseDurationMs: config.WORKER_LEASE_MS,
     logger,
     healthCheck: checkHttpHealth,
+    healthGraceMs: config.WORKER_HEALTH_GRACE_MS,
     routeManager: new TraefikFileRouteManager({
       configurationDirectory: config.WORKER_TRAEFIK_DYNAMIC_CONFIG_DIR,
     }),

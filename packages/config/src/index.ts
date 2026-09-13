@@ -8,6 +8,7 @@ const environmentSchema = z.enum(["development", "test", "production"]);
 const logLevelSchema = z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]);
 const portSchema = z.coerce.number().int().min(1).max(65_535);
 const positiveIntegerSchema = z.coerce.number().int().positive();
+const nonNegativeIntegerSchema = z.coerce.number().int().min(0);
 const urlSchema = z.string().url();
 const workerIdentifierSchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/);
 const defaultWorkerSourceRoot = resolve(process.cwd(), ".launchrail/sources");
@@ -110,6 +111,7 @@ const workerSchema = sharedServiceSchema.extend({
   WORKER_CONCURRENCY: positiveIntegerSchema.max(32).default(2),
   WORKER_HEALTH_HOST: z.string().min(1).default("127.0.0.1"),
   WORKER_HEALTH_PORT: portSchema.default(4001),
+  WORKER_HEALTH_GRACE_MS: nonNegativeIntegerSchema.max(3_600_000).default(0),
   WORKER_HEARTBEAT_INTERVAL_MS: positiveIntegerSchema.max(300_000).default(10_000),
   WORKER_JOB_TIMEOUT_MS: positiveIntegerSchema.max(86_400_000).default(300_000),
   WORKER_LEASE_MS: positiveIntegerSchema.max(86_400_000).default(60_000),

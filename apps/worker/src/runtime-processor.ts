@@ -31,6 +31,7 @@ export interface DeploymentRuntimeProcessorOptions {
     readonly port: number;
     readonly timeoutMs: number;
   }) => Promise<HttpHealthCheckResult>;
+  readonly healthGraceMs?: number;
   readonly routeManager?: RouteManager;
 }
 
@@ -180,6 +181,17 @@ export class DeploymentRuntimeProcessor {
       try {
         if (this.options.healthCheck === undefined)
           return await this.completeRuntime(lease, loaded, started);
+        const healthGraceMs = this.options.healthGraceMs ?? 0;
+        if (healthGraceMs > 0)
+          await new Promise<void>((resolve, reject) => {
+            const timer = setTimeout(resolve, healthGraceMs);
+            const abort = (): void => {
+              clearTimeout(timer);
+              reject(signal.reason ?? new Error("Health grace period interrupted"));
+            };
+            if (signal.aborted) abort();
+            else signal.addEventListener("abort", abort, { once: true });
+          });
         const health = await this.options.healthCheck({
           host: "127.0.0.1",
           path: loaded.runtime.healthCheckPath,

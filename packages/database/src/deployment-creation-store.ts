@@ -7,13 +7,15 @@ import { and, eq, isNull } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 
 import type { LaunchRailDatabase } from "./client.js";
-import { auditEvents, deployments, projects } from "./schema.js";
+import { auditEvents, deploymentEvents, deployments, projects } from "./schema.js";
 import { DeploymentNotFoundError } from "./errors.js";
 
 export class PostgresDeploymentCreationStore implements DeploymentCreationStore {
   public constructor(private readonly db: LaunchRailDatabase) {}
 
   public async createDeployment(command: CreateDeploymentCommand): Promise<CreatedDeployment> {
+    if (!/^[0-9a-f]{40}(?:[0-9a-f]{24})?$/.test(command.sourceRevision))
+      throw new RangeError("sourceRevision must be a lowercase Git object ID");
     const [project] = await this.db
       .select()
       .from(projects)
@@ -47,6 +49,15 @@ export class PostgresDeploymentCreationStore implements DeploymentCreationStore 
           repositoryProvider: "github",
           requestedRevision: command.sourceRevision,
         },
+      });
+      await transaction.insert(deploymentEvents).values({
+        deploymentId,
+        fromState: null,
+        kind: "deployment_created",
+        metadata: {},
+        organizationId: command.organizationId,
+        sequence: 0,
+        toState: "queued",
       });
       await transaction.insert(auditEvents).values({
         action: "deployment.create",

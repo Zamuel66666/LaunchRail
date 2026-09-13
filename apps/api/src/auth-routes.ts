@@ -381,6 +381,33 @@ export function registerAuthRoutes(
   }
 
   if (options.transitionStore !== undefined) {
+    server.get<{
+      Params: { organizationId: string; deploymentId: string };
+      Querystring: { limit?: string };
+    }>(
+      "/v1/organizations/:organizationId/deployments/:deploymentId/events",
+      async (request, reply) => {
+        const authorization = await authorizeOrganization(
+          request,
+          reply,
+          request.params.organizationId,
+          "project:read",
+        );
+        if (authorization === null) return;
+        const limit = request.query.limit === undefined ? 100 : Number(request.query.limit);
+        if (!Number.isSafeInteger(limit) || limit < 1 || limit > 200)
+          return reply.code(400).send(errorBody("invalid_request", "Invalid history limit"));
+        return {
+          events:
+            (await options.transitionStore?.listEvents?.({
+              deploymentId: request.params.deploymentId,
+              organizationId: request.params.organizationId,
+              limit,
+            })) ?? [],
+        };
+      },
+    );
+
     server.post<{
       Headers: { "idempotency-key"?: string };
       Params: { organizationId: string; deploymentId: string };

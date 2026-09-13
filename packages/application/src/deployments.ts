@@ -29,6 +29,20 @@ export interface DeploymentTransitionResult {
 }
 
 export interface DeploymentTransitionStore {
+  listEvents?(query: {
+    readonly deploymentId: string;
+    readonly organizationId: string;
+    readonly limit: number;
+  }): Promise<
+    readonly {
+      readonly createdAt: Date;
+      readonly fromState: DeploymentState | null;
+      readonly kind: string;
+      readonly metadata: Readonly<Record<string, unknown>>;
+      readonly sequence: number;
+      readonly toState: DeploymentState;
+    }[]
+  >;
   promote(command: PromoteDeploymentCommand): Promise<DeploymentTransitionResult>;
   transition(command: TransitionDeploymentCommand): Promise<DeploymentTransitionResult>;
 }

@@ -245,6 +245,33 @@ export class PostgresDeploymentTransitionStore implements DeploymentTransitionSt
     );
   }
 
+  public async listEvents(query: {
+    readonly deploymentId: string;
+    readonly organizationId: string;
+    readonly limit: number;
+  }) {
+    if (!Number.isSafeInteger(query.limit) || query.limit < 1 || query.limit > 200)
+      throw new RangeError("Deployment event history limit must be between 1 and 200");
+    return this.db
+      .select({
+        createdAt: deploymentEvents.createdAt,
+        fromState: deploymentEvents.fromState,
+        kind: deploymentEvents.kind,
+        metadata: deploymentEvents.metadata,
+        sequence: deploymentEvents.sequence,
+        toState: deploymentEvents.toState,
+      })
+      .from(deploymentEvents)
+      .where(
+        and(
+          eq(deploymentEvents.deploymentId, query.deploymentId),
+          eq(deploymentEvents.organizationId, query.organizationId),
+        ),
+      )
+      .orderBy(sql`${deploymentEvents.sequence} desc`)
+      .limit(query.limit);
+  }
+
   public async promote(command: PromoteDeploymentCommand): Promise<DeploymentTransitionResult> {
     if (command.idempotencyKey.trim().length === 0) {
       throw new DeploymentPersistenceConflictError("Idempotency key cannot be blank");

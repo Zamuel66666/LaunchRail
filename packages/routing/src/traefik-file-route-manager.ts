@@ -1,4 +1,4 @@
-import { lstat, mkdir, realpath, rename, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readdir, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { basename, isAbsolute, join, parse, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 
@@ -19,6 +19,10 @@ export interface RouteTarget {
 export interface RouteManager {
   apply(route: PreviewRoute, target: RouteTarget): Promise<void>;
   remove(route: PreviewRoute): Promise<void>;
+}
+
+export interface DesiredPreviewRoute extends PreviewRoute {
+  readonly target: RouteTarget;
 }
 
 export interface TraefikFileRouteManagerOptions {
@@ -115,5 +119,22 @@ export class TraefikFileRouteManager implements RouteManager {
       throw new Error("Refusing to remove an unsafe Traefik configuration path");
     }
     await rm(destination, { force: true });
+  }
+
+  /** Restore the file-provider directory to the persisted desired route set. */
+  public async reconcile(routes: readonly DesiredPreviewRoute[]): Promise<void> {
+    await this.prepareDirectory();
+    const desired = new Set<string>();
+    for (const route of routes) {
+      validateRoute(route);
+      validateTarget(route.target);
+      desired.add(fileName(route));
+      await this.apply(route, route.target);
+    }
+    for (const entry of await readdir(this.configurationDirectory, { withFileTypes: true })) {
+      if (!entry.isFile() || !entry.name.startsWith("launchrail-") || !entry.name.endsWith(".yaml"))
+        continue;
+      if (!desired.has(entry.name)) await rm(join(this.configurationDirectory, entry.name), { force: true });
+    }
   }
 }

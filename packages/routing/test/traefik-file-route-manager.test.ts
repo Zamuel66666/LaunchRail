@@ -36,4 +36,16 @@ describe("TraefikFileRouteManager", () => {
       await rm(directory, { force: true, recursive: true });
     }
   });
+
+  it("reconciles desired routes and removes stale LaunchRail files", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "launchrail-routes-"));
+    try {
+      const manager = new TraefikFileRouteManager({ configurationDirectory: directory });
+      await manager.apply(route, { hostPort: 41_001 });
+      await manager.reconcile([]);
+      await expect(manager.remove(route)).resolves.toBeUndefined();
+    } finally {
+      await rm(directory, { force: true, recursive: true });
+    }
+  });
 });

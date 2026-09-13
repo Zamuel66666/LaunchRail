@@ -197,7 +197,7 @@ Delivered so far:
 - A pinned Traefik file-provider adapter with exact deployment-bound localhost hostnames, private atomic writes, safe removal, and stale-file reconciliation.
 - A real Traefik acceptance path that proves a generated preview route reaches only the loopback-published host port.
 
-Exit evidence for the adapter boundary: [GitHub Actions run 34769727393](https://github.com/Zamuel66666/LaunchRail/actions/runs/34769727393). Durable route ownership and worker restart restoration remain in progress.
+Exit evidence for the adapter boundary: [GitHub Actions run 34769727393](https://github.com/Zamuel66666/LaunchRail/actions/runs/34769727393). Worker restart restoration now reads running runtime metadata; route ownership still needs a dedicated persisted route record and cross-organization API coverage.
 
 Exit gate: local preview routing works after proxy/worker restart and cannot cross project or organization boundaries.
 

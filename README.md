@@ -84,7 +84,7 @@ LaunchRail will use a modular monolith for the web/API boundary and a separate w
 
 ### Planned next
 
-- Persist runtime route ownership and reconcile it from the worker after restart.
+- Persisted running runtime metadata is reconciled into Traefik routes by the worker after restart.
 - Run HTTP health checks before promoting a deployment to the active release.
 
 ### Not currently planned

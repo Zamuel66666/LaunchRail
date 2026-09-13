@@ -500,6 +500,18 @@ export interface DeploymentJobStore {
     readonly durationMs: number;
     readonly checkedAt: Date;
   }) => Promise<void>;
+  listHealthChecks?: (query: {
+    readonly deploymentId: string;
+    readonly organizationId: string;
+    readonly limit: number;
+  }) => Promise<
+    readonly {
+      readonly checkedAt: Date;
+      readonly durationMs: number;
+      readonly outcome: "passed" | "failed";
+      readonly statusCode: number | null;
+    }[]
+  >;
   appendBuildLogs(
     command: AppendDeploymentBuildLogsCommand,
   ): Promise<AppendDeploymentBuildLogsResult>;

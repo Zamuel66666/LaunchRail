@@ -603,6 +603,38 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
     await this.db.insert(healthCheckAttempts).values(command);
   }
 
+  public async listHealthChecks(query: {
+    readonly deploymentId: string;
+    readonly organizationId: string;
+    readonly limit: number;
+  }) {
+    if (!Number.isSafeInteger(query.limit) || query.limit < 1 || query.limit > 100)
+      throw new RangeError("Health-check history limit must be between 1 and 100");
+    return this.db
+      .select({
+        checkedAt: healthCheckAttempts.checkedAt,
+        durationMs: healthCheckAttempts.durationMs,
+        outcome: healthCheckAttempts.outcome,
+        statusCode: healthCheckAttempts.statusCode,
+      })
+      .from(healthCheckAttempts)
+      .where(
+        and(
+          eq(healthCheckAttempts.deploymentId, query.deploymentId),
+          eq(healthCheckAttempts.organizationId, query.organizationId),
+        ),
+      )
+      .orderBy(sql`${healthCheckAttempts.checkedAt} desc`)
+      .limit(query.limit) as Promise<
+      readonly {
+        checkedAt: Date;
+        durationMs: number;
+        outcome: "passed" | "failed";
+        statusCode: number | null;
+      }[]
+    >;
+  }
+
   public async ensurePendingClaim(
     command: EnsureDeploymentClaimJobCommand,
   ): Promise<EnsureDeploymentClaimJobResult> {

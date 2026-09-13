@@ -556,5 +556,51 @@ export function registerAuthRoutes(
         };
       },
     );
+
+    server.post<{
+      Headers: { "idempotency-key"?: string };
+      Params: { organizationId: string; deploymentId: string };
+    }>(
+      "/v1/organizations/:organizationId/deployments/:deploymentId/rollback",
+      {
+        schema: {
+          params: {
+            additionalProperties: false,
+            properties: {
+              deploymentId: { pattern: uuidPattern, type: "string" },
+              organizationId: { pattern: uuidPattern, type: "string" },
+            },
+            required: ["organizationId", "deploymentId"],
+            type: "object",
+          },
+        },
+      },
+      async (request, reply) => {
+        const authorization = await authorizeOrganization(
+          request,
+          reply,
+          request.params.organizationId,
+          "deployment:control",
+        );
+        if (authorization === null) return;
+        const idempotencyKey = resolveIdempotencyKey(
+          request.headers["idempotency-key"],
+          `api-rollback-${request.params.deploymentId}`,
+        );
+        if (idempotencyKey === null)
+          return reply.code(400).send(errorBody("invalid_request", "Invalid idempotency key"));
+        const transitionStore = options.transitionStore;
+        if (transitionStore === undefined || transitionStore.rollback === undefined)
+          return reply.code(501).send(errorBody("not_implemented", "Rollback is unavailable"));
+        return {
+          deployment: await transitionStore.rollback({
+            actorUserId: authorization.principal.userId,
+            deploymentId: request.params.deploymentId,
+            idempotencyKey,
+            organizationId: request.params.organizationId,
+          }),
+        };
+      },
+    );
   }
 }

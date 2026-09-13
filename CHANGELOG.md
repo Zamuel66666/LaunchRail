@@ -10,6 +10,7 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 - Added a loopback-only HTTP health-check adapter with strict path, port, timeout bounds, and worker runtime-completion gating.
 - Completed the routing milestone with persisted preview-route ownership, restart reconciliation, organization fencing, promotion preservation, and terminal cleanup.
 - Added authenticated, idempotent deployment stop control alongside promotion, cancellation, health history, and event history APIs.
+- Added transactional rollback from the active release to the latest superseded release, including pointer switching, ordered events, and audit records.
 
 - Plain-language product scope, target users, core workflow, success criteria, and explicit non-goals.
 - Initial architecture for the web application, API, worker, persistence, queue, build/runtime, routing, and observability boundaries.

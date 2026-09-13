@@ -19,6 +19,13 @@ export interface PromoteDeploymentCommand {
   readonly organizationId: string;
 }
 
+export interface RollbackDeploymentCommand {
+  readonly actorUserId?: string;
+  readonly deploymentId: string;
+  readonly idempotencyKey: string;
+  readonly organizationId: string;
+}
+
 export interface DeploymentTransitionResult {
   readonly deploymentId: string;
   readonly eventSequence: number;
@@ -44,6 +51,7 @@ export interface DeploymentTransitionStore {
     }[]
   >;
   promote(command: PromoteDeploymentCommand): Promise<DeploymentTransitionResult>;
+  rollback?(command: RollbackDeploymentCommand): Promise<DeploymentTransitionResult>;
   transition(command: TransitionDeploymentCommand): Promise<DeploymentTransitionResult>;
 }
 
@@ -60,5 +68,14 @@ export class PromoteDeployment {
 
   public execute(command: PromoteDeploymentCommand): Promise<DeploymentTransitionResult> {
     return this.store.promote(command);
+  }
+}
+
+export class RollbackDeployment {
+  public constructor(private readonly store: DeploymentTransitionStore) {}
+
+  public execute(command: RollbackDeploymentCommand): Promise<DeploymentTransitionResult> {
+    if (this.store.rollback === undefined) throw new Error("Rollback is not supported");
+    return this.store.rollback(command);
   }
 }

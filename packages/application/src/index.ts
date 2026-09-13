@@ -14,10 +14,12 @@ export {
 } from "./builds.js";
 export {
   PromoteDeployment,
+  RollbackDeployment,
   TransitionDeployment,
   type DeploymentTransitionResult,
   type DeploymentTransitionStore,
   type PromoteDeploymentCommand,
+  type RollbackDeploymentCommand,
   type TransitionDeploymentCommand,
 } from "./deployments.js";
 export {

@@ -50,7 +50,7 @@ export default function HomePage() {
 
       <section className="next" aria-labelledby="next-title">
         <p className="section-label">Next milestone</p>
-        <h2 id="next-title">Route and health-check the candidate runtime</h2>
+        <h2 id="next-title">Persist route ownership and restore it from the worker</h2>
         <p>
           The next phase registers the restricted loopback runtime behind a preview URL and promotes
           it only after an explicit HTTP health check succeeds.

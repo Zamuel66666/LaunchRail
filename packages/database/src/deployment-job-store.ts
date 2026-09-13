@@ -88,6 +88,7 @@ import {
   deploymentSourcePreparations,
   deployments,
   projects,
+  previewRoutes,
   runtimeInstances,
   workerHeartbeats,
 } from "./schema.js";
@@ -2208,6 +2209,21 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
             .set({ healthCheckedAt: command.healthCheckedAt, updatedAt: command.healthCheckedAt })
             .where(eq(deployments.id, deployment.id));
         }
+        await transaction
+          .insert(previewRoutes)
+          .values({
+            deploymentId: deployment.id,
+            organizationId: deployment.organizationId,
+            hostname: `d-${deployment.id}.localhost`,
+            hostPort: command.runtime.hostPort,
+          })
+          .onConflictDoUpdate({
+            target: previewRoutes.deploymentId,
+            set: {
+              hostPort: command.runtime.hostPort,
+              updatedAt: sql`clock_timestamp()`,
+            },
+          });
         const completionClock = transaction
           .select({ now: sql<Date>`clock_timestamp()`.as("now") })
           .from(sql`(select 1) as clock_source`)
@@ -2713,6 +2729,7 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
     const rows = await this.db
       .select({ runtime: runtimeInstances })
       .from(runtimeInstances)
+      .innerJoin(previewRoutes, eq(previewRoutes.deploymentId, runtimeInstances.deploymentId))
       .innerJoin(deployments, eq(deployments.id, runtimeInstances.deploymentId))
       .where(
         and(

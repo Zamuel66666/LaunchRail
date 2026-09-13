@@ -406,6 +406,27 @@ export const runtimeInstances = pgTable(
   ],
 );
 
+export const previewRoutes = pgTable(
+  "preview_routes",
+  {
+    deploymentId: uuid("deployment_id").primaryKey(),
+    organizationId: uuid("organization_id").notNull(),
+    hostname: text("hostname").notNull(),
+    hostPort: integer("host_port").notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.deploymentId, table.organizationId],
+      foreignColumns: [deployments.id, deployments.organizationId],
+      name: "preview_routes_deployment_organization_fk",
+    }).onDelete("cascade"),
+    unique("preview_routes_hostname_unique").on(table.hostname),
+    check("preview_routes_hostname_format", sql`${table.hostname} ~ '^d-[0-9a-f-]+\\.localhost$'`),
+    check("preview_routes_host_port_range", sql`${table.hostPort} between 1 and 65535`),
+  ],
+);
+
 export const activeReleases = pgTable(
   "active_releases",
   {

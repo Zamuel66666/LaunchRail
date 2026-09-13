@@ -134,7 +134,8 @@ export class TraefikFileRouteManager implements RouteManager {
     for (const entry of await readdir(this.configurationDirectory, { withFileTypes: true })) {
       if (!entry.isFile() || !entry.name.startsWith("launchrail-") || !entry.name.endsWith(".yaml"))
         continue;
-      if (!desired.has(entry.name)) await rm(join(this.configurationDirectory, entry.name), { force: true });
+      if (!desired.has(entry.name))
+        await rm(join(this.configurationDirectory, entry.name), { force: true });
     }
   }
 }

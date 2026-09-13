@@ -197,5 +197,13 @@ describe("deployment health history", () => {
     });
     expect(cancelled.statusCode).toBe(200);
     expect(cancelled.json()).toMatchObject({ deployment: { to: "cancelling" } });
+    const invalidKey = await server.inject({
+      cookies: { launchrail_session: "session-token" },
+      headers: { origin: "http://localhost:3000", "idempotency-key": "x".repeat(129) },
+      method: "POST",
+      payload: {},
+      url: `/v1/organizations/${organizationId}/deployments/${deploymentId}/promote`,
+    });
+    expect(invalidKey.statusCode).toBe(400);
   });
 });

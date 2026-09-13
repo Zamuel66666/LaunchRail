@@ -1467,6 +1467,7 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
         kind: "loaded",
         runtime: {
           deploymentId: deployment.id,
+          healthCheckPath: project.healthCheckPath,
           healthCheckPort: project.healthCheckPort,
           imageId: artifact.imageId,
           imageReference: artifact.imageReference,

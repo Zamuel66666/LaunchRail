@@ -315,6 +315,7 @@ export type FailDeploymentBuildResult =
 
 export interface DeploymentRuntimeInput {
   readonly deploymentId: string;
+  readonly healthCheckPath: string;
   readonly healthCheckPort: number;
   readonly imageId: string;
   readonly imageReference: string;

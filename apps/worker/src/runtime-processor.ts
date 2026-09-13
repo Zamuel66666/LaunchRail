@@ -8,6 +8,7 @@ import type {
 import { RuntimeStartError } from "@launchrail/application";
 import type { DeploymentStartRuntimeJob } from "@launchrail/contracts";
 import { computeDeploymentJobBackoffMs } from "@launchrail/queue";
+import { checkHttpHealth } from "@launchrail/runtime";
 
 import type { DeploymentJobProcessingOutcome, WorkerEventLogger } from "./processor.js";
 
@@ -165,6 +166,39 @@ export class DeploymentRuntimeProcessor {
       } catch (error) {
         if (signal.aborted) return "interrupted";
         return await this.persistFailure(lease, safeFailure(error), signal);
+      }
+      try {
+        const health = await checkHttpHealth({
+          host: "127.0.0.1",
+          path: loaded.runtime.healthCheckPath,
+          port: started.hostPort,
+          timeoutMs: Math.min(this.options.jobTimeoutMs, 5_000),
+        });
+        if (health.statusCode < 200 || health.statusCode >= 400)
+          throw new Error(`Health check returned HTTP ${health.statusCode}`);
+      } catch (error) {
+        await this.options.runtimeManager
+          .stop({
+            containerId: started.containerId,
+            identity: {
+              deploymentId: loaded.runtime.deploymentId,
+              organizationId: loaded.runtime.organizationId,
+              projectId: loaded.runtime.projectId,
+              workItemId: loaded.runtime.workItemId,
+            },
+            signal,
+          })
+          .catch(() => undefined);
+        if (signal.aborted) return "interrupted";
+        return await this.persistFailure(
+          lease,
+          {
+            category: "runtime_start_failed",
+            message: error instanceof Error ? error.message : "Runtime health check failed",
+            retryable: true,
+          },
+          signal,
+        );
       }
       const completion = await this.options.store.completeRuntime({
         leaseToken: lease.leaseToken,

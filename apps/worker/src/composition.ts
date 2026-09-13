@@ -195,6 +195,9 @@ export function createDeploymentWorkerComponents({
     maxAttempts: config.WORKER_MAX_ATTEMPTS,
     publisher,
     store,
+    routeManager: new TraefikFileRouteManager({
+      configurationDirectory: config.WORKER_TRAEFIK_DYNAMIC_CONFIG_DIR,
+    }),
   });
   const runtime = new DeploymentWorkerRuntime({
     consumer,

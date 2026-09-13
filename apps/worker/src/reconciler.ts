@@ -2,6 +2,7 @@ import type { DeploymentJobStore } from "@launchrail/application";
 import { parseDeploymentJob, type DeploymentJob } from "@launchrail/contracts";
 
 import type { WorkerEventLogger } from "./processor.js";
+import type { RouteManager } from "@launchrail/routing";
 
 export interface DeploymentJobPublisher {
   enqueue(job: DeploymentJob): Promise<Readonly<{ jobId: string }>>;
@@ -13,6 +14,7 @@ export interface DeploymentJobReconcilerOptions {
   readonly maxAttempts: number;
   readonly publisher: DeploymentJobPublisher;
   readonly store: DeploymentJobStore;
+  readonly routeManager?: RouteManager;
 }
 
 export interface DeploymentJobReconciliationResult {
@@ -30,6 +32,7 @@ export class DeploymentJobReconciler {
   private readonly maxAttempts: number;
   private readonly publisher: DeploymentJobPublisher;
   private readonly store: DeploymentJobStore;
+  private readonly routeManager: RouteManager | undefined;
 
   public constructor({
     batchSize,
@@ -37,12 +40,14 @@ export class DeploymentJobReconciler {
     maxAttempts,
     publisher,
     store,
+    routeManager,
   }: DeploymentJobReconcilerOptions) {
     this.batchSize = batchSize;
     this.logger = logger;
     this.maxAttempts = maxAttempts;
     this.publisher = publisher;
     this.store = store;
+    this.routeManager = routeManager;
   }
 
   public runOnce(): Promise<DeploymentJobReconciliationResult> {
@@ -63,6 +68,19 @@ export class DeploymentJobReconciler {
       maxAttempts: this.maxAttempts,
     });
     const dispatchable = await this.store.listDispatchable({ limit: this.batchSize });
+    if (
+      this.routeManager?.reconcile !== undefined &&
+      this.store.listRoutableRuntimes !== undefined
+    ) {
+      const runtimes = await this.store.listRoutableRuntimes();
+      await this.routeManager.reconcile(
+        runtimes.map((runtime) => ({
+          deploymentId: runtime.deploymentId,
+          hostname: `d-${runtime.deploymentId}.localhost`,
+          target: { hostPort: runtime.hostPort },
+        })),
+      );
+    }
     let dispatched = 0;
     let dispatchFailed = 0;
 

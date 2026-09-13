@@ -2708,4 +2708,24 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
       .orderBy(asc(workerHeartbeats.startedAt), asc(workerHeartbeats.workerId));
     return rows.map((row) => toWorkerSummary(row, row.freshness));
   }
+
+  public async listRoutableRuntimes(): Promise<readonly DeploymentRuntimeInstanceSummary[]> {
+    const rows = await this.db
+      .select({ runtime: runtimeInstances })
+      .from(runtimeInstances)
+      .innerJoin(deployments, eq(deployments.id, runtimeInstances.deploymentId))
+      .where(
+        and(
+          eq(runtimeInstances.state, "running"),
+          sql`${deployments.state} in ('health_checking', 'active')`,
+        ),
+      );
+    return rows
+      .map(({ runtime }) =>
+        runtime.hostPort === null || runtime.containerId === null
+          ? null
+          : toRuntimeSummary(runtime),
+      )
+      .filter((runtime): runtime is DeploymentRuntimeInstanceSummary => runtime !== null);
+  }
 }

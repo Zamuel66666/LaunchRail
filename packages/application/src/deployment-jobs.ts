@@ -528,6 +528,7 @@ export interface DeploymentJobStore {
   listWorkerHeartbeats(
     query: ListWorkerHeartbeatsQuery,
   ): Promise<readonly WorkerHeartbeatSummary[]>;
+  listRoutableRuntimes?: () => Promise<readonly DeploymentRuntimeInstanceSummary[]>;
   recordWorkerHeartbeat(
     command: RecordWorkerHeartbeatCommand,
   ): Promise<RecordWorkerHeartbeatResult>;

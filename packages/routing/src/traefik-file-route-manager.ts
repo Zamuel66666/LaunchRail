@@ -19,6 +19,7 @@ export interface RouteTarget {
 export interface RouteManager {
   apply(route: PreviewRoute, target: RouteTarget): Promise<void>;
   remove(route: PreviewRoute): Promise<void>;
+  reconcile?(routes: readonly DesiredPreviewRoute[]): Promise<void>;
 }
 
 export interface DesiredPreviewRoute extends PreviewRoute {

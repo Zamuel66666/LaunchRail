@@ -19,6 +19,7 @@ import {
   deploymentEvents,
   deployments,
   projects,
+  previewRoutes,
 } from "./schema.js";
 import { DeploymentNotFoundError, DeploymentPersistenceConflictError } from "./errors.js";
 
@@ -179,6 +180,14 @@ export async function transitionDeploymentInTransaction(
       version,
     })
     .where(eq(deployments.id, deployment.id));
+
+  if (
+    ["build_failed", "cancelled", "deployment_failed", "rolled_back", "stopped"].includes(
+      command.to,
+    )
+  ) {
+    await transaction.delete(previewRoutes).where(eq(previewRoutes.deploymentId, deployment.id));
+  }
 
   await transaction.insert(deploymentEvents).values({
     deploymentId: deployment.id,

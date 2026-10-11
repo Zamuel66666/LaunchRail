@@ -4,6 +4,7 @@ import type { DeploymentBuildProcessor } from "./build-processor.js";
 import type { DeploymentClaimProcessor, DeploymentJobProcessingOutcome } from "./processor.js";
 import type { DeploymentSourceProcessor } from "./source-processor.js";
 import type { DeploymentRuntimeProcessor } from "./runtime-processor.js";
+import { withTraceSpan } from "@launchrail/observability";
 
 export interface DeploymentJobProcessorOptions {
   readonly buildProcessor: DeploymentBuildProcessor;
@@ -31,16 +32,22 @@ export class DeploymentJobProcessor {
   }
 
   public process(job: DeploymentJob, signal: AbortSignal): Promise<DeploymentJobProcessingOutcome> {
-    switch (job.kind) {
-      case "deployment.build":
-        return this.buildProcessor.process(job, signal);
-      case "deployment.claim":
-        return this.claimProcessor.process(job, signal);
-      case "deployment.prepare_source":
-        return this.sourceProcessor.process(job, signal);
-      case "deployment.start_runtime":
-        return this.runtimeProcessor.process(job, signal);
-    }
+    return withTraceSpan(
+      "launchrail.deployment.process",
+      { "launchrail.job.kind": job.kind, "launchrail.work_item.id": job.workItemId },
+      async () => {
+        switch (job.kind) {
+          case "deployment.build":
+            return await this.buildProcessor.process(job, signal);
+          case "deployment.claim":
+            return await this.claimProcessor.process(job, signal);
+          case "deployment.prepare_source":
+            return await this.sourceProcessor.process(job, signal);
+          case "deployment.start_runtime":
+            return await this.runtimeProcessor.process(job, signal);
+        }
+      },
+    );
   }
 
   public getActiveJobCount(): number {

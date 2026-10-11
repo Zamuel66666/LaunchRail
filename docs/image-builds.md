@@ -42,7 +42,9 @@ step networking does not prevent the builder from fetching base images or
 remote build inputs. This is not a hostile multi-tenant sandbox. Reconciliation
 removes unreferenced LaunchRail images only after a 24-hour grace period while
 protecting database-recorded image IDs and live build leases. Registry
-publication, signing, scanning, and distributed tracing remain unfinished.
+publication, signing, and scanning remain unfinished; distributed tracing is
+available for the control plane and queue but has not been independently
+verified.
 Manual deployments are created in the authenticated project workspace from an
 exact commit SHA; retained build logs are viewable there.
 

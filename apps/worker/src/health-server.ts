@@ -18,6 +18,7 @@ export interface WorkerRuntimeLogAccess {
 
 export interface WorkerHealthServer extends Server {
   configureRuntimeLogs(access: WorkerRuntimeLogAccess | undefined): void;
+  configureReadiness(check: () => boolean): void;
 }
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
@@ -39,6 +40,7 @@ export function createWorkerHealthServer({
   version = "0.1.0",
 }: WorkerHealthServerOptions = {}): WorkerHealthServer {
   let runtimeLogAccess: WorkerRuntimeLogAccess | undefined;
+  let readinessCheck = (): boolean => false;
   const server = createServer((request, response) => {
     if (request.method === "GET" && request.url === "/metrics") {
       response.writeHead(200, { "content-type": "text/plain; version=0.0.4" });
@@ -124,6 +126,15 @@ export function createWorkerHealthServer({
       return;
     }
     if (request.method !== "GET" || request.url !== "/health") {
+      if (request.method === "GET" && request.url === "/ready") {
+        const ready = readinessCheck();
+        response.writeHead(ready ? 200 : 503, {
+          "content-type": "application/json; charset=utf-8",
+          "cache-control": "no-store",
+        });
+        response.end(JSON.stringify({ ready }));
+        return;
+      }
       response.writeHead(404, { "content-type": "application/json; charset=utf-8" });
       response.end(JSON.stringify({ error: "not_found" }));
       return;
@@ -134,6 +145,9 @@ export function createWorkerHealthServer({
   }) as WorkerHealthServer;
   server.configureRuntimeLogs = (access) => {
     runtimeLogAccess = access;
+  };
+  server.configureReadiness = (check) => {
+    readinessCheck = check;
   };
   return server;
 }

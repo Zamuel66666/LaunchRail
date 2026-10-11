@@ -1,3 +1,5 @@
+import { tracingRuntime } from "./tracing-bootstrap.js";
+
 import { randomUUID } from "node:crypto";
 
 import { ConfigurationError, loadWorkerConfig } from "@launchrail/config";
@@ -22,12 +24,14 @@ async function main(): Promise<void> {
   let databaseClient: DatabaseClient | undefined;
   let healthClosePromise: Promise<void> | undefined;
   let runtime: ReturnType<typeof createDeploymentWorkerComponents>["runtime"] | undefined;
+  let runtimeReady = false;
   let shutdownRequested = false;
   let shutdownPromise: Promise<void> | undefined;
   let markStartupFinished = (): void => undefined;
   const startupFinished = new Promise<void>((resolve) => {
     markStartupFinished = resolve;
   });
+  healthServer.configureReadiness(() => runtimeReady && !shutdownRequested);
 
   const closeDatabase = async (): Promise<void> => {
     if (databaseClient === undefined) {
@@ -52,7 +56,11 @@ async function main(): Promise<void> {
       try {
         await closeDatabase();
       } finally {
-        await closeHealth();
+        try {
+          await closeHealth();
+        } finally {
+          await tracingRuntime.shutdown();
+        }
       }
     }
   };
@@ -136,6 +144,7 @@ async function main(): Promise<void> {
         return;
       }
       await runtime.start();
+      runtimeReady = true;
     } catch (error) {
       if (shutdownRequested) {
         await finishShutdown();
@@ -158,4 +167,5 @@ try {
       : "LaunchRail worker failed to start; inspect structured worker logs for safe diagnostics";
   process.stderr.write(`${message}\n`);
   process.exitCode = 1;
+  await tracingRuntime.shutdown().catch(() => undefined);
 }

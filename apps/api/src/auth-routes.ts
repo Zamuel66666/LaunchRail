@@ -16,8 +16,10 @@ import {
   type OrganizationPermission,
 } from "@launchrail/domain";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { TraceHeaders } from "@launchrail/observability";
 
 import { registerProjectRoutes } from "./project-routes.js";
+import { getRequestTraceHeaders } from "./trace-context.js";
 
 interface RegisterAuthRoutesOptions {
   readonly cookieName: string;
@@ -34,6 +36,7 @@ interface RegisterAuthRoutesOptions {
   readonly deploymentWakeup?: (deployment: {
     readonly deploymentId: string;
     readonly organizationId: string;
+    readonly traceHeaders?: TraceHeaders;
   }) => Promise<void>;
   readonly transitionStore?: DeploymentTransitionStore;
   readonly webhookDeliveryStore?: WebhookDeliveryStore;
@@ -967,7 +970,11 @@ export function registerAuthRoutes(
           return reply
             .code(503)
             .send(errorBody("deployment_unavailable", "Deployment creation is unavailable"));
-        await options.deploymentWakeup(deployment);
+        const traceHeaders = getRequestTraceHeaders(request);
+        await options.deploymentWakeup({
+          ...deployment,
+          ...(traceHeaders === undefined ? {} : { traceHeaders }),
+        });
         return reply.code(202).send({ deployment });
       },
     );

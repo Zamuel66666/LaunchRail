@@ -58,6 +58,7 @@ Phase 6's clean-service suites cover both identifier-only job kinds, transitions
 - Owner/admin/developer/viewer permissions for every protected organization, membership, project, and environment-variable route.
 - Cross-organization identifiers concealed on every organization detail, member, role-change, audit-history, project, and secret path.
 - Runtime-log authorization before proxy, shared-token enforcement on the worker endpoint, organization/deployment label matching, bounded output, and no-store response behavior.
+- W3C parent-child trace propagation across API, BullMQ producer/consumer metadata, and worker processing; no tenant IDs or secrets in traces; collector outage/drop behavior and bounded shutdown export.
 
 - Valid/invalid signatures over exact raw payload bytes.
 - Duplicate delivery ID, unsupported event, branch mismatch, oversized body, and replay.

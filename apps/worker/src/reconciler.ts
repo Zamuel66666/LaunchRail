@@ -6,6 +6,7 @@ import type {
 } from "@launchrail/application";
 import { parseDeploymentJob, type DeploymentJob } from "@launchrail/contracts";
 import type { MetricsRegistry } from "@launchrail/observability";
+import { withTraceSpan } from "@launchrail/observability";
 
 import type { WorkerEventLogger } from "./processor.js";
 import type { RouteManager } from "@launchrail/routing";
@@ -81,7 +82,9 @@ export class DeploymentJobReconciler {
   }
 
   public runOnce(): Promise<DeploymentJobReconciliationResult> {
-    this.inFlight ??= this.reconcile().finally(() => {
+    this.inFlight ??= withTraceSpan("launchrail.worker.reconcile", {}, () =>
+      this.reconcile(),
+    ).finally(() => {
       this.inFlight = undefined;
     });
     return this.inFlight;

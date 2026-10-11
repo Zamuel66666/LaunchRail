@@ -26,4 +26,4 @@ This checklist is the release gate for a public LaunchRail version. No version i
 
 ## Current status
 
-LaunchRail is not release-ready. Recovery acceptance, full distributed tracing, browser runtime log viewing, broad reproducible benchmarks, independent verification of recent features, and production operations remain outstanding. Do not create a release tag based on this checklist alone.
+LaunchRail is not release-ready. Recovery acceptance, independent verification of distributed traces and their secret boundaries, accessible onboarding, broad reproducible benchmarks, independent verification of recent features, and production operations remain outstanding. Do not create a release tag based on this checklist alone.

@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@launchrail/contracts": "workspace:*",
+    "@launchrail/observability": "workspace:*",
     "bullmq": "5.81.3",
     "ioredis": "5.11.1"
   },

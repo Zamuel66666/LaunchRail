@@ -11,6 +11,7 @@ import type {
 import { parseGitHubPushEvent, verifyGitHubSignature } from "@launchrail/application";
 import { DeploymentNotFoundError, DeploymentPersistenceConflictError } from "@launchrail/database";
 import { MetricsRegistry } from "@launchrail/observability";
+import type { TraceHeaders } from "@launchrail/observability";
 import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
@@ -18,6 +19,7 @@ import rateLimit from "@fastify/rate-limit";
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from "fastify";
 
 import { registerAuthRoutes } from "./auth-routes.js";
+import { endRequestTrace, getRequestTraceHeaders, startRequestTrace } from "./trace-context.js";
 
 interface BuildServerOptions {
   readonly cookieName?: string;
@@ -32,9 +34,11 @@ interface BuildServerOptions {
     readonly tail: number;
   }) => Promise<string | null>;
   readonly deploymentCreationStore?: DeploymentCreationStore;
+  readonly readinessCheck?: () => Promise<boolean>;
   readonly deploymentWakeup?: (deployment: {
     readonly deploymentId: string;
     readonly organizationId: string;
+    readonly traceHeaders?: TraceHeaders;
   }) => Promise<void>;
   readonly transitionStore?: DeploymentTransitionStore;
   readonly secureCookies?: boolean;
@@ -56,6 +60,7 @@ export function buildServer({
   deploymentStore,
   runtimeLogReader,
   deploymentCreationStore,
+  readinessCheck,
   deploymentWakeup,
   transitionStore,
   secureCookies = false,
@@ -89,6 +94,7 @@ export function buildServer({
   server.addHook("onRequest", async (request, reply) => {
     reply.header("x-request-id", request.id);
     (request as typeof request & { startedAt?: number }).startedAt = performance.now();
+    startRequestTrace(request);
   });
   server.addHook("onResponse", async (request, reply) => {
     const startedAt = (request as typeof request & { startedAt?: number }).startedAt;
@@ -107,6 +113,7 @@ export function buildServer({
           route: request.routeOptions.url ?? "unknown",
         },
       );
+    endRequestTrace(request, reply.statusCode, request.routeOptions.url);
   });
   server.get("/metrics", async (_request, reply) =>
     reply.type("text/plain; version=0.0.4").send(metrics.renderPrometheus()),
@@ -122,6 +129,15 @@ export function buildServer({
   void server.register(rateLimit, { global: false });
 
   server.get("/health", async () => createHealthResponse({ now, service: "api", version }));
+  server.get("/ready", async (_request, reply) => {
+    if (readinessCheck === undefined) return { ready: true };
+    try {
+      if (await readinessCheck()) return { ready: true };
+    } catch {
+      // Readiness deliberately returns only a generic status to avoid leaking dependency details.
+    }
+    return reply.code(503).send({ ready: false });
+  });
 
   if (
     webhookSecret !== undefined &&
@@ -245,7 +261,13 @@ export function buildServer({
           });
         }
         try {
-          await webhookTrigger.trigger({ deliveryId, organizationId, push: parsed });
+          const traceHeaders = getRequestTraceHeaders(request);
+          await webhookTrigger.trigger({
+            deliveryId,
+            organizationId,
+            push: parsed,
+            ...(traceHeaders === undefined ? {} : { traceHeaders }),
+          });
           recordWebhookMetric("processed");
           const processed = await webhookStore.mark({
             deliveryId,

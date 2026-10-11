@@ -73,37 +73,39 @@ The volume-deleting command is not wrapped in the normal shutdown script so data
 
 `.env.example` is the safe local template. The API and worker load the root `.env` through Node's `--env-file-if-exists` option. The smoke test uses `.env` when present and falls back to `.env.example`.
 
-| Variable                                   | Purpose                          | Local default                 |
-| ------------------------------------------ | -------------------------------- | ----------------------------- |
-| `NODE_ENV`                                 | Runtime policy                   | `development`                 |
-| `LOG_LEVEL`                                | API/worker structured log level  | `info`                        |
-| `API_HOST`, `API_PORT`                     | API health listener              | `127.0.0.1:4000`              |
-| `WORKER_HEALTH_HOST`, `WORKER_HEALTH_PORT` | Worker health listener           | `127.0.0.1:4001`              |
-| `WORKER_INTERNAL_URL`                      | API's private worker endpoint    | `http://127.0.0.1:4001`       |
-| `WORKER_INTERNAL_TOKEN`                    | Shared API/worker log credential | Unset (runtime logs disabled) |
-
-| `WORKER_MODE` | Full worker or health-only | `run` |
-| `WORKER_QUEUE_NAME`, `WORKER_QUEUE_PREFIX` | Bounded BullMQ identifiers | See `.env.example` |
-| `WORKER_CONCURRENCY` | Concurrent job handlers | `2` |
-| `WORKER_MAX_ATTEMPTS` | Durable attempt ceiling | `5` |
-| `WORKER_JOB_TIMEOUT_MS` | Per-job execution bound | `300000` |
-| `WORKER_BACKOFF_BASE_MS`, `*_CAP_MS` | Deterministic retry bounds | `1000`, `60000` |
-| `WORKER_LEASE_MS` | PostgreSQL job lease | `60000` |
-| `WORKER_HEARTBEAT_INTERVAL_MS` | Job/worker heartbeat interval | `10000` |
-| `WORKER_RECONCILIATION_INTERVAL_MS` | Recovery scan interval | `15000` |
-| `WORKER_RECONCILIATION_BATCH_SIZE` | Maximum rows per recovery scan | `100` |
-| `WORKER_SHUTDOWN_GRACE_MS` | Active-work drain bound | `30000` |
-| `WORKER_SOURCE_ROOT` | Private retained checkout root | `/tmp/launchrail-sources` |
-| `WORKER_SOURCE_RESOLVE_*` | GitHub response/deadline bounds | See `.env.example` |
-| `WORKER_SOURCE_CLONE_TIMEOUT_MS` | Source preparation deadline | `120000` |
-| `WORKER_SOURCE_GIT_*` | Git directory/output bounds | See `.env.example` |
-| `WORKER_SOURCE_MAX_*` | Checkout file/byte/path bounds | See `.env.example` |
-| `WEB_HOST`, `WEB_PORT` | Next.js listener | `127.0.0.1:3000` |
-| `NEXT_PUBLIC_API_BASE_URL` | Browser-facing API base URL | `http://localhost:4000` |
-| `DATABASE_URL` | PostgreSQL connection URL | Local Compose service |
-| `REDIS_URL` | Redis connection URL | Local Compose service |
+| Variable                                   | Purpose                            | Local default                 |
+| ------------------------------------------ | ---------------------------------- | ----------------------------- |
+| `NODE_ENV`                                 | Runtime policy                     | `development`                 |
+| `LOG_LEVEL`                                | API/worker structured log level    | `info`                        |
+| `OTEL_EXPORTER_OTLP_ENDPOINT`              | Optional OTLP/HTTP trace collector | Unset (export disabled)       |
+| `API_HOST`, `API_PORT`                     | API health listener                | `127.0.0.1:4000`              |
+| `WORKER_HEALTH_HOST`, `WORKER_HEALTH_PORT` | Worker health listener             | `127.0.0.1:4001`              |
+| `WORKER_INTERNAL_URL`                      | API's private worker endpoint      | `http://127.0.0.1:4001`       |
+| `WORKER_INTERNAL_TOKEN`                    | Shared API/worker log credential   | Unset (runtime logs disabled) |
+| `WORKER_MODE`                              | Full worker or health-only         | `run`                         |
+| `WORKER_QUEUE_NAME`, `WORKER_QUEUE_PREFIX` | Bounded BullMQ identifiers         | See `.env.example`            |
+| `WORKER_CONCURRENCY`                       | Concurrent job handlers            | `2`                           |
+| `WORKER_MAX_ATTEMPTS`                      | Durable attempt ceiling            | `5`                           |
+| `WORKER_JOB_TIMEOUT_MS`                    | Per-job execution bound            | `300000`                      |
+| `WORKER_BACKOFF_BASE_MS`, `*_CAP_MS`       | Deterministic retry bounds         | `1000`, `60000`               |
+| `WORKER_LEASE_MS`                          | PostgreSQL job lease               | `60000`                       |
+| `WORKER_HEARTBEAT_INTERVAL_MS`             | Job/worker heartbeat interval      | `10000`                       |
+| `WORKER_RECONCILIATION_INTERVAL_MS`        | Recovery scan interval             | `15000`                       |
+| `WORKER_RECONCILIATION_BATCH_SIZE`         | Maximum rows per recovery scan     | `100`                         |
+| `WORKER_SHUTDOWN_GRACE_MS`                 | Active-work drain bound            | `30000`                       |
+| `WORKER_SOURCE_ROOT`                       | Private retained checkout root     | `/tmp/launchrail-sources`     |
+| `WORKER_SOURCE_RESOLVE_*`                  | GitHub response/deadline bounds    | See `.env.example`            |
+| `WORKER_SOURCE_CLONE_TIMEOUT_MS`           | Source preparation deadline        | `120000`                      |
+| `WORKER_SOURCE_GIT_*`                      | Git directory/output bounds        | See `.env.example`            |
+| `WORKER_SOURCE_MAX_*`                      | Checkout file/byte/path bounds     | See `.env.example`            |
+| `WEB_HOST`, `WEB_PORT`                     | Next.js listener                   | `127.0.0.1:3000`              |
+| `NEXT_PUBLIC_API_BASE_URL`                 | Browser-facing API base URL        | `http://localhost:4000`       |
+| `DATABASE_URL`                             | PostgreSQL connection URL          | Local Compose service         |
+| `REDIS_URL`                                | Redis connection URL               | Local Compose service         |
 
 To enable runtime log viewing, generate a unique value with `openssl rand -hex 32` and put it in the untracked `.env` as `WORKER_INTERNAL_TOKEN`; both API and worker must receive the same value. Use a loopback HTTP URL for a same-host setup or HTTPS for a remote worker. Never expose the worker health/internal listener to untrusted networks.
+
+To export traces, set `OTEL_EXPORTER_OTLP_ENDPOINT` to a trusted collector base URL (or its `/v1/traces` endpoint); unset/empty disables export. Plain HTTP is accepted only for loopback endpoints. API and worker use distinct `service.name` resources and flush buffered spans during graceful shutdown.
 | `WEB_ORIGIN` | Allowed browser request origin | `http://localhost:3000` |
 | `SESSION_*` | Cookie and session lifetimes | See `.env.example` |
 | `SIGN_IN_RATE_LIMIT_MAX` | Sign-in attempts/client/minute | `5` |

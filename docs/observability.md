@@ -21,7 +21,7 @@ The Phase 6 BullMQ payload contains only its contract version, one of the two su
 
 ## Structured logs
 
-API and worker logs are JSON in production-like modes and readable locally. Phase 5/6 worker events use stable names and opaque work-item/worker identifiers; completion, retry, and dead-letter records include the durable attempt where applicable. Source success includes only adoption, file count, and total bytes—not repository content, raw Git output, arguments, paths, or provider responses. Safe retry codes/messages live in PostgreSQL, while logs use fixed operator-safe messages and never interpolate thrown exception details. Request IDs, work-item IDs, webhook delivery records, ordered deployment events, and cleanup events provide partial cross-component pivots; full trace propagation/export remains unimplemented.
+API and worker logs are JSON in production-like modes and readable locally. Phase 5/6 worker events use stable names and opaque work-item/worker identifiers; completion, retry, and dead-letter records include the durable attempt where applicable. Source success includes only adoption, file count, and total bytes—not repository content, raw Git output, arguments, paths, or provider responses. Safe retry codes/messages live in PostgreSQL, while logs use fixed operator-safe messages and never interpolate thrown exception details. API request spans and BullMQ producer/consumer spans now preserve W3C trace context through BullMQ's telemetry metadata, not the strict job data payload; worker processing and reconciliation add bounded application spans. Database sub-operation spans and remote aggregation remain future work.
 
 The target event families include:
 
@@ -56,15 +56,15 @@ Per-deployment investigation uses traces, events, and logs rather than a high-ca
 
 ## Tracing
 
-OpenTelemetry spans will cover API handlers, database operations where safe/useful, job publish/consume, source preparation, build, runtime, health, route, webhook, and reconciliation steps. Span status records stable failure categories. Large logs, source content, Git output, local paths, secret values, raw headers, URLs containing credentials, and environment variables are never span attributes.
+The optional OTLP/HTTP exporter sends API request, queue publish/consume, worker processing, and reconciliation spans when `OTEL_EXPORTER_OTLP_ENDPOINT` is configured with a trusted collector URL (base URL or `/v1/traces`). Span status records success or a fixed error category; source/build/runtime operations run under the worker processing span. BullMQ persists only its telemetry metadata for W3C propagation; its deployment job payload remains identifier-only. Large logs, source content, Git output, local paths, secret values, raw headers, URLs containing credentials, and environment variables are never span attributes. The telemetry collector is an operator-controlled destination and should be protected as deployment metadata can include opaque work-item identifiers.
 
 Queue propagation creates linked asynchronous traces rather than pretending the original HTTP request stays open through a deployment.
 
 ## Health and readiness
 
-- API liveness reports only process health; a future readiness endpoint will check required dependencies within bounded time.
-- Worker `/health` and `pnpm smoke:health` report process liveness only. Health-only smoke mode intentionally does not connect to PostgreSQL or Redis.
-- Phase 6 persists worker status/heartbeat/active-job records for operational inspection and later operator presentation. Lease expiry, not the worker-heartbeat row, drives work recovery; no HTTP queue-readiness contract or UI exists.
+- API `/health` reports process liveness. `/ready` executes a bounded PostgreSQL `SELECT 1`, returning only a generic 200/503 result; pool queries have a 2-second timeout.
+- Worker `/health` reports process liveness. `/ready` is 200 only after database/Redis-backed runtime startup and initial reconciliation have completed, and returns 503 during health-only mode, startup, or shutdown. Health-only smoke mode intentionally does not connect to PostgreSQL or Redis.
+- Phase 6 persists worker status/heartbeat/active-job records for operational inspection. Lease expiry, not the worker-heartbeat row, drives work recovery; readiness is not a queue-depth or ongoing dependency-health guarantee.
 - Docker, BuildKit, and proxy dependency state appears in operator diagnostics without leaking configuration secrets.
 
 ## Dashboards and alerts
@@ -90,7 +90,7 @@ The shared redaction package sanitizes control-plane logs, deployment events, ad
 3. **Available:** safe source success/retry/dead-letter/fencing/reconciliation events and immutable preparation metadata are verified for Phase 6.
 4. Instrument API latency, verified webhook outcomes, health attempts, active work, and runtime outcomes with low-cardinality metrics.
 5. Provision an optional local Prometheus/Grafana stack and version the operator dashboard.
-6. Add distributed trace propagation/export and dependency-readiness endpoints.
+6. Implement W3C trace propagation/export and bounded startup/dependency-readiness endpoints; independent verification remains outstanding.
 7. Run canary-secret/cardinality reviews and demonstrate successful/failed flows before marking observability available.
 
 ## Evidence required
@@ -99,7 +99,7 @@ Observability becomes “Available” only when a recorded demonstration can tra
 
 # Local metrics and dashboards
 
-The API and worker expose Prometheus text format at `/metrics`. The API includes route-template request counts and latency plus bounded GitHub delivery outcomes and processing duration. The worker reports process uptime/RSS, active jobs, job reconciliation/dispatch outcomes, runtime handoffs, health-check outcomes/duration, terminal/retryable runtime failures, and orphan-runtime cleanup results. Metric labels intentionally avoid organization, project, deployment, request, and delivery identifiers.
+The API and worker expose Prometheus text format at `/metrics`. The API includes route-template request counts and latency plus bounded GitHub delivery outcomes and processing duration. The worker reports process uptime/RSS, active jobs, job reconciliation/dispatch outcomes, runtime handoffs, health-check outcomes/duration, terminal/retryable runtime failures, and resource cleanup results. Metric labels intentionally avoid organization, project, deployment, request, and delivery identifiers.
 
 The optional local dashboard stack is isolated from the default development services. It uses Linux host networking to reach API and worker metrics, so this overlay is currently supported on Linux hosts:
 
@@ -114,6 +114,6 @@ Start the API and worker with `pnpm dev`, then open Prometheus at `http://localh
 docker compose -f compose.yaml -f compose.observability.yaml --profile observability down
 ```
 
-The current request ID is returned as `x-request-id` and is attached to API logs. Worker logs include durable work-item IDs, while deployment events and webhook delivery IDs provide database pivots between the two. This is operational correlation, not distributed tracing: trace/span export, exemplars, alert policies, and remote log aggregation remain future work.
+The current request ID is returned as `x-request-id` and is attached to API logs. W3C trace context links instrumented API requests through BullMQ producer/consumer spans to worker processing; work-item IDs and ordered deployment events remain additional pivots. Exemplars, alert policies, remote log aggregation, database sub-operation spans, and independent OTLP canary-secret verification remain future work.
 
 The project timeline can request a bounded tail of runtime output through an API-to-worker endpoint. Set the same random `WORKER_INTERNAL_TOKEN` (at least 32 characters) for the API and worker, and configure `WORKER_INTERNAL_URL` on the API; without the token, runtime log access stays disabled. The API authorizes the organization reader before proxying, the worker verifies the shared secret and matches the deployment and organization against managed-container labels, and responses are not cached. Runtime output is controlled by the deployed application and may include sensitive values; do not print credentials or other secrets from application code.

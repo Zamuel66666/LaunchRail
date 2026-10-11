@@ -6,9 +6,10 @@ import type {
 } from "@launchrail/application";
 import { matchesGitHubBranchFilter } from "@launchrail/application";
 import type { DeploymentJob } from "@launchrail/contracts";
+import type { TraceHeaders } from "@launchrail/observability";
 
 export interface DeploymentWakeupPublisher {
-  enqueue(job: DeploymentJob): Promise<Readonly<{ jobId: string }>>;
+  enqueue(job: DeploymentJob, traceHeaders?: TraceHeaders): Promise<Readonly<{ jobId: string }>>;
 }
 
 export interface CreateGitHubWebhookDeploymentTriggerOptions {
@@ -67,11 +68,14 @@ export function createGitHubWebhookDeploymentTrigger({
           continue;
         }
         try {
-          await publisher.enqueue({
-            contractVersion: 1,
-            kind: "deployment.claim",
-            workItemId: ensured.job.id,
-          });
+          await publisher.enqueue(
+            {
+              contractVersion: 1,
+              kind: "deployment.claim",
+              workItemId: ensured.job.id,
+            },
+            event.traceHeaders,
+          );
         } catch (error) {
           onDispatchFailure({ deploymentId: deployment.deploymentId, error });
         }

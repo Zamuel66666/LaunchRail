@@ -1,5 +1,19 @@
 import pino, { type Logger, type LoggerOptions } from "pino";
 
+export {
+  createBullMqTelemetryBridge,
+  finishHttpServerTrace,
+  initializeTracing,
+  startHttpServerTrace,
+  traceHeadersFromContext,
+  withTraceHeaders,
+  withTraceSpan,
+  type RequestTrace,
+  type BullMqTelemetryBridge,
+  type TraceHeaders,
+  type TracingRuntime,
+} from "./tracing.js";
+
 export class MetricsRegistry {
   private readonly counters = new Map<string, number>();
   private readonly gauges = new Map<string, number>();

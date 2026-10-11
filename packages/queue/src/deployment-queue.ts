@@ -3,7 +3,12 @@ import {
   parseDeploymentJob,
   type DeploymentJob,
 } from "@launchrail/contracts";
-import { Queue, UnrecoverableError, Worker } from "bullmq";
+import {
+  createBullMqTelemetryBridge,
+  withTraceHeaders,
+  type TraceHeaders,
+} from "@launchrail/observability";
+import { Queue, UnrecoverableError, Worker, type QueueOptions, type WorkerOptions } from "bullmq";
 import { Redis } from "ioredis";
 
 export const deploymentQueueName = "launchrail-deployments";
@@ -159,6 +164,7 @@ export class BullMqDeploymentQueuePublisher {
     const location = resolveLocation(options);
     const notify = safeInfrastructureNotifier("publisher", options.onInfrastructureEvent);
     this.connection = createProducerConnection(location.redisUrl, notify);
+    const telemetry = createBullMqTelemetryBridge() as unknown as QueueOptions["telemetry"];
     this.queue = new Queue<DeploymentJob, void, DeploymentJob["kind"]>(location.queueName, {
       connection: this.connection,
       defaultJobOptions: {
@@ -167,6 +173,7 @@ export class BullMqDeploymentQueuePublisher {
         removeOnFail: true,
       },
       prefix: location.prefix,
+      telemetry,
     });
     this.queue.on("error", () => notify("queue_error"));
   }
@@ -175,12 +182,20 @@ export class BullMqDeploymentQueuePublisher {
     await this.queue.waitUntilReady();
   }
 
-  public async enqueue(input: unknown): Promise<DeploymentQueueEnqueueResult> {
+  public async enqueue(
+    input: unknown,
+    traceHeaders?: TraceHeaders,
+  ): Promise<DeploymentQueueEnqueueResult> {
     const payload = parseQueuePayload(input);
     const jobId = createDeploymentJobId(payload);
     await this.waitUntilReady();
-    await this.removeTerminalWakeup(jobId);
-    await this.queue.add(payload.kind, payload, { jobId });
+    await withTraceHeaders(traceHeaders, async () => {
+      await this.removeTerminalWakeup(jobId);
+      await this.queue.add(payload.kind, payload, {
+        jobId,
+        telemetry: { omitContext: false },
+      });
+    });
     return { jobId };
   }
 
@@ -260,6 +275,7 @@ export class BullMqDeploymentQueueConsumer {
     this.notify = notify;
     const concurrency = requirePositiveSafeInteger("concurrency", options.concurrency ?? 1);
     this.connection = createWorkerConnection(location.redisUrl, notify);
+    const telemetry = createBullMqTelemetryBridge() as unknown as WorkerOptions["telemetry"];
     this.worker = new Worker<unknown, void, string>(
       location.queueName,
       async (job, _token, signal) => {
@@ -276,6 +292,7 @@ export class BullMqDeploymentQueueConsumer {
         connection: this.connection,
         concurrency,
         prefix: location.prefix,
+        telemetry,
       },
     );
     this.worker.on("error", () => notify("queue_error"));

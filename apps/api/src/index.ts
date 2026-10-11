@@ -1,3 +1,5 @@
+import { tracingRuntime } from "./tracing-bootstrap.js";
+
 import { ConfigurationError, loadApiConfig } from "@launchrail/config";
 import { serviceLoggerOptions } from "@launchrail/observability";
 import {
@@ -111,7 +113,8 @@ async function main(): Promise<void> {
           },
         }),
     deploymentCreationStore,
-    deploymentWakeup: async ({ deploymentId, organizationId }) => {
+    readinessCheck: () => databaseClient.checkReady(),
+    deploymentWakeup: async ({ deploymentId, organizationId, traceHeaders }) => {
       try {
         const ensured = await deploymentStore.ensurePendingClaim({
           availableAt: new Date(),
@@ -127,6 +130,7 @@ async function main(): Promise<void> {
             kind: "deployment.claim",
             workItemId: ensured.job.id,
           }),
+          traceHeaders,
         );
       } catch {
         // The database remains authoritative; worker reconciliation recreates the wake-up.
@@ -148,6 +152,11 @@ async function main(): Promise<void> {
   });
   server.addHook("onClose", async () => databaseClient.close());
   server.addHook("onClose", async () => deploymentPublisher.close());
+  server.addHook("onClose", async () => {
+    await tracingRuntime.shutdown().catch(() => {
+      server.log.warn("OTLP trace exporter shutdown failed");
+    });
+  });
 
   const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
     server.log.info({ signal }, "API shutdown requested");
@@ -169,4 +178,5 @@ try {
       : `LaunchRail API failed to start: ${error instanceof Error ? error.message : "unknown error"}`;
   process.stderr.write(`${message}\n`);
   process.exitCode = 1;
+  await tracingRuntime.shutdown().catch(() => undefined);
 }

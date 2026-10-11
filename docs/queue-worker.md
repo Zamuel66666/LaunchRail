@@ -136,6 +136,6 @@ Phase 6 acceptance combines strict contract/source/worker unit tests with `pnpm 
 - Prepared checkouts remain on the trusted worker host for Phase 7; broad hard-crash staging/orphan cleanup remains Phase 14 work.
 - Image building, bounded retained build logs, application runtime, route, health-gated activation, deployment control, webhooks, and rollback are implemented in later milestones; their current verification state is tracked in the roadmap.
 - No project configuration or secret value in Redis, and no runtime secret decryption/injection.
-- No queue-readiness HTTP endpoint or distributed trace export; metrics dashboards and the current operator workspace are implemented, with validation deferred as recorded in the roadmap.
+- Worker `/ready` reports startup readiness after Redis/database initialization and initial reconciliation; it is not a continuous dependency or queue-depth monitor. W3C trace context now propagates in BullMQ telemetry metadata while the queue data contract remains identifier-only; end-to-end collector and secret-redaction verification is deferred as recorded in the roadmap.
 - No broad process/service interruption or external-resource convergence claim; Phase 14 owns that evidence.
 - No `v0.2.0` tag: that release target also requires image builds and live progress.

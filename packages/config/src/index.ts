@@ -85,6 +85,7 @@ const sharedServiceSchema = z.object({
   DATABASE_URL: urlSchema,
   LOG_LEVEL: logLevelSchema.default("info"),
   NODE_ENV: environmentSchema.default("development"),
+  OTEL_EXPORTER_OTLP_ENDPOINT: optionalEnvironmentValue(urlSchema),
   REDIS_URL: urlSchema,
 });
 

@@ -63,6 +63,92 @@ const inspection = (managed = true) => [
 ];
 
 describe("DockerDeploymentRuntimeManager", () => {
+  it("bounds stop grace by the command deadline and treats repeated cleanup as complete", async () => {
+    const root = await mkdtemp(join(tmpdir(), "launchrail-runtime-stop-"));
+    const requests: string[][] = [];
+    let removed = false;
+    try {
+      const manager = new DockerDeploymentRuntimeManager({
+        dockerConfigDirectory: root,
+        timeoutMs: 5000,
+        executor: {
+          execute: async (request) => {
+            requests.push([...request.arguments]);
+            if (request.arguments[0] === "inspect") {
+              if (removed) throw new Error("missing");
+              return { exitCode: 0, stderr: "", stdout: JSON.stringify(inspection()) };
+            }
+            if (request.arguments[0] === "rm") removed = true;
+            return { exitCode: 0, stderr: "", stdout: "" };
+          },
+        },
+      });
+      const cleanup = {
+        containerId: "c".repeat(64),
+        identity,
+        signal: new AbortController().signal,
+      };
+      await manager.stop(cleanup);
+      await manager.cleanupOrphan(cleanup);
+      expect(requests.filter((request) => request[0] === "stop")).toEqual([
+        ["stop", "--time", "4", cleanup.containerId],
+      ]);
+      expect(requests.filter((request) => request[0] === "rm")).toHaveLength(1);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("never stops or removes a container whose ownership does not match", async () => {
+    const root = await mkdtemp(join(tmpdir(), "launchrail-runtime-stop-"));
+    const requests: string[][] = [];
+    try {
+      const manager = new DockerDeploymentRuntimeManager({
+        dockerConfigDirectory: root,
+        timeoutMs: 1000,
+        executor: {
+          execute: async (request) => {
+            requests.push([...request.arguments]);
+            return { exitCode: 0, stderr: "", stdout: JSON.stringify(inspection(false)) };
+          },
+        },
+      });
+      await expect(
+        manager.stop({
+          containerId: "c".repeat(64),
+          identity,
+          signal: new AbortController().signal,
+        }),
+      ).rejects.toMatchObject({ code: "runtime_metadata_invalid" });
+      expect(requests.map((request) => request[0])).toEqual(["inspect"]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("does not mistake a Docker outage for successful cleanup", async () => {
+    const root = await mkdtemp(join(tmpdir(), "launchrail-runtime-stop-"));
+    try {
+      const manager = new DockerDeploymentRuntimeManager({
+        dockerConfigDirectory: root,
+        timeoutMs: 1000,
+        executor: {
+          execute: async () => {
+            throw new Error("daemon unavailable");
+          },
+        },
+      });
+      await expect(
+        manager.stop({
+          containerId: "c".repeat(64),
+          identity,
+          signal: new AbortController().signal,
+        }),
+      ).rejects.toThrow();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
   it("creates a restricted loopback-published runtime then verifies it", async () => {
     const root = await mkdtemp(join(tmpdir(), "launchrail-runtime-test-"));
     const requests: readonly string[][] = [];

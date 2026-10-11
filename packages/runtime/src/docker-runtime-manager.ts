@@ -404,50 +404,53 @@ export class DockerDeploymentRuntimeManager implements DeploymentRuntimeManager 
   }
 
   public async cleanupOrphan(command: CleanupOrphanDeploymentRuntimeCommand): Promise<void> {
-    const { containerId, identity, signal } = command;
-    if (
-      !idPattern.test(containerId) ||
-      !Object.values(identity).every((value) => uuidPattern.test(value))
-    )
-      throw new RangeError("Orphan runtime identity is invalid");
-    await this.prepareDockerConfiguration();
-    const inspected = await this.inspect(containerId, signal);
-    const actual = inspected?.Config?.Labels ?? {};
-    if (
-      inspected?.Id !== containerId ||
-      actual["dev.launchrail.managed"] !== "true" ||
-      actual["dev.launchrail.deployment-id"] !== identity.deploymentId ||
-      actual["dev.launchrail.organization-id"] !== identity.organizationId ||
-      actual["dev.launchrail.project-id"] !== identity.projectId ||
-      actual["dev.launchrail.work-item-id"] !== identity.workItemId
-    )
-      throw fail(
-        "runtime_metadata_invalid",
-        "Orphan runtime ownership could not be verified",
-        false,
-      );
-    try {
-      await this.execute(
-        ["stop", "--time", String(this.limits.stopGraceSeconds), containerId],
-        signal,
-      );
-    } catch {
-      // An already-stopped managed container is still safe to remove after the ownership check.
-    }
-    try {
-      await this.execute(["rm", containerId], signal);
-    } catch {
-      throw fail("runtime_cleanup_failed", "The orphan runtime could not be removed", true);
-    }
+    await this.stop(command);
   }
 
   public async stop(command: StopDeploymentRuntimeCommand): Promise<void> {
-    if (!uuidPattern.test(command.identity.deploymentId) || !idPattern.test(command.containerId))
+    if (
+      !Object.values(command.identity).every((value) => uuidPattern.test(value)) ||
+      !idPattern.test(command.containerId)
+    )
       throw new RangeError("Runtime cleanup identity is invalid");
     await this.prepareDockerConfiguration();
+    const absent = async (): Promise<boolean> => {
+      const result = await this.execute(
+        ["ps", "--all", "--quiet", "--no-trunc", "--filter", `id=${command.containerId}`],
+        command.signal,
+      );
+      return result.stdout.trim() === "";
+    };
+    const inspected = await this.inspect(command.containerId, command.signal);
+    if (inspected === undefined) {
+      if (await absent()) return;
+      throw fail(
+        "runtime_metadata_invalid",
+        "Runtime cleanup ownership could not be verified",
+        false,
+      );
+    }
+    const actual = inspected.Config?.Labels ?? {};
+    if (
+      inspected.Id !== command.containerId ||
+      actual["dev.launchrail.managed"] !== "true" ||
+      actual["dev.launchrail.deployment-id"] !== command.identity.deploymentId ||
+      actual["dev.launchrail.organization-id"] !== command.identity.organizationId ||
+      actual["dev.launchrail.project-id"] !== command.identity.projectId ||
+      actual["dev.launchrail.work-item-id"] !== command.identity.workItemId
+    )
+      throw fail(
+        "runtime_metadata_invalid",
+        "Runtime cleanup ownership could not be verified",
+        false,
+      );
+    const stopGraceSeconds = Math.min(
+      this.limits.stopGraceSeconds,
+      Math.max(0, Math.floor(this.timeoutMs / 1000) - 1),
+    );
     try {
       await this.execute(
-        ["stop", "--time", String(this.limits.stopGraceSeconds), command.containerId],
+        ["stop", "--time", String(stopGraceSeconds), command.containerId],
         command.signal,
       );
     } catch {
@@ -456,6 +459,7 @@ export class DockerDeploymentRuntimeManager implements DeploymentRuntimeManager 
     try {
       await this.execute(["rm", command.containerId], command.signal);
     } catch {
+      if (await absent()) return;
       throw fail("runtime_cleanup_failed", "The runtime container could not be removed", true);
     }
   }

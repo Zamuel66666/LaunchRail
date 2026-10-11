@@ -6,6 +6,9 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 
 ### Verification fixes
 
+- Runtime stop/orphan cleanup now verifies every ownership label, reserves time for graceful stop within the Docker command deadline, and treats confirmed concurrent removal as successful cleanup. A Docker outage is never treated as resource absence.
+- Added real Docker acceptance for the healthy, failed-health, Node.js, and Python applications built from repository-root contexts.
+
 - Updated Next.js and its lint configuration to 16.3.8, Fastify to 5.12.5, and affected transitive dependencies; the production dependency audit reports zero known vulnerabilities after the update.
 
 - Restored the complete deployment queue path, including runtime-start wake-ups and queue-depth collection through the supported BullMQ queue API.

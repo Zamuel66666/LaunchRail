@@ -6,6 +6,8 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 
 ### Verification fixes
 
+- Updated Next.js and its lint configuration to 16.3.8, Fastify to 5.12.5, and affected transitive dependencies; the production dependency audit reports zero known vulnerabilities after the update.
+
 - Restored the complete deployment queue path, including runtime-start wake-ups and queue-depth collection through the supported BullMQ queue API.
 - Completed the BullMQ tracing bridge so failed/completed jobs do not interrupt consumption; allowlisted trace attributes and events exclude IDs, queue configuration, error text, and arbitrary tracestate.
 - Fixed OpenTelemetry initialization, webhook retry persistence, API configuration/types, and active-runtime transition imports exposed by full compilation and service tests.

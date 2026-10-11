@@ -111,7 +111,13 @@ export function buildServer({
         const signature = request.headers["x-hub-signature-256"];
         const deliveryId = request.headers["x-github-delivery"];
         const eventName = request.headers["x-github-event"];
-        if (deliveryId === undefined || eventName === undefined)
+        if (
+          deliveryId === undefined ||
+          deliveryId.length > 100 ||
+          !/^[A-Za-z0-9-]+$/.test(deliveryId) ||
+          eventName === undefined ||
+          eventName.length > 100
+        )
           return reply.code(400).send({
             error: { code: "invalid_request", message: "Missing GitHub delivery headers" },
           });
@@ -142,29 +148,80 @@ export function buildServer({
           provider: "github",
           verificationState:
             verified && (eventName !== "push" || parsed !== null) ? "verified" : "rejected",
+          ...(verified && parsed !== null ? { push: parsed } : {}),
         });
-        if (!verified)
+        if (delivery.duplicate) {
+          if (!verified)
+            return reply.code(401).send({
+              error: {
+                code: "invalid_signature",
+                message: "GitHub signature verification failed",
+              },
+            });
+          return reply.code(200).send({ delivery });
+        }
+        if (!verified) {
+          await webhookStore.mark({
+            deliveryId,
+            organizationId,
+            processingError: "invalid_signature",
+            processingState: "failed",
+          });
           return reply.code(401).send({
             error: { code: "invalid_signature", message: "GitHub signature verification failed" },
           });
-        if (eventName !== "push")
+        }
+        if (eventName !== "push") {
+          await webhookStore.mark({
+            deliveryId,
+            organizationId,
+            processingError: "unsupported_event",
+            processingState: "ignored",
+          });
           return reply.code(400).send({
             error: { code: "unsupported_event", message: "GitHub event is not supported" },
           });
-        if (eventName === "push" && parsed === null)
+        }
+        if (parsed === null) {
+          await webhookStore.mark({
+            deliveryId,
+            organizationId,
+            processingError: "invalid_payload",
+            processingState: "failed",
+          });
           return reply.code(400).send({
             error: { code: "invalid_request", message: "Invalid GitHub push payload" },
           });
-        if (
-          eventName === "push" &&
-          parsed !== null &&
-          !delivery.duplicate &&
-          webhookTrigger !== undefined
-        )
+        }
+        if (webhookTrigger === undefined) {
+          await webhookStore.mark({
+            deliveryId,
+            organizationId,
+            processingError: "trigger_unavailable",
+            processingState: "failed",
+          });
+          return reply.code(503).send({
+            error: { code: "trigger_unavailable", message: "Webhook processing is unavailable" },
+          });
+        }
+        try {
           await webhookTrigger.trigger({ deliveryId, organizationId, push: parsed });
-        return reply
-          .code(delivery.duplicate ? 200 : 202)
-          .send({ delivery, ...(parsed === null ? {} : { push: parsed }) });
+          const processed = await webhookStore.mark({
+            deliveryId,
+            organizationId,
+            processingState: "processed",
+          });
+          return reply.code(202).send({ delivery: processed, push: parsed });
+        } catch (error) {
+          request.log.warn({ error, requestId: request.id }, "GitHub webhook processing failed");
+          const failed = await webhookStore.mark({
+            deliveryId,
+            organizationId,
+            processingError: "trigger_failed",
+            processingState: "failed",
+          });
+          return reply.code(503).send({ delivery: failed });
+        }
       },
     );
   }
@@ -179,6 +236,8 @@ export function buildServer({
         ...(deploymentStore === undefined ? {} : { deploymentStore }),
         ...(deploymentCreationStore === undefined ? {} : { deploymentCreationStore }),
         ...(transitionStore === undefined ? {} : { transitionStore }),
+        ...(webhookStore === undefined ? {} : { webhookDeliveryStore: webhookStore }),
+        ...(webhookTrigger === undefined ? {} : { webhookTrigger }),
         secureCookies,
         signInRateLimitMax,
         webOrigin,

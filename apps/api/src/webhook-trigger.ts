@@ -54,6 +54,7 @@ export function createGitHubWebhookDeploymentTrigger({
         const deployment = await deploymentCreationStore.createDeployment({
           organizationId: event.organizationId,
           projectId: project.id,
+          sourceEvent: { deliveryId: event.deliveryId, provider: "github" },
           sourceRevision: event.push.revision,
         });
         const ensured = await deploymentJobStore.ensurePendingClaim({

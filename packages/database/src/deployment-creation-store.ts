@@ -7,7 +7,13 @@ import { and, eq, isNull } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 
 import type { LaunchRailDatabase } from "./client.js";
-import { auditEvents, deploymentEvents, deployments, projects } from "./schema.js";
+import {
+  auditEvents,
+  deploymentEvents,
+  deployments,
+  projects,
+  webhookDeploymentTriggers,
+} from "./schema.js";
 import { DeploymentNotFoundError } from "./errors.js";
 
 export class PostgresDeploymentCreationStore implements DeploymentCreationStore {
@@ -54,6 +60,29 @@ export class PostgresDeploymentCreationStore implements DeploymentCreationStore 
         ),
       );
     if (project === undefined) throw new DeploymentNotFoundError();
+    const existingWebhookDeployment = async (): Promise<CreatedDeployment | null> => {
+      if (command.sourceEvent === undefined) return null;
+      const [existing] = await this.db
+        .select({
+          deploymentId: deployments.id,
+          organizationId: deployments.organizationId,
+          projectId: deployments.projectId,
+          sourceRevision: deployments.sourceRevision,
+        })
+        .from(webhookDeploymentTriggers)
+        .innerJoin(deployments, eq(webhookDeploymentTriggers.deploymentId, deployments.id))
+        .where(
+          and(
+            eq(webhookDeploymentTriggers.organizationId, command.organizationId),
+            eq(webhookDeploymentTriggers.provider, command.sourceEvent.provider),
+            eq(webhookDeploymentTriggers.deliveryId, command.sourceEvent.deliveryId),
+            eq(webhookDeploymentTriggers.projectId, projectId),
+          ),
+        );
+      return existing ?? null;
+    };
+    const existing = await existingWebhookDeployment();
+    if (existing !== null) return existing;
     if (command.retryOfDeploymentId !== undefined) {
       const [original] = await this.db
         .select({
@@ -74,53 +103,67 @@ export class PostgresDeploymentCreationStore implements DeploymentCreationStore 
         throw new Error("Only terminal failed deployments can be retried");
     }
     const deploymentId = randomUUID();
-    await this.db.transaction(async (transaction) => {
-      await transaction.insert(deployments).values({
-        configurationSnapshot: {
-          defaultBranch: project.defaultBranch,
-          dockerfilePath: project.dockerfilePath,
-          healthCheckPath: project.healthCheckPath,
-          healthCheckPort: project.healthCheckPort,
-          runtimeConfig: project.runtimeConfig,
-        },
-        id: deploymentId,
-        organizationId: command.organizationId,
-        projectId,
-        retryOfDeploymentId: command.retryOfDeploymentId,
-        sourceRevision,
-        sourceSnapshot: {
-          contractVersion: 1,
-          dockerfilePath: project.dockerfilePath,
-          repositoryName: project.repositoryName,
-          repositoryOwner: project.repositoryOwner,
-          repositoryProvider: "github",
-          requestedRevision: sourceRevision,
-        },
-      });
-      await transaction.insert(deploymentEvents).values({
-        deploymentId,
-        fromState: null,
-        kind: "deployment_created",
-        metadata: {},
-        organizationId: command.organizationId,
-        sequence: 0,
-        toState: "queued",
-      });
-      await transaction.insert(auditEvents).values({
-        action: "deployment.create",
-        ...(command.actorUserId === undefined ? {} : { actorUserId: command.actorUserId }),
-        metadata: {
+    try {
+      await this.db.transaction(async (transaction) => {
+        await transaction.insert(deployments).values({
+          configurationSnapshot: {
+            defaultBranch: project.defaultBranch,
+            dockerfilePath: project.dockerfilePath,
+            healthCheckPath: project.healthCheckPath,
+            healthCheckPort: project.healthCheckPort,
+            runtimeConfig: project.runtimeConfig,
+          },
+          id: deploymentId,
+          organizationId: command.organizationId,
+          projectId,
+          retryOfDeploymentId: command.retryOfDeploymentId,
           sourceRevision,
-          ...(command.retryOfDeploymentId === undefined
-            ? {}
-            : { retryOfDeploymentId: command.retryOfDeploymentId }),
-        },
-        organizationId: command.organizationId,
-        outcome: "succeeded",
-        targetId: deploymentId,
-        targetType: "deployment",
+          sourceSnapshot: {
+            contractVersion: 1,
+            dockerfilePath: project.dockerfilePath,
+            repositoryName: project.repositoryName,
+            repositoryOwner: project.repositoryOwner,
+            repositoryProvider: "github",
+            requestedRevision: sourceRevision,
+          },
+        });
+        await transaction.insert(deploymentEvents).values({
+          deploymentId,
+          fromState: null,
+          kind: "deployment_created",
+          metadata: {},
+          organizationId: command.organizationId,
+          sequence: 0,
+          toState: "queued",
+        });
+        await transaction.insert(auditEvents).values({
+          action: "deployment.create",
+          ...(command.actorUserId === undefined ? {} : { actorUserId: command.actorUserId }),
+          metadata: {
+            sourceRevision,
+            ...(command.retryOfDeploymentId === undefined
+              ? {}
+              : { retryOfDeploymentId: command.retryOfDeploymentId }),
+          },
+          organizationId: command.organizationId,
+          outcome: "succeeded",
+          targetId: deploymentId,
+          targetType: "deployment",
+        });
+        if (command.sourceEvent !== undefined)
+          await transaction.insert(webhookDeploymentTriggers).values({
+            deploymentId,
+            deliveryId: command.sourceEvent.deliveryId,
+            organizationId: command.organizationId,
+            projectId,
+            provider: command.sourceEvent.provider,
+          });
       });
-    });
+    } catch (error) {
+      const raced = await existingWebhookDeployment();
+      if (raced !== null) return raced;
+      throw error;
+    }
     return {
       deploymentId,
       organizationId: command.organizationId,

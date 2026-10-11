@@ -106,6 +106,20 @@ export interface AuditEventSummary {
   readonly targetType: string;
 }
 
+export interface WebhookDeliverySummary {
+  readonly attemptCount: number;
+  readonly deliveryId: string;
+  readonly duplicate: boolean;
+  readonly eventName: string;
+  readonly organizationId: string;
+  readonly payloadDigest: string;
+  readonly processingError: string | null;
+  readonly processingState: "failed" | "ignored" | "pending" | "processed";
+  readonly provider: string;
+  readonly receivedAt: string;
+  readonly verificationState: "rejected" | "verified";
+}
+
 interface ApiErrorBody {
   readonly error?: {
     readonly code?: string;
@@ -246,6 +260,30 @@ export async function listAuditEvents(
     signal === undefined ? {} : { signal },
   );
   return response.events;
+}
+
+export async function listWebhookDeliveries(
+  organizationId: string,
+  signal?: AbortSignal,
+): Promise<readonly WebhookDeliverySummary[]> {
+  const response = await apiRequest<{
+    readonly deliveries: readonly WebhookDeliverySummary[];
+  }>(
+    `/v1/organizations/${encodeURIComponent(organizationId)}/webhook-deliveries?limit=100`,
+    signal === undefined ? {} : { signal },
+  );
+  return response.deliveries;
+}
+
+export async function retryWebhookDelivery(
+  organizationId: string,
+  deliveryId: string,
+): Promise<WebhookDeliverySummary> {
+  const response = await apiRequest<{ readonly delivery: WebhookDeliverySummary }>(
+    `/v1/organizations/${encodeURIComponent(organizationId)}/webhook-deliveries/${encodeURIComponent(deliveryId)}/retry`,
+    { method: "POST" },
+  );
+  return response.delivery;
 }
 
 export async function retryDeployment(

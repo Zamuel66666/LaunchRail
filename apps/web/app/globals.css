@@ -961,6 +961,31 @@ button:disabled {
   margin-top: 0.45rem;
 }
 
+.webhook-deliveries-panel {
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid #294a5a;
+  border-radius: 0.7rem;
+  background: #0d202b;
+}
+
+.webhook-deliveries-panel > summary {
+  color: #9fc9da;
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.webhook-deliveries-panel p,
+.webhook-deliveries-panel ol {
+  margin: 0.7rem 0 0;
+  color: #a9c1cf;
+  font-size: 0.82rem;
+}
+
+.webhook-deliveries-panel li + li {
+  margin-top: 0.8rem;
+}
+
 .environment-panel {
   margin-top: 1rem;
   padding: 1.2rem;

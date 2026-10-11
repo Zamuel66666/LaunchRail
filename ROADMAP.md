@@ -22,7 +22,7 @@ The roadmap reports verified repository state, not aspirations as completed feat
 
 - **Phase 10 — Health checks and activation:** health outcomes, prior-route preservation, and interrupted-grace cleanup are implemented; independent verification is deferred by request.
 - **Phase 11 — Deployment controls:** API controls, retry lineage, timeline history, confirmations, actionable browser feedback, and deployment-scoped operator audit history are implemented; independent race/failure-injection verification is deferred.
-- **Phase 12 — GitHub webhooks:** signed push ingestion creates matching queued deployment snapshots; direct queue publication and richer delivery processing remain.
+- **Phase 12 — GitHub webhooks:** verified signed pushes persist normalized retry data, idempotently create deployments, publish wake-ups, expose processing outcomes, and support scoped operator retry; independent verification is deferred.
 - **Phase 13 — Observability:** request/process metrics and correlation IDs are available; deployment/queue/health metrics, traces, and dashboards remain.
 
 ### Planned later
@@ -227,11 +227,11 @@ Exit gate: independent concurrency and failure-injection verification proves saf
 
 ### Phase 12 — GitHub webhooks
 
-**Status:** In progress
+**Status:** In progress — implementation complete; independent verification deferred by request
 
-Signature verification, strict push-event parsing, safe wildcard branch filtering, organization-scoped delivery persistence with provider/delivery deduplication, and configured-organization API ingestion create queued deployments for matching project branches. Each durable deployment now immediately publishes its deterministic claim wake-up; worker reconciliation remains the safe fallback if Redis is unavailable. Delivery-result presentation and retry tooling remain to be implemented.
+Signature verification, strict push-event parsing, safe wildcard branch filtering, organization-scoped delivery persistence with provider/delivery deduplication, and configured-organization API ingestion create queued deployments for matching project branches. Each durable deployment immediately publishes its deterministic claim wake-up; worker reconciliation remains the safe fallback if Redis is unavailable. Processing state and safe error codes are durable, owners/admins can inspect recent delivery results, and deployment controllers can retry failed verified deliveries. Per-delivery/project trigger records prevent retry from creating duplicate deployment rows.
 
-Exit gate: invalid, duplicate, unsupported, oversized, and valid deliveries have deterministic tested outcomes.
+Exit gate: independently verify invalid, duplicate, unsupported, oversized, retried, partially failed, and valid deliveries against clean PostgreSQL and Redis services.
 
 ### Phase 13 — Observability
 

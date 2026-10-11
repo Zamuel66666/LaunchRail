@@ -529,6 +529,9 @@ export const webhookDeliveries = pgTable(
     verificationState: webhookVerificationState("verification_state").notNull(),
     processingState: webhookProcessingState("processing_state").default("pending").notNull(),
     payloadDigest: text("payload_digest").notNull(),
+    pushPayload: jsonb("push_payload").$type<Readonly<Record<string, unknown>>>(),
+    processingError: text("processing_error"),
+    attemptCount: integer("attempt_count").default(0).notNull(),
     receivedAt: timestamp("received_at", { mode: "date", withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -540,6 +543,44 @@ export const webhookDeliveries = pgTable(
       table.provider,
       table.deliveryId,
     ),
+    check("webhook_deliveries_attempt_count_bounds", sql`${table.attemptCount} between 0 and 100`),
+    check(
+      "webhook_deliveries_processing_error_format",
+      sql`${table.processingError} is null or ${table.processingError} ~ '^[a-z][a-z0-9_]{0,63}$'`,
+    ),
+  ],
+);
+
+export const webhookDeploymentTriggers = pgTable(
+  "webhook_deployment_triggers",
+  {
+    organizationId: uuid("organization_id").notNull(),
+    provider: text("provider").notNull(),
+    deliveryId: text("delivery_id").notNull(),
+    projectId: uuid("project_id").notNull(),
+    deploymentId: uuid("deployment_id").notNull(),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.organizationId, table.provider, table.deliveryId, table.projectId],
+      name: "webhook_deployment_triggers_pkey",
+    }),
+    unique("webhook_deployment_triggers_deployment_unique").on(table.deploymentId),
+    foreignKey({
+      columns: [table.organizationId, table.provider, table.deliveryId],
+      foreignColumns: [
+        webhookDeliveries.organizationId,
+        webhookDeliveries.provider,
+        webhookDeliveries.deliveryId,
+      ],
+      name: "webhook_deployment_triggers_delivery_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.deploymentId, table.projectId, table.organizationId],
+      foreignColumns: [deployments.id, deployments.projectId, deployments.organizationId],
+      name: "webhook_deployment_triggers_deployment_fk",
+    }).onDelete("cascade"),
   ],
 );
 

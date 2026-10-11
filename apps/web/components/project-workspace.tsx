@@ -15,7 +15,9 @@ import {
   listDeploymentEvents,
   listDeploymentHealthChecks,
   listAuditEvents,
+  listWebhookDeliveries,
   retryDeployment,
+  retryWebhookDelivery,
   controlDeployment,
   signOut,
   updateProject,
@@ -24,6 +26,7 @@ import {
   type DeploymentHealthCheckSummary,
   type DeploymentHistorySummary,
   type AuditEventSummary,
+  type WebhookDeliverySummary,
   type Membership,
   type ProjectInput,
   type ProjectSummary,
@@ -428,7 +431,9 @@ function ProjectCard({
                       <ol>
                         {auditEvents[deployment.deploymentId]?.map((event) => (
                           <li key={event.id}>
-                            <strong>{event.action.replaceAll(".", " ").replaceAll("_", " ")}</strong>
+                            <strong>
+                              {event.action.replaceAll(".", " ").replaceAll("_", " ")}
+                            </strong>
                             {` · ${event.outcome}`}
                             <br />
                             <span>{formatDate(event.createdAt)}</span>
@@ -554,6 +559,12 @@ export function ProjectWorkspace() {
   const [archiving, setArchiving] = useState(false);
   const [announcement, setAnnouncement] = useState("");
   const [signingOut, setSigningOut] = useState(false);
+  const [webhookDeliveries, setWebhookDeliveries] = useState<
+    readonly WebhookDeliverySummary[] | null
+  >(null);
+  const [loadingWebhookDeliveries, setLoadingWebhookDeliveries] = useState(false);
+  const [retryingWebhookDeliveryId, setRetryingWebhookDeliveryId] = useState<string | null>(null);
+  const [webhookDeliveryError, setWebhookDeliveryError] = useState("");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -623,6 +634,7 @@ export function ProjectWorkspace() {
   const canManageSecrets = permissions.includes("secret:manage");
   const canReadSecrets = permissions.includes("secret:read-metadata");
   const canReadAudit = permissions.includes("audit:read");
+  const canControlDeployments = permissions.includes("deployment:control");
 
   function openEditor(project: ProjectSummary | null): void {
     setProjectError("");
@@ -747,6 +759,35 @@ export function ProjectWorkspace() {
         ? { ...current, environmentVariables: variables }
         : current,
     );
+  }
+
+  function loadWebhookDeliveries(): void {
+    if (webhookDeliveries !== null || loadingWebhookDeliveries) return;
+    setLoadingWebhookDeliveries(true);
+    setWebhookDeliveryError("");
+    void listWebhookDeliveries(selectedOrganizationId)
+      .then(setWebhookDeliveries)
+      .catch((error: unknown) =>
+        setWebhookDeliveryError(actionError(error, "GitHub deliveries could not be loaded.")),
+      )
+      .finally(() => setLoadingWebhookDeliveries(false));
+  }
+
+  function retryDelivery(deliveryId: string): void {
+    setRetryingWebhookDeliveryId(deliveryId);
+    setWebhookDeliveryError("");
+    void retryWebhookDelivery(selectedOrganizationId, deliveryId)
+      .then((updated) =>
+        setWebhookDeliveries(
+          (current) =>
+            current?.map((delivery) => (delivery.deliveryId === deliveryId ? updated : delivery)) ??
+            null,
+        ),
+      )
+      .catch((error: unknown) =>
+        setWebhookDeliveryError(actionError(error, "The GitHub delivery could not be retried.")),
+      )
+      .finally(() => setRetryingWebhookDeliveryId(null));
   }
 
   async function endSession(): Promise<void> {
@@ -940,6 +981,56 @@ export function ProjectWorkspace() {
             </div>
           )}
 
+          {canReadAudit ? (
+            <details
+              className="webhook-deliveries-panel"
+              onToggle={(event) => {
+                if (event.currentTarget.open) loadWebhookDeliveries();
+              }}
+            >
+              <summary>GitHub webhook deliveries</summary>
+              {webhookDeliveryError.length > 0 ? (
+                <p className="deployment-action-error" role="alert">
+                  {webhookDeliveryError}
+                </p>
+              ) : null}
+              {loadingWebhookDeliveries ? (
+                <p role="status">Loading signed delivery history…</p>
+              ) : webhookDeliveries === null ? (
+                <p>Open to load the latest verified delivery outcomes.</p>
+              ) : webhookDeliveries.length === 0 ? (
+                <p>No GitHub webhook deliveries have been recorded.</p>
+              ) : (
+                <ol>
+                  {webhookDeliveries.map((delivery) => (
+                    <li key={delivery.deliveryId}>
+                      <strong>{delivery.processingState}</strong>
+                      {` · ${delivery.eventName} · ${delivery.verificationState} · attempt ${delivery.attemptCount}`}
+                      {delivery.processingError === null ? "" : ` · ${delivery.processingError}`}
+                      <br />
+                      <code>{delivery.deliveryId}</code>
+                      {` · ${formatDate(delivery.receivedAt)}`}
+                      {canControlDeployments &&
+                      delivery.processingState === "failed" &&
+                      delivery.verificationState === "verified" ? (
+                        <button
+                          className="button-secondary"
+                          disabled={retryingWebhookDeliveryId !== null}
+                          onClick={() => retryDelivery(delivery.deliveryId)}
+                          type="button"
+                        >
+                          {retryingWebhookDeliveryId === delivery.deliveryId
+                            ? "Retrying…"
+                            : "Retry delivery"}
+                        </button>
+                      ) : null}
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </details>
+          ) : null}
+
           {projectsStatus === "loading" || projectsStatus === "idle" ? (
             <LoadingState label="Loading projects" />
           ) : projectsStatus === "unavailable" ? null : projects.length === 0 ? (
@@ -967,9 +1058,8 @@ export function ProjectWorkspace() {
                 <div>
                   <h2>{projects.length === 1 ? "1 project" : `${projects.length} projects`}</h2>
                   <p>
-                    Configuration is authoritative; health-checked deployment controls and release
-                    history are available through the API while the operator timeline is being
-                    completed.
+                    Configuration and release history are authoritative; deployments activate only
+                    after their recorded health check passes.
                   </p>
                 </div>
                 {canCreate ? (

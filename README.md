@@ -2,7 +2,7 @@
 
 **A self-hosted platform that turns a GitHub repository into a health-checked application deployment with live logs, preview URLs, release history, and safe rollback.**
 
-> **Phases 0–9 are Available.** Phase 10's health outcomes, route-preservation, and interruption implementation is in place; independent verification is deferred at the user's request. Phase 11 now includes scoped operator audit history. Webhook operations, complete telemetry, recovery, UX, and release work remain.
+> **Phases 0–9 are Available.** Phases 10–12 now include recorded health outcomes, interrupted-candidate cleanup, scoped operator audit history, and retryable GitHub delivery processing; independent verification is deferred at the user's request. Full telemetry, failure recovery, UX, and release work remain.
 
 ## What LaunchRail does
 
@@ -87,10 +87,11 @@ LaunchRail will use a modular monolith for the web/API boundary and a separate w
 - The project workspace shows each deployment's recorded health attempts and ordered lifecycle activity, and confirms stop/cancel/rollback actions before sending them.
 - Runtime health failures are categorized and recorded before terminal failure, preserve the previous active release and preview route, and interrupted startup grace cleans the candidate runtime without probing or promoting it.
 - Owner/admin users can expand deployment-scoped audit entries alongside lifecycle events.
+- Signed webhook outcomes are persisted, reviewable by audit readers, and failed verified deliveries can be retried without duplicating a deployment for the same delivery/project pair.
 
 ### Planned next
 
-- Prove deployment-control races through failure-injection acceptance; finish webhook delivery-result presentation and retry tooling; then add deployment/queue/health telemetry and dashboard evidence.
+- Prove deployment and webhook control races through failure-injection acceptance; then add deployment/queue/health telemetry, dashboard evidence, recovery workflows, and release readiness.
 
 ### Not currently planned
 
@@ -141,6 +142,7 @@ See the [development guide](docs/development.md) for verification, configuration
 - [Authentication and authorization](docs/authentication.md)
 - [Project management and secret rotation](docs/project-management.md)
 - [Queue and worker operations](docs/queue-worker.md)
+- [GitHub webhook delivery operations](docs/webhooks.md)
 - [Repository preparation and source security](docs/repository-preparation.md)
 - [Image builds and BuildKit boundaries](docs/image-builds.md)
 - [Architecture decisions](docs/adr/)

@@ -6,6 +6,8 @@ import {
   type IdentityStore,
   type ProjectManagementStore,
   type SessionPrincipal,
+  type WebhookDeliveryStore,
+  type WebhookDeploymentTrigger,
 } from "@launchrail/application";
 import {
   hasOrganizationPermission,
@@ -24,6 +26,8 @@ interface RegisterAuthRoutesOptions {
   readonly deploymentStore?: DeploymentJobStore;
   readonly deploymentCreationStore?: DeploymentCreationStore;
   readonly transitionStore?: DeploymentTransitionStore;
+  readonly webhookDeliveryStore?: WebhookDeliveryStore;
+  readonly webhookTrigger?: WebhookDeploymentTrigger;
   readonly secureCookies: boolean;
   readonly signInRateLimitMax: number;
   readonly webOrigin: string;
@@ -266,6 +270,120 @@ export function registerAuthRoutes(
         : { members: await options.identityStore.listMembers(request.params.organizationId) };
     },
   );
+
+  if (options.webhookDeliveryStore !== undefined) {
+    server.get<{
+      Params: OrganizationParams;
+      Querystring: { limit?: string };
+    }>(
+      "/v1/organizations/:organizationId/webhook-deliveries",
+      {
+        schema: {
+          params: organizationParamsSchema,
+          querystring: {
+            additionalProperties: false,
+            properties: { limit: { pattern: "^[0-9]{1,3}$", type: "string" } },
+            type: "object",
+          },
+        },
+      },
+      async (request, reply) => {
+        const authorization = await authorizeOrganization(
+          request,
+          reply,
+          request.params.organizationId,
+          "audit:read",
+        );
+        if (authorization === null) return;
+        const limit = request.query.limit === undefined ? 50 : Number(request.query.limit);
+        if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100)
+          return reply
+            .code(400)
+            .send(errorBody("invalid_request", "Invalid delivery history limit"));
+        return {
+          deliveries: await options.webhookDeliveryStore?.list(
+            request.params.organizationId,
+            limit,
+          ),
+        };
+      },
+    );
+
+    server.post<{
+      Params: { organizationId: string; deliveryId: string };
+    }>(
+      "/v1/organizations/:organizationId/webhook-deliveries/:deliveryId/retry",
+      {
+        schema: {
+          params: {
+            additionalProperties: false,
+            properties: {
+              deliveryId: {
+                maxLength: 100,
+                minLength: 1,
+                pattern: "^[A-Za-z0-9-]+$",
+                type: "string",
+              },
+              organizationId: { pattern: uuidPattern, type: "string" },
+            },
+            required: ["organizationId", "deliveryId"],
+            type: "object",
+          },
+        },
+      },
+      async (request, reply) => {
+        const authorization = await authorizeOrganization(
+          request,
+          reply,
+          request.params.organizationId,
+          "deployment:control",
+        );
+        if (authorization === null) return;
+        const trigger = options.webhookTrigger;
+        if (trigger === undefined)
+          return reply
+            .code(503)
+            .send(errorBody("retry_unavailable", "Webhook retry is unavailable"));
+        const retry = await options.webhookDeliveryStore?.loadRetry(
+          request.params.organizationId,
+          request.params.deliveryId,
+        );
+        if (retry === null || retry === undefined)
+          return reply
+            .code(409)
+            .send(errorBody("delivery_not_retryable", "Delivery cannot be retried"));
+        await options.webhookDeliveryStore.mark({
+          deliveryId: retry.deliveryId,
+          organizationId: request.params.organizationId,
+          processingState: "pending",
+          retry: true,
+        });
+        try {
+          await trigger.trigger({
+            deliveryId: retry.deliveryId,
+            organizationId: request.params.organizationId,
+            push: retry.push,
+          });
+          return {
+            delivery: await options.webhookDeliveryStore.mark({
+              deliveryId: retry.deliveryId,
+              organizationId: request.params.organizationId,
+              processingState: "processed",
+            }),
+          };
+        } catch (error) {
+          request.log.warn({ error, requestId: request.id }, "GitHub webhook retry failed");
+          const delivery = await options.webhookDeliveryStore.mark({
+            deliveryId: retry.deliveryId,
+            organizationId: request.params.organizationId,
+            processingError: "retry_failed",
+            processingState: "failed",
+          });
+          return reply.code(503).send({ delivery });
+        }
+      },
+    );
+  }
 
   server.patch<{ Body: UpdateMembershipBody; Params: MembershipParams }>(
     "/v1/organizations/:organizationId/members/:userId",

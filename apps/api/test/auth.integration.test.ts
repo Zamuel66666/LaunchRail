@@ -3,6 +3,7 @@ import type {
   DeploymentJobStore,
   DeploymentTransitionStore,
   IdentityStore,
+  RecordWebhookDeliveryCommand,
 } from "@launchrail/application";
 import { afterEach, describe, expect, it } from "vitest";
 import { DeploymentPersistenceConflictError } from "@launchrail/database";
@@ -92,21 +93,70 @@ describe("GitHub webhook ingestion", () => {
       ref: "refs/heads/main",
       repository: { name: "app", owner: { login: "octo" } },
     };
-    const records: Array<{ deliveryId: string }> = [];
+    const records = new Map<
+      string,
+      {
+        command: RecordWebhookDeliveryCommand;
+        attemptCount: number;
+        processingError: string | null;
+        processingState: "failed" | "ignored" | "pending" | "processed";
+        receivedAt: Date;
+      }
+    >();
     const triggered: string[] = [];
     const server = buildServer({
       webhookOrganizationId: organizationId,
       webhookSecret: "secret",
       webhookStore: {
         async record(command) {
-          const duplicate = records.some((record) => record.deliveryId === command.deliveryId);
-          if (!duplicate) records.push({ deliveryId: command.deliveryId });
-          return {
-            ...command,
-            duplicate,
+          const existing = records.get(command.deliveryId);
+          if (existing !== undefined) return { ...existing.command, ...existing, duplicate: true };
+          const value = {
+            command,
+            attemptCount: 1,
+            processingError: null,
             processingState: "pending" as const,
             receivedAt: new Date("2026-01-01T00:00:00Z"),
           };
+          records.set(command.deliveryId, value);
+          return {
+            ...command,
+            ...value,
+            duplicate: false,
+          };
+        },
+        async list() {
+          return Array.from(records.values()).map((record) => ({
+            ...record.command,
+            attemptCount: record.attemptCount,
+            duplicate: false,
+            processingError: record.processingError,
+            processingState: record.processingState,
+            receivedAt: record.receivedAt,
+          }));
+        },
+        async mark(command) {
+          const current = records.get(command.deliveryId);
+          if (current === undefined) throw new Error("missing delivery");
+          const next = {
+            ...current,
+            attemptCount: current.attemptCount + (command.retry === true ? 1 : 0),
+            processingError: command.processingError ?? null,
+            processingState: command.processingState,
+          };
+          records.set(command.deliveryId, next);
+          return { ...next.command, ...next, duplicate: false };
+        },
+        async loadRetry(organizationId, deliveryId) {
+          const record = records.get(deliveryId);
+          if (
+            record === undefined ||
+            record.command.organizationId !== organizationId ||
+            record.processingState !== "failed" ||
+            record.command.push === undefined
+          )
+            return null;
+          return { deliveryId, push: record.command.push };
         },
       },
       webhookTrigger: {

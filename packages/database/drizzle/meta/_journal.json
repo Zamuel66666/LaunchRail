@@ -71,6 +71,13 @@
       "when": 1789304400000,
       "tag": "0009_health_check_attempts",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791712095838,
+      "tag": "0010_hard_phil_sheldon",
+      "breakpoints": true
     }
   ]
 }

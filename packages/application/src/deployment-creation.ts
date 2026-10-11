@@ -3,6 +3,10 @@ export interface CreateDeploymentCommand {
   readonly organizationId: string;
   readonly projectId?: string;
   readonly retryOfDeploymentId?: string;
+  readonly sourceEvent?: {
+    readonly deliveryId: string;
+    readonly provider: string;
+  };
   readonly sourceRevision?: string;
 }
 

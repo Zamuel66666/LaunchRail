@@ -52,6 +52,8 @@ import {
 
 const markerFileName = "checkout.json";
 const lfsPointerPrefix = "version https://git-lfs.github.com/spec/v1\n";
+const stageDirectoryPattern =
+  /^\.prepare-([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})-[A-Za-z0-9_-]+$/u;
 
 interface CheckoutMarkerV1 {
   readonly checkoutKey: string;
@@ -728,6 +730,42 @@ export class HardenedGitRepositoryCheckout implements RepositoryCheckout {
     const finalDirectory = join(root, checkoutKey);
     assertContained(root, finalDirectory);
     await rm(finalDirectory, { force: true, recursive: true });
+  }
+
+  public async cleanupAbandonedStages(command: {
+    readonly olderThan: Date;
+    readonly protectedCheckoutKeys: readonly string[];
+  }): Promise<number> {
+    if (!Number.isFinite(command.olderThan.getTime()))
+      throw new RangeError("Stale checkout cutoff must be a valid date");
+    const root = await this.prepareRoot();
+    const protectedKeys = new Set(command.protectedCheckoutKeys);
+    const directory = await opendir(root);
+    let removed = 0;
+    let inspected = 0;
+    for await (const entry of directory) {
+      const match = stageDirectoryPattern.exec(entry.name);
+      const checkoutKey = match?.[1];
+      if (
+        checkoutKey === undefined ||
+        protectedKeys.has(checkoutKey) ||
+        !entry.isDirectory() ||
+        inspected >= 1_000
+      )
+        continue;
+      inspected += 1;
+      const stageDirectory = join(root, entry.name);
+      const stats = await lstat(stageDirectory);
+      if (
+        !stats.isDirectory() ||
+        stats.isSymbolicLink() ||
+        stats.mtimeMs >= command.olderThan.getTime()
+      )
+        continue;
+      await rm(stageDirectory, { force: true, recursive: true });
+      removed += 1;
+    }
+    return removed;
   }
 }
 

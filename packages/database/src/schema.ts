@@ -652,6 +652,7 @@ export const deploymentSourcePreparations = pgTable(
     preparedAt: timestamp("prepared_at", { mode: "date", withTimezone: true })
       .defaultNow()
       .notNull(),
+    checkoutRemovedAt: timestamp("checkout_removed_at", { mode: "date", withTimezone: true }),
   },
   (table) => [
     foreignKey({

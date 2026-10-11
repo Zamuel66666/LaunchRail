@@ -138,31 +138,32 @@ export function createDeploymentWorkerComponents({
     store,
     workerId,
   });
+  const deploymentImageBuilder =
+    imageBuilder ??
+    new BuildKitImageBuilder({
+      buildRootDirectory: config.WORKER_BUILD_ROOT,
+      dockerConfigDirectory: join(config.WORKER_BUILD_ROOT, "docker-config"),
+      platform: config.WORKER_BUILD_PLATFORM,
+      timeoutMs: config.WORKER_BUILD_TIMEOUT_MS,
+      limits: {
+        cpuMillicores: config.WORKER_BUILD_CPU_MILLICORES,
+        maxImageBytes: config.WORKER_BUILD_IMAGE_MAX_BYTES,
+        maxInspectBytes: config.WORKER_BUILD_INSPECT_BYTES,
+        maxLogBytes: config.WORKER_BUILD_LOG_MAX_BYTES,
+        maxLogChunkBytes: config.WORKER_BUILD_LOG_CHUNK_BYTES,
+        maxMetadataBytes: config.WORKER_BUILD_METADATA_BYTES,
+        maxProgressBytes: config.WORKER_BUILD_PROGRESS_BYTES,
+        maxProgressLineBytes: config.WORKER_BUILD_PROGRESS_LINE_BYTES,
+        memoryMegabytes: config.WORKER_BUILD_MEMORY_MEGABYTES,
+        processLimit: config.WORKER_BUILD_PROCESS_LIMIT,
+        sharedMemoryMegabytes: config.WORKER_BUILD_SHARED_MEMORY_MEGABYTES,
+      },
+    });
   const buildProcessor = new DeploymentBuildProcessor({
     backoffBaseMs: config.WORKER_BACKOFF_BASE_MS,
     backoffCapMs: config.WORKER_BACKOFF_CAP_MS,
     heartbeatIntervalMs: config.WORKER_HEARTBEAT_INTERVAL_MS,
-    imageBuilder:
-      imageBuilder ??
-      new BuildKitImageBuilder({
-        buildRootDirectory: config.WORKER_BUILD_ROOT,
-        dockerConfigDirectory: join(config.WORKER_BUILD_ROOT, "docker-config"),
-        platform: config.WORKER_BUILD_PLATFORM,
-        timeoutMs: config.WORKER_BUILD_TIMEOUT_MS,
-        limits: {
-          cpuMillicores: config.WORKER_BUILD_CPU_MILLICORES,
-          maxImageBytes: config.WORKER_BUILD_IMAGE_MAX_BYTES,
-          maxInspectBytes: config.WORKER_BUILD_INSPECT_BYTES,
-          maxLogBytes: config.WORKER_BUILD_LOG_MAX_BYTES,
-          maxLogChunkBytes: config.WORKER_BUILD_LOG_CHUNK_BYTES,
-          maxMetadataBytes: config.WORKER_BUILD_METADATA_BYTES,
-          maxProgressBytes: config.WORKER_BUILD_PROGRESS_BYTES,
-          maxProgressLineBytes: config.WORKER_BUILD_PROGRESS_LINE_BYTES,
-          memoryMegabytes: config.WORKER_BUILD_MEMORY_MEGABYTES,
-          processLimit: config.WORKER_BUILD_PROCESS_LIMIT,
-          sharedMemoryMegabytes: config.WORKER_BUILD_SHARED_MEMORY_MEGABYTES,
-        },
-      }),
+    imageBuilder: deploymentImageBuilder,
     jobTimeoutMs: config.WORKER_JOB_TIMEOUT_MS,
     leaseDurationMs: config.WORKER_LEASE_MS,
     logMaxRetainedBytes: config.WORKER_BUILD_LOG_MAX_BYTES,
@@ -205,6 +206,7 @@ export function createDeploymentWorkerComponents({
     batchSize: config.WORKER_RECONCILIATION_BATCH_SIZE,
     logger,
     maxAttempts: config.WORKER_MAX_ATTEMPTS,
+    imageBuilder: deploymentImageBuilder,
     ...(metrics === undefined ? {} : { metrics }),
     publisher,
     store,
@@ -212,6 +214,7 @@ export function createDeploymentWorkerComponents({
       configurationDirectory: config.WORKER_TRAEFIK_DYNAMIC_CONFIG_DIR,
     }),
     runtimeManager: deploymentRuntimeManager,
+    repositoryCheckout: checkout,
   });
   const runtime = new DeploymentWorkerRuntime({
     consumer,

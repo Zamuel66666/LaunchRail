@@ -4,7 +4,7 @@
 
 Phase 6 extends LaunchRail's durable background-work foundation through source preparation. PostgreSQL owns every work item's identity, organization/deployment relationship, status, attempt count, due time, lease, safe failure, completion/dead-letter result, immutable source input/output, and worker heartbeat. Redis and BullMQ provide at-least-once wake-ups only.
 
-Two job kinds are implemented. `deployment.claim` advances an eligible deployment from `queued` to `cloning` and durably hands off `deployment.prepare_source`; the source job verifies and checks out the immutable public GitHub revision, stores portable metadata, and advances `cloning` to `building`. There is no deployment-start use case, HTTP endpoint, or web flow, and the worker does not build an image, start a container, route traffic, activate a release, or expose deployment controls.
+Phase 6 itself covers two job kinds: `deployment.claim` advances an eligible deployment from `queued` to `cloning` and durably hands off `deployment.prepare_source`; the source job verifies and checks out the immutable public GitHub revision, stores portable metadata, and advances `cloning` to `building`. Later phases add manual deployment start, image building, runtime, health-gated routing, and operator controls. Current gaps in those later phases are tracked in the roadmap.
 
 ## Identifier-only wake-up contract
 
@@ -65,7 +65,7 @@ The bounded reconciliation loop:
 
 This repairs enqueue failures, deleted/missing Redis jobs, and worker interruption across claim and source preparation. Duplicate wake-ups either find a busy/complete/dead-lettered row or replay existing durable results. A validated final checkout carries a trusted manifest marker and is adopted only after complete revalidation, covering a crash after atomic rename but before the database commit. No restart silently marks work complete.
 
-Phase 14 reconciliation now inventories LaunchRail-labeled runtime containers after route reconciliation. It protects container IDs already recorded in PostgreSQL and any container whose runtime work item has an unexpired lease, then re-verifies all ownership labels before removing an unrecorded runtime or one belonging to a terminal deployment. Persisted cleanup state and low-cardinality counters make repeated failures retryable and observable. This only covers Docker runtime containers; source/build staging, BuildKit/image resources, proxy interruption, Redis/database outages, and cancellation/control races remain unverified recovery boundaries.
+Phase 14 reconciliation now inventories LaunchRail-labeled runtime containers after route reconciliation. It protects container IDs already recorded in PostgreSQL and any container whose runtime work item has an unexpired lease, then re-verifies all ownership labels before removing an unrecorded runtime or one belonging to a terminal deployment. Persisted cleanup state and low-cardinality counters make repeated failures retryable and observable. Completed source checkouts are removed only after the deployment moves past `building` and no unexpired source/build lease uses them; PostgreSQL records the cleanup timestamp. The worker also removes only `.prepare-*` and `.build-*` staging directories older than 24 hours when their corresponding source/build work is not protected by a live lease. BuildKit image records, BuildKit daemon containers, proxy interruption, Redis/database outages, and cancellation/control races remain unverified recovery boundaries.
 
 ## Worker heartbeat and shutdown
 

@@ -81,7 +81,7 @@ Ordinary failure and cancellation remove only the adapter-created staging direct
 
 A crash can occur after that rename and before PostgreSQL commits. On retry, the adapter never trusts the marker alone: it re-reads the bounded marker, rescans every source entry and Git blob identity, recomputes the Dockerfile digest, and compares all identities and totals before returning `adopted: true`. Same-size file tampering therefore fails. Concurrent preparation converges by adopting the winner after complete validation.
 
-Successful checkouts remain available for Phase 7's build context. Cleanup of abandoned final checkouts and staging directories left by a hard process/host crash is part of the broader Phase 14 recovery inventory.
+Successful checkouts remain available until the build processor consumes them. Worker reconciliation removes terminal/deployed source checkouts only after the deployment is past `building` and no unexpired source/build lease uses them; PostgreSQL records the cleanup timestamp for idempotent retries. It removes abandoned `.prepare-*` staging directories only after a 24-hour grace period and when no live source/build lease protects the deployment. Uncertain in-flight checkouts remain available for safe adoption.
 
 ## Safe failure reporting
 
@@ -112,7 +112,7 @@ The disposable PostgreSQL/Redis suite covers kind binding, immutable input loadi
 ## Current boundaries
 
 - Public GitHub only; no private credentials, enterprise GitHub, arbitrary hosts, submodules, or Git LFS.
-- No deployment-start HTTP endpoint or UI; an already-persisted immutable deployment is required.
+- This adapter consumes an already-persisted immutable deployment; the later manual deployment-start endpoint/UI is documented in the project-management and deployment-lifecycle guides.
 - No BuildKit/image/log work yet. Phase 7 consumes the retained checkout without re-resolving the source.
 - No external GitHub smoke test in acceptance CI; provider behavior is deterministic and network-independent there.
 - The current adapter accepts 40-character Git SHA-1 identifiers. The database format is future-capable for 64-character hashes, but the GitHub adapter does not claim SHA-256 repository support.

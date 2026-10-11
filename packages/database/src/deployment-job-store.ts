@@ -54,7 +54,7 @@ import type {
   RecoverExpiredDeploymentJobsCommand,
   RecoveredDeploymentJob,
   WorkerHeartbeatFreshness,
-  RuntimeRecoveryState,
+  WorkerResourceRecoveryState,
   WorkerHeartbeatStatus,
   WorkerHeartbeatSummary,
 } from "@launchrail/application";
@@ -2840,53 +2840,115 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
       .filter((runtime): runtime is DeploymentRuntimeInstanceSummary => runtime !== null);
   }
 
-  public async listRuntimeRecoveryState(): Promise<RuntimeRecoveryState> {
-    const [known, cleanupTargets, leased] = await Promise.all([
-      this.db
-        .select({ containerId: runtimeInstances.containerId })
-        .from(runtimeInstances)
-        .where(sql`${runtimeInstances.containerId} is not null`),
-      this.db
-        .select({ containerId: runtimeInstances.containerId })
-        .from(runtimeInstances)
-        .innerJoin(
-          deployments,
-          and(
-            eq(deployments.id, runtimeInstances.deploymentId),
-            eq(deployments.organizationId, runtimeInstances.organizationId),
+  public async listWorkerResourceRecoveryState(): Promise<WorkerResourceRecoveryState> {
+    const [known, cleanupTargets, leased, leasedSource, leasedBuild, cleanupCheckouts] =
+      await Promise.all([
+        this.db
+          .select({ containerId: runtimeInstances.containerId })
+          .from(runtimeInstances)
+          .where(sql`${runtimeInstances.containerId} is not null`),
+        this.db
+          .select({ containerId: runtimeInstances.containerId })
+          .from(runtimeInstances)
+          .innerJoin(
+            deployments,
+            and(
+              eq(deployments.id, runtimeInstances.deploymentId),
+              eq(deployments.organizationId, runtimeInstances.organizationId),
+            ),
+          )
+          .where(
+            and(
+              sql`${runtimeInstances.containerId} is not null`,
+              sql`(${runtimeInstances.cleanupState} in ('pending', 'failed') or ${runtimeInstances.state} in ('stopped', 'failed', 'orphaned') or ${deployments.state} in ('cancelled', 'build_failed', 'deployment_failed', 'rolled_back', 'stopped'))`,
+            ),
           ),
-        )
-        .where(
-          and(
-            sql`${runtimeInstances.containerId} is not null`,
-            sql`${runtimeInstances.cleanupState} in ('pending', 'failed') or ${runtimeInstances.state} in ('stopped', 'failed', 'orphaned') or ${deployments.state} in ('cancelled', 'build_failed', 'deployment_failed', 'stopped')`,
+        this.db
+          .select({ workItemId: deploymentJobs.id })
+          .from(deploymentJobs)
+          .where(
+            and(
+              eq(deploymentJobs.kind, deploymentStartRuntimeJobKind),
+              eq(deploymentJobs.status, "running"),
+              sql`${deploymentJobs.leaseExpiresAt} > clock_timestamp()`,
+            ),
           ),
-        ),
-      this.db
-        .select({ workItemId: deploymentJobs.id })
-        .from(deploymentJobs)
-        .where(
-          and(
-            eq(deploymentJobs.kind, deploymentStartRuntimeJobKind),
-            eq(deploymentJobs.status, "running"),
-            sql`${deploymentJobs.leaseExpiresAt} > clock_timestamp()`,
+        this.db
+          .select({ deploymentId: deploymentJobs.deploymentId })
+          .from(deploymentJobs)
+          .where(
+            and(
+              eq(deploymentJobs.kind, deploymentPrepareSourceJobKind),
+              eq(deploymentJobs.status, "running"),
+              sql`${deploymentJobs.leaseExpiresAt} > clock_timestamp()`,
+            ),
           ),
-        ),
-    ]);
+        this.db
+          .select({ deploymentId: deploymentJobs.deploymentId, workItemId: deploymentJobs.id })
+          .from(deploymentJobs)
+          .where(
+            and(
+              eq(deploymentJobs.kind, deploymentBuildJobKind),
+              eq(deploymentJobs.status, "running"),
+              sql`${deploymentJobs.leaseExpiresAt} > clock_timestamp()`,
+            ),
+          ),
+        this.db
+          .select({ checkoutId: deploymentSourcePreparations.checkoutId })
+          .from(deploymentSourcePreparations)
+          .innerJoin(
+            deployments,
+            and(
+              eq(deployments.id, deploymentSourcePreparations.deploymentId),
+              eq(deployments.organizationId, deploymentSourcePreparations.organizationId),
+            ),
+          )
+          .where(
+            and(
+              sql`${deploymentSourcePreparations.checkoutRemovedAt} is null`,
+              sql`${deployments.state} not in ('queued', 'cloning', 'building')`,
+              notExists(
+                this.db
+                  .select({ id: deploymentJobs.id })
+                  .from(deploymentJobs)
+                  .where(
+                    and(
+                      eq(deploymentJobs.deploymentId, deploymentSourcePreparations.deploymentId),
+                      inArray(deploymentJobs.kind, [
+                        deploymentPrepareSourceJobKind,
+                        deploymentBuildJobKind,
+                      ]),
+                      eq(deploymentJobs.status, "running"),
+                      sql`${deploymentJobs.leaseExpiresAt} > clock_timestamp()`,
+                    ),
+                  ),
+              ),
+            ),
+          )
+          .orderBy(asc(deploymentSourcePreparations.preparedAt))
+          .limit(1_000),
+      ]);
     return {
       cleanupContainerIds: cleanupTargets.flatMap((row) =>
         row.containerId === null ? [] : [row.containerId],
       ),
+      cleanupCheckoutKeys: cleanupCheckouts.map((row) => row.checkoutId),
       knownContainerIds: known.flatMap((row) =>
         row.containerId === null ? [] : [row.containerId],
       ),
+      leasedBuildWorkItemIds: leasedBuild.map((row) => row.workItemId),
+      leasedCheckoutKeys: [
+        ...new Set([
+          ...leasedSource.map((row) => row.deploymentId),
+          ...leasedBuild.map((row) => row.deploymentId),
+        ]),
+      ],
       leasedWorkItemIds: leased.map((row) => row.workItemId),
     };
   }
 
   public async recordRuntimeCleanup(command: {
     readonly containerId: string;
-    readonly organizationId: string;
     readonly state: "complete" | "failed";
   }): Promise<void> {
     await this.db
@@ -2896,10 +2958,19 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
         state: command.state === "complete" ? "stopped" : "orphaned",
         updatedAt: sql<Date>`clock_timestamp()`,
       })
+      .where(eq(runtimeInstances.containerId, command.containerId));
+  }
+
+  public async recordSourceCheckoutCleanup(command: {
+    readonly checkoutKey: string;
+  }): Promise<void> {
+    await this.db
+      .update(deploymentSourcePreparations)
+      .set({ checkoutRemovedAt: sql<Date>`clock_timestamp()` })
       .where(
         and(
-          eq(runtimeInstances.containerId, command.containerId),
-          eq(runtimeInstances.organizationId, command.organizationId),
+          eq(deploymentSourcePreparations.checkoutId, command.checkoutKey),
+          sql`${deploymentSourcePreparations.checkoutRemovedAt} is null`,
         ),
       );
   }

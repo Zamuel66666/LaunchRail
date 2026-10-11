@@ -1,0 +1,1 @@
+ALTER TABLE "deployment_source_preparations" ADD COLUMN "checkout_removed_at" timestamp with time zone;

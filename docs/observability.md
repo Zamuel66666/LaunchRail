@@ -4,7 +4,7 @@
 
 When a deployment is slow or fails, a user should see which stage failed and what they can do. An operator should be able to follow the same deployment across the browser request, queue job, worker steps, Docker resources, health checks, and route update without searching unrelated text logs.
 
-Phase 1 establishes structured Pino logging, shared credential redaction, and process-health endpoints. Phase 5 adds bounded completion, retry, dead-letter, fencing, reconciliation, infrastructure, heartbeat-failure, and shutdown control-plane events. Phase 6 adds safe source-prepared, source-retry/dead-letter, source-fencing, and source-failure-persistence events plus durable portable source metadata. The API and worker now expose request, webhook, health, runtime, active-job, reconciliation, and runtime-orphan cleanup metrics; a versioned local Prometheus/Grafana dashboard is included. These additions await the independent verification requested for the current implementation pass.
+Phase 1 establishes structured Pino logging, shared credential redaction, and process-health endpoints. Phase 5 adds bounded completion, retry, dead-letter, fencing, reconciliation, infrastructure, heartbeat-failure, and shutdown control-plane events. Phase 6 adds safe source-prepared, source-retry/dead-letter, source-fencing, and source-failure-persistence events plus durable portable source metadata. The API and worker now expose request, webhook, health, runtime, active-job, reconciliation, runtime-orphan, and source/build cleanup metrics; a versioned local Prometheus/Grafana dashboard is included. These additions await the independent verification requested for the current implementation pass.
 
 ## Correlation model
 
@@ -69,7 +69,7 @@ Queue propagation creates linked asynchronous traces rather than pretending the 
 
 ## Dashboards and alerts
 
-The provisioned local Grafana dashboard currently charts API request rate, webhook outcomes, health-check outcomes/duration, worker dispatch failures/memory, and orphan-runtime cleanup outcomes. Follow-on dashboard panels should answer:
+The provisioned local Grafana dashboard currently charts API request rate, webhook outcomes, health-check outcomes/duration, worker dispatch failures/memory, orphan-runtime cleanup outcomes, source/build staging cleanup volume/failures, and completed checkout removals. Follow-on dashboard panels should answer:
 
 1. Are API and worker processes available?
 2. Is queued work growing or stuck?

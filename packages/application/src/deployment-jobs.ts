@@ -505,9 +505,12 @@ export interface WorkerHeartbeatSummary {
   readonly workerId: string;
 }
 
-export interface RuntimeRecoveryState {
+export interface WorkerResourceRecoveryState {
   readonly cleanupContainerIds: readonly string[];
+  readonly cleanupCheckoutKeys: readonly string[];
   readonly knownContainerIds: readonly string[];
+  readonly leasedBuildWorkItemIds: readonly string[];
+  readonly leasedCheckoutKeys: readonly string[];
   readonly leasedWorkItemIds: readonly string[];
 }
 
@@ -576,12 +579,12 @@ export interface DeploymentJobStore {
     query: ListWorkerHeartbeatsQuery,
   ): Promise<readonly WorkerHeartbeatSummary[]>;
   listRoutableRuntimes?: () => Promise<readonly DeploymentRuntimeInstanceSummary[]>;
-  listRuntimeRecoveryState?: () => Promise<RuntimeRecoveryState>;
+  listWorkerResourceRecoveryState?: () => Promise<WorkerResourceRecoveryState>;
   recordRuntimeCleanup?(command: {
     readonly containerId: string;
-    readonly organizationId: string;
     readonly state: "complete" | "failed";
   }): Promise<void>;
+  recordSourceCheckoutCleanup?(command: { readonly checkoutKey: string }): Promise<void>;
   recordWorkerHeartbeat(
     command: RecordWorkerHeartbeatCommand,
   ): Promise<RecordWorkerHeartbeatResult>;

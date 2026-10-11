@@ -15,7 +15,7 @@ const milestoneItems = [
   "Signed GitHub delivery outcomes, safe retry records, and webhook-trigger idempotency",
   "Bounded API, worker, queue, and health metrics with an optional local operations dashboard",
   "Manual deployment by exact Git commit and organization-scoped retained build-log viewing",
-  "Lease-aware cleanup of orphaned LaunchRail Docker runtimes during worker reconciliation",
+  "Lease-aware cleanup of orphaned runtimes and stale source/build staging directories",
   "Reproducible API liveness benchmark output and a public-release readiness checklist",
 ];
 

@@ -73,6 +73,10 @@ export interface CheckoutRepositoryCommand {
 }
 
 export interface RepositoryCheckout {
+  cleanupAbandonedStages?(command: {
+    readonly olderThan: Date;
+    readonly protectedCheckoutKeys: readonly string[];
+  }): Promise<number>;
   prepare(command: CheckoutRepositoryCommand): Promise<PreparedRepositoryCheckout>;
   remove(checkoutKey: string): Promise<void>;
 }

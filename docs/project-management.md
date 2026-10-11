@@ -23,7 +23,7 @@ The API rejects unknown fields and validates the same safety rules in the domain
 | Process limit          | Integer from 16 through 1,024                                                                                                 |
 | Read-only root setting | Boolean                                                                                                                       |
 
-Project create/update syntax validation deliberately does not contact GitHub. Phase 6 adds a separate application/provider boundary that can resolve a public requested reference to exact immutable deployment source fields, and the worker later verifies/checks out that exact commit with source limits and Dockerfile containment. No deployment-start HTTP route calls that bridge yet. Private-repository authentication is not available.
+Project create/update syntax validation deliberately does not contact GitHub. The deployment controller accepts a full immutable commit SHA, creates an audited deployment snapshot, and queues durable work; source preparation verifies and checks out that exact public GitHub commit with source limits and Dockerfile containment. The UI does not resolve branch names for manual starts. Private-repository authentication is not available.
 
 ## Role behavior
 
@@ -112,8 +112,8 @@ Run the repository gates from [development.md](development.md). Real-database cl
 ## Current boundaries
 
 - Public GitHub source verification and containment are available only for an already-persisted immutable deployment; project save itself remains an offline syntax operation.
-- Private repositories, Git LFS, submodules, arbitrary Git hosts, and deployment-start HTTP/UI are not available.
+- Private repositories, Git LFS, submodules, and arbitrary Git hosts are not available. Manual deployment creation requires an exact full commit SHA.
 - Saved project configuration and decrypted values are not yet placed in queue messages, builds, or runtime environments.
-- Identifier-only queue consumption and source preparation are available; image builds, application containers, readiness checks, live logs, previews, deployment controls, and rollback do not exist yet.
+- Identifier-only queue consumption, source/build/runtime processing, health checks, previews, deployment controls, rollback, and retained build-log viewing are implemented; runtime log viewing and broader recovery remain unfinished.
 - Authentication is local-password only, and health endpoints report liveness rather than dependency readiness.
 - Automated key re-encryption and external key-management integration are not implemented.

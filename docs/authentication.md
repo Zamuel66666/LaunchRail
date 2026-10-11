@@ -86,4 +86,4 @@ The real-PostgreSQL API suite verifies token hashing, cookie policy, revocation,
 
 ## Current limitations
 
-There is no password reset, invitation flow, email verification, MFA, SSO, credential rotation UI, global session list, or remote session termination. The bootstrap command is intentionally one-time and local. TLS termination and secure deployment configuration remain operator responsibilities. Project and deployment authorization will reuse this policy boundary as those APIs are added.
+There is no password reset, invitation flow, email verification, MFA, SSO, credential rotation UI, global session list, or remote session termination. The bootstrap command is intentionally one-time and local. TLS termination and secure deployment configuration remain operator responsibilities. Project, deployment, webhook, build-log, and audit APIs use this organization policy boundary; the latest deployment and webhook changes still require independent authorization review.

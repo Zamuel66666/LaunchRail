@@ -1,4 +1,9 @@
-import type { DeploymentJobStore, DeploymentRuntimeManager } from "@launchrail/application";
+import type {
+  DeploymentJobStore,
+  DeploymentRuntimeManager,
+  ImageBuilder,
+  RepositoryCheckout,
+} from "@launchrail/application";
 import { parseDeploymentJob, type DeploymentJob } from "@launchrail/contracts";
 import type { MetricsRegistry } from "@launchrail/observability";
 
@@ -18,6 +23,8 @@ export interface DeploymentJobReconcilerOptions {
   readonly store: DeploymentJobStore;
   readonly routeManager?: RouteManager;
   readonly runtimeManager?: Pick<DeploymentRuntimeManager, "cleanupOrphan" | "listManagedRuntimes">;
+  readonly imageBuilder?: Pick<ImageBuilder, "cleanupAbandonedStages">;
+  readonly repositoryCheckout?: Pick<RepositoryCheckout, "cleanupAbandonedStages" | "remove">;
 }
 
 export interface DeploymentJobReconciliationResult {
@@ -28,6 +35,10 @@ export interface DeploymentJobReconciliationResult {
   readonly recovered: number;
   readonly orphanRuntimesCleaned: number;
   readonly orphanRuntimeCleanupFailures: number;
+  readonly sourceStagesRemoved: number;
+  readonly buildStagesRemoved: number;
+  readonly filesystemCleanupFailures: number;
+  readonly finalCheckoutsRemoved: number;
 }
 
 export class DeploymentJobReconciler {
@@ -40,6 +51,8 @@ export class DeploymentJobReconciler {
   private readonly store: DeploymentJobStore;
   private readonly routeManager: RouteManager | undefined;
   private readonly runtimeManager: DeploymentJobReconcilerOptions["runtimeManager"];
+  private readonly imageBuilder: DeploymentJobReconcilerOptions["imageBuilder"];
+  private readonly repositoryCheckout: DeploymentJobReconcilerOptions["repositoryCheckout"];
 
   public constructor({
     batchSize,
@@ -50,6 +63,8 @@ export class DeploymentJobReconciler {
     store,
     routeManager,
     runtimeManager,
+    imageBuilder,
+    repositoryCheckout,
   }: DeploymentJobReconcilerOptions) {
     this.batchSize = batchSize;
     this.logger = logger;
@@ -59,6 +74,8 @@ export class DeploymentJobReconciler {
     this.store = store;
     this.routeManager = routeManager;
     this.runtimeManager = runtimeManager;
+    this.imageBuilder = imageBuilder;
+    this.repositoryCheckout = repositoryCheckout;
   }
 
   public runOnce(): Promise<DeploymentJobReconciliationResult> {
@@ -94,46 +111,109 @@ export class DeploymentJobReconciler {
     }
     let orphanRuntimesCleaned = 0;
     let orphanRuntimeCleanupFailures = 0;
-    if (
-      this.runtimeManager?.listManagedRuntimes !== undefined &&
-      this.runtimeManager.cleanupOrphan !== undefined &&
-      this.store.listRuntimeRecoveryState !== undefined
-    ) {
-      const recoveryState = await this.store.listRuntimeRecoveryState();
-      const knownIds = new Set(recoveryState.knownContainerIds);
-      const cleanupIds = new Set(recoveryState.cleanupContainerIds);
-      const leasedWorkItems = new Set(recoveryState.leasedWorkItemIds);
-      const signal = new AbortController().signal;
-      const managed = await this.runtimeManager.listManagedRuntimes(signal);
-      for (const runtime of managed) {
-        if (
-          (knownIds.has(runtime.containerId) && !cleanupIds.has(runtime.containerId)) ||
-          leasedWorkItems.has(runtime.identity.workItemId)
-        )
-          continue;
+    let sourceStagesRemoved = 0;
+    let buildStagesRemoved = 0;
+    let finalCheckoutsRemoved = 0;
+    let filesystemCleanupFailures = 0;
+    if (this.store.listWorkerResourceRecoveryState !== undefined) {
+      const recoveryState = await this.store.listWorkerResourceRecoveryState();
+      const olderThan = new Date(Date.now() - 24 * 60 * 60 * 1_000);
+      if (this.repositoryCheckout !== undefined) {
+        for (const checkoutKey of recoveryState.cleanupCheckoutKeys) {
+          try {
+            await this.repositoryCheckout.remove(checkoutKey);
+            await this.store.recordSourceCheckoutCleanup?.({ checkoutKey });
+            finalCheckoutsRemoved += 1;
+          } catch {
+            filesystemCleanupFailures += 1;
+            this.logger.warn(
+              { event: "completed_source_checkout_cleanup_failed" },
+              "Completed source checkout cleanup will be retried during reconciliation",
+            );
+          }
+        }
+      }
+      if (this.repositoryCheckout?.cleanupAbandonedStages !== undefined) {
         try {
-          await this.runtimeManager.cleanupOrphan({ ...runtime, signal });
-          await this.store.recordRuntimeCleanup?.({
-            containerId: runtime.containerId,
-            organizationId: runtime.identity.organizationId,
-            state: "complete",
+          sourceStagesRemoved = await this.repositoryCheckout.cleanupAbandonedStages({
+            olderThan,
+            protectedCheckoutKeys: recoveryState.leasedCheckoutKeys,
           });
-          orphanRuntimesCleaned += 1;
-        } catch (error) {
-          await this.store.recordRuntimeCleanup?.({
-            containerId: runtime.containerId,
-            organizationId: runtime.identity.organizationId,
-            state: "failed",
+        } catch {
+          filesystemCleanupFailures += 1;
+          this.logger.warn(
+            { event: "orphan_source_stage_cleanup_failed" },
+            "Abandoned source staging cleanup will be retried during reconciliation",
+          );
+        }
+      }
+      if (this.imageBuilder?.cleanupAbandonedStages !== undefined) {
+        try {
+          buildStagesRemoved = await this.imageBuilder.cleanupAbandonedStages({
+            olderThan,
+            protectedWorkItemIds: recoveryState.leasedBuildWorkItemIds,
           });
+        } catch {
+          filesystemCleanupFailures += 1;
+          this.logger.warn(
+            { event: "orphan_build_stage_cleanup_failed" },
+            "Abandoned build staging cleanup will be retried during reconciliation",
+          );
+        }
+      }
+      if (
+        this.runtimeManager?.listManagedRuntimes !== undefined &&
+        this.runtimeManager.cleanupOrphan !== undefined
+      ) {
+        const knownIds = new Set(recoveryState.knownContainerIds);
+        const cleanupIds = new Set(recoveryState.cleanupContainerIds);
+        const leasedWorkItems = new Set(recoveryState.leasedWorkItemIds);
+        const signal = new AbortController().signal;
+        try {
+          const managed = await this.runtimeManager.listManagedRuntimes(signal);
+          for (const runtime of managed) {
+            if (
+              (knownIds.has(runtime.containerId) && !cleanupIds.has(runtime.containerId)) ||
+              leasedWorkItems.has(runtime.identity.workItemId)
+            )
+              continue;
+            let removed = false;
+            try {
+              await this.runtimeManager.cleanupOrphan({ ...runtime, signal });
+              removed = true;
+              await this.store.recordRuntimeCleanup?.({
+                containerId: runtime.containerId,
+                state: "complete",
+              });
+              orphanRuntimesCleaned += 1;
+            } catch {
+              if (!removed) {
+                try {
+                  await this.store.recordRuntimeCleanup?.({
+                    containerId: runtime.containerId,
+                    state: "failed",
+                  });
+                } catch {
+                  // Runtime label inventory still protects the resource for a later pass.
+                }
+              }
+              orphanRuntimeCleanupFailures += 1;
+              this.logger.warn(
+                {
+                  event: removed
+                    ? "orphan_runtime_cleanup_state_record_failed"
+                    : "orphan_runtime_cleanup_failed",
+                  workItemId: runtime.identity.workItemId,
+                },
+                "Orphan runtime cleanup will be reconciled again",
+              );
+            }
+          }
+        } catch {
           orphanRuntimeCleanupFailures += 1;
           this.logger.warn(
-            {
-              containerId: runtime.containerId,
-              error,
-              event: "orphan_runtime_cleanup_failed",
-              workItemId: runtime.identity.workItemId,
-            },
-            "Orphan runtime cleanup will be retried during reconciliation",
+            { event: "orphan_runtime_inventory_failed" },
+            "Managed runtime inventory will be retried during reconciliation",
           );
         }
       }
@@ -168,6 +248,10 @@ export class DeploymentJobReconciler {
       ensured: ensured.length,
       orphanRuntimesCleaned,
       orphanRuntimeCleanupFailures,
+      sourceStagesRemoved,
+      buildStagesRemoved,
+      filesystemCleanupFailures,
+      finalCheckoutsRemoved,
       recovered: recovered.length,
     };
     this.metrics?.increment("launchrail_worker_reconciliations_total");
@@ -190,6 +274,14 @@ export class DeploymentJobReconciler {
       this.metrics?.increment("launchrail_worker_orphan_runtimes_cleaned_total");
     for (let index = 0; index < orphanRuntimeCleanupFailures; index += 1)
       this.metrics?.increment("launchrail_worker_orphan_runtime_cleanup_failures_total");
+    for (let index = 0; index < sourceStagesRemoved; index += 1)
+      this.metrics?.increment("launchrail_worker_source_stages_removed_total");
+    for (let index = 0; index < buildStagesRemoved; index += 1)
+      this.metrics?.increment("launchrail_worker_build_stages_removed_total");
+    for (let index = 0; index < filesystemCleanupFailures; index += 1)
+      this.metrics?.increment("launchrail_worker_filesystem_cleanup_failures_total");
+    for (let index = 0; index < finalCheckoutsRemoved; index += 1)
+      this.metrics?.increment("launchrail_worker_final_checkouts_removed_total");
     this.logger.info(
       { event: "deployment_job_reconciliation", ...result },
       "Deployment job reconciliation pass completed",

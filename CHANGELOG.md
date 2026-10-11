@@ -48,6 +48,8 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 - Added authenticated exact-commit deployment creation for deployment controllers with database-authoritative claim creation and queue reconciliation fallback.
 - Added organization-scoped, sequence-ordered API access to retained build output and lazy build-log viewing in the project deployment timeline.
 - Added the dependency-free loopback API liveness benchmark command and a public release readiness checklist.
+- Added 24-hour, lease-aware cleanup for abandoned source-checkout and private build-context staging directories.
+- Added lease-aware removal and PostgreSQL cleanup markers for completed source-checkout directories.
 
 - Plain-language product scope, target users, core workflow, success criteria, and explicit non-goals.
 - Initial architecture for the web application, API, worker, persistence, queue, build/runtime, routing, and observability boundaries.

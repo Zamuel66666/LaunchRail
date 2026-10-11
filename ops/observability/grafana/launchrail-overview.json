@@ -125,6 +125,56 @@
       ],
       "title": "Orphan runtime cleanup failures (hourly)",
       "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "launchrail-prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
+      "id": 9,
+      "targets": [
+        {
+          "expr": "sum(increase(launchrail_worker_source_stages_removed_total[1h]))",
+          "legendFormat": "source stages",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(increase(launchrail_worker_build_stages_removed_total[1h]))",
+          "legendFormat": "build stages",
+          "refId": "B"
+        }
+      ],
+      "title": "Stale worker staging directories removed (hourly)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "launchrail-prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
+      "id": 10,
+      "targets": [
+        {
+          "expr": "sum(increase(launchrail_worker_filesystem_cleanup_failures_total[1h]))",
+          "legendFormat": "cleanup failures",
+          "refId": "A"
+        }
+      ],
+      "title": "Filesystem cleanup failures (hourly)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "launchrail-prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 40 },
+      "id": 11,
+      "targets": [
+        {
+          "expr": "sum(increase(launchrail_worker_final_checkouts_removed_total[1h]))",
+          "legendFormat": "source checkouts",
+          "refId": "A"
+        }
+      ],
+      "title": "Completed source checkouts removed (hourly)",
+      "type": "timeseries"
     }
   ],
   "refresh": "30s",

@@ -39,7 +39,7 @@ Phases 1 through 6 provide Vitest tests for health/configuration contracts, depl
 - Stale leases and labeled resource adoption without duplication.
 - Graceful shutdown stops claiming work and leaves recoverable state.
 
-Phase 6's clean-service suites cover both identifier-only job kinds, transitions from `queued` through prepared source to `building`, source failure, restart after the claim side effect, and revalidated checkout adoption. Phase 14 now inventories and cleans orphaned managed runtime containers while protecting active database leases. Broad hard-crash source/build staging cleanup and interruption coverage around build, container, health, route, and other external-resource side effects remain unverified.
+Phase 6's clean-service suites cover both identifier-only job kinds, transitions from `queued` through prepared source to `building`, source failure, restart after the claim side effect, and revalidated checkout adoption. Phase 14 now inventories and cleans orphaned managed runtime containers while protecting active database leases, removes completed source checkouts, and prunes stale source/build staging directories after a 24-hour grace period. These new cleanup paths have not been independently exercised; BuildKit image cleanup and interruption coverage around build, container, health, route, and other external-resource side effects remain unverified.
 
 ### Sources, builds, and runtime
 

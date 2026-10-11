@@ -3,6 +3,7 @@ import {
   lstat,
   mkdir,
   open,
+  opendir,
   readFile,
   realpath,
   rename,
@@ -122,6 +123,8 @@ interface BuildResultMarkerV1 {
 }
 
 const digestPattern = /^sha256:[0-9a-f]{64}$/;
+const staleBuildDirectoryPattern =
+  /^\.build-([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})-[A-Za-z0-9_-]+$/u;
 
 function buildError(options: ConstructorParameters<typeof ImageBuildError>[0]): ImageBuildError {
   return new ImageBuildError(options);
@@ -889,5 +892,41 @@ export class BuildKitImageBuilder implements ImageBuilder {
         retryable: true,
       });
     }
+  }
+
+  public async cleanupAbandonedStages(command: {
+    readonly olderThan: Date;
+    readonly protectedWorkItemIds: readonly string[];
+  }): Promise<number> {
+    if (!Number.isFinite(command.olderThan.getTime()))
+      throw new RangeError("Stale build cutoff must be a valid date");
+    const root = await preparePrivateBuildRoot(this.buildRootDirectory);
+    const protectedIds = new Set(command.protectedWorkItemIds);
+    const directory = await opendir(root);
+    let removed = 0;
+    let inspected = 0;
+    for await (const entry of directory) {
+      const match = staleBuildDirectoryPattern.exec(entry.name);
+      const workItemId = match?.[1];
+      if (
+        workItemId === undefined ||
+        protectedIds.has(workItemId) ||
+        !entry.isDirectory() ||
+        inspected >= 1_000
+      )
+        continue;
+      inspected += 1;
+      const stageDirectory = join(root, entry.name);
+      const stats = await lstat(stageDirectory);
+      if (
+        !stats.isDirectory() ||
+        stats.isSymbolicLink() ||
+        stats.mtimeMs >= command.olderThan.getTime()
+      )
+        continue;
+      await rm(stageDirectory, { force: true, recursive: true });
+      removed += 1;
+    }
+    return removed;
   }
 }

@@ -66,6 +66,10 @@ export interface RemoveBuiltImageCommand {
 }
 
 export interface ImageBuilder {
+  cleanupAbandonedStages?(command: {
+    readonly olderThan: Date;
+    readonly protectedWorkItemIds: readonly string[];
+  }): Promise<number>;
   build(command: BuildImageCommand, sink: BuildLogSink): Promise<BuiltImage>;
   remove(command: RemoveBuiltImageCommand): Promise<void>;
 }

@@ -1,6 +1,6 @@
 # Image builds
 
-Status: implementation under verification. Phase 7 is not yet published as available.
+Status: Phase 7 is available with clean-CI acceptance evidence; the recently added Phases 10–16 have separate verification gates.
 
 Source preparation creates a durable `deployment.build` work item in the same
 transaction that moves the deployment to `building`. PostgreSQL owns attempts,
@@ -40,8 +40,9 @@ provisions the pinned builder and runs this acceptance suite.
 The Docker daemon and BuildKit host are trusted infrastructure. Disabling build
 step networking does not prevent the builder from fetching base images or
 remote build inputs. This is not a hostile multi-tenant sandbox. Registry
-publication, signing, scanning, runtime startup, browser log streaming, and the
-deployment-start interface remain subsequent work.
+publication, signing, scanning, runtime log streaming, and distributed tracing
+remain unfinished. Manual deployments are created in the authenticated project
+workspace from an exact commit SHA; retained build logs are viewable there.
 
 The acceptance builder disables external Dockerfile frontends. Dockerfiles that
 request an external `syntax` frontend are rejected; ordinary Dockerfiles use the

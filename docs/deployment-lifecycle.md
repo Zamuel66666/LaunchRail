@@ -6,7 +6,7 @@ A deployment is a recorded attempt to turn one exact source revision into a runn
 
 If a candidate fails, the previously healthy release stays active. Every step is recorded so a user can see what happened, and a restarted worker reconstructs work from PostgreSQL rather than assuming an in-memory job completed.
 
-Phase 2 implements this state model, ordinary transactional transitions, and healthy active-release promotion in PostgreSQL. Phase 5 adds durable background work, leases, retry/dead-letter state, heartbeat, BullMQ wake-ups, and an idempotent `queued` to `cloning` claim. Phase 6 adds exact public source verification, durable source work, immutable preparation metadata, and lease-fenced `cloning` to `building` or `build_failed` outcomes. Image building, container orchestration, route reconciliation, cancellation side effects, and rollback execution remain later-phase behavior.
+Phase 2 implements the state model and transactional active-release promotion. Later phases add durable claim/source/build/runtime work, exact public source verification, immutable image metadata, runtime creation, health-gated activation, preview routes, controls, rollback, signed webhooks, and reconciliation. Operators can also create a deployment from an exact commit SHA in the authenticated project workspace. Current remaining recovery and verification gaps are listed in the roadmap.
 
 ## Terms
 
@@ -209,6 +209,6 @@ Before this model can be marked available, tests must prove:
 
 ## Current limitations
 
-Phase 6 verifies queue/worker recovery from `queued` through a prepared exact public source checkout and `building`, including safe source failure. There is no deployment-start HTTP/UI, image build, runtime, health, route, cancellation, stop, or rollback execution. Prepared checkouts are retained for Phase 7, while Phase 14's broad interruption and orphan-resource recovery matrix remains planned. The eventual runtime design assumes one Docker host and one active route per project; route switching will not be a distributed transaction with PostgreSQL and must be proven through idempotent adapters, observed-state recording, compensation, and reconciliation.
+Earlier Phase 6 acceptance verified queue/worker recovery from `queued` through a prepared exact public source checkout and `building`. Later phases add deployment start, image build, runtime, health, route, cancellation, stop, and rollback execution. Runtime containers, completed source checkouts, and stale source/build staging directories now have reconciliation cleanup; BuildKit image cleanup and interruption acceptance remain incomplete. The runtime design assumes one Docker host and one active route per project; route switching is not a distributed transaction with PostgreSQL and depends on idempotent adapters, observed-state recording, compensation, and reconciliation.
 
 See [queue and worker operations](queue-worker.md) for the implemented contract, durable state, retry policy, reconciliation, and shutdown procedure.

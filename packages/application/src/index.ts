@@ -92,7 +92,7 @@ export {
   type WorkerHeartbeatFreshness,
   type WorkerHeartbeatStatus,
   type WorkerHeartbeatSummary,
-  type RuntimeRecoveryState,
+  type WorkerResourceRecoveryState,
 } from "./deployment-jobs.js";
 export {
   MembershipUpdateConflictError,

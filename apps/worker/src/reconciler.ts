@@ -42,6 +42,8 @@ export interface DeploymentJobReconciliationResult {
   readonly finalCheckoutsRemoved: number;
   readonly orphanImagesRemoved: number;
   readonly orphanImageCleanupFailures: number;
+  readonly interruptedRouteFilesRemoved: number;
+  readonly routeFileCleanupFailures: number;
 }
 
 export class DeploymentJobReconciler {
@@ -101,6 +103,7 @@ export class DeploymentJobReconciler {
       maxAttempts: this.maxAttempts,
     });
     const dispatchable = await this.store.listDispatchable({ limit: this.batchSize });
+    const olderThan = new Date(Date.now() - 24 * 60 * 60 * 1_000);
     if (
       this.routeManager?.reconcile !== undefined &&
       this.store.listRoutableRuntimes !== undefined
@@ -114,6 +117,19 @@ export class DeploymentJobReconciler {
         })),
       );
     }
+    let interruptedRouteFilesRemoved = 0;
+    let routeFileCleanupFailures = 0;
+    if (this.routeManager?.cleanupTemporaryFiles !== undefined) {
+      try {
+        interruptedRouteFilesRemoved = await this.routeManager.cleanupTemporaryFiles({ olderThan });
+      } catch {
+        routeFileCleanupFailures += 1;
+        this.logger.warn(
+          { event: "interrupted_route_file_cleanup_failed" },
+          "Interrupted preview route files will be retried during reconciliation",
+        );
+      }
+    }
     let orphanRuntimesCleaned = 0;
     let orphanRuntimeCleanupFailures = 0;
     let sourceStagesRemoved = 0;
@@ -124,7 +140,6 @@ export class DeploymentJobReconciler {
     let orphanImageCleanupFailures = 0;
     if (this.store.listWorkerResourceRecoveryState !== undefined) {
       const recoveryState = await this.store.listWorkerResourceRecoveryState();
-      const olderThan = new Date(Date.now() - 24 * 60 * 60 * 1_000);
       if (this.repositoryCheckout !== undefined) {
         for (const checkoutKey of recoveryState.cleanupCheckoutKeys) {
           try {
@@ -284,6 +299,8 @@ export class DeploymentJobReconciler {
       finalCheckoutsRemoved,
       orphanImagesRemoved,
       orphanImageCleanupFailures,
+      interruptedRouteFilesRemoved,
+      routeFileCleanupFailures,
       recovered: recovered.length,
     };
     this.metrics?.increment("launchrail_worker_reconciliations_total");
@@ -318,6 +335,10 @@ export class DeploymentJobReconciler {
       this.metrics?.increment("launchrail_worker_orphan_build_images_removed_total");
     for (let index = 0; index < orphanImageCleanupFailures; index += 1)
       this.metrics?.increment("launchrail_worker_orphan_build_image_cleanup_failures_total");
+    for (let index = 0; index < interruptedRouteFilesRemoved; index += 1)
+      this.metrics?.increment("launchrail_worker_interrupted_route_files_removed_total");
+    for (let index = 0; index < routeFileCleanupFailures; index += 1)
+      this.metrics?.increment("launchrail_worker_route_file_cleanup_failures_total");
     this.logger.info(
       { event: "deployment_job_reconciliation", ...result },
       "Deployment job reconciliation pass completed",

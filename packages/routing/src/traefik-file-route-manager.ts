@@ -20,6 +20,7 @@ export interface RouteManager {
   apply(route: PreviewRoute, target: RouteTarget): Promise<void>;
   remove(route: PreviewRoute): Promise<void>;
   reconcile?(routes: readonly DesiredPreviewRoute[]): Promise<void>;
+  cleanupTemporaryFiles?(options: { readonly olderThan: Date }): Promise<number>;
 }
 
 export interface DesiredPreviewRoute extends PreviewRoute {
@@ -120,6 +121,25 @@ export class TraefikFileRouteManager implements RouteManager {
       throw new Error("Refusing to remove an unsafe Traefik configuration path");
     }
     await rm(destination, { force: true });
+  }
+
+  public async cleanupTemporaryFiles(options: { readonly olderThan: Date }): Promise<number> {
+    if (!Number.isFinite(options.olderThan.getTime())) {
+      throw new RangeError("Temporary route cleanup cutoff must be a valid date");
+    }
+    await this.prepareDirectory();
+    let removed = 0;
+    const temporaryPattern = /^\.launchrail-[0-9a-f-]{36}\.yaml\.[0-9a-f-]{36}\.tmp$/u;
+    for (const entry of await readdir(this.configurationDirectory, { withFileTypes: true })) {
+      if (!entry.isFile() || !temporaryPattern.test(entry.name)) continue;
+      const path = join(this.configurationDirectory, entry.name);
+      const stats = await lstat(path);
+      if (!stats.isFile() || stats.isSymbolicLink() || stats.mtimeMs >= options.olderThan.getTime())
+        continue;
+      await rm(path, { force: true });
+      removed += 1;
+    }
+    return removed;
   }
 
   /** Restore the file-provider directory to the persisted desired route set. */

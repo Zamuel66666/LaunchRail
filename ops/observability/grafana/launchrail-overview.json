@@ -205,6 +205,26 @@
       ],
       "title": "Orphan build image cleanup failures (hourly)",
       "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "launchrail-prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 48 },
+      "id": 14,
+      "targets": [
+        {
+          "expr": "sum(increase(launchrail_worker_interrupted_route_files_removed_total[1h]))",
+          "legendFormat": "temporary route files removed",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(increase(launchrail_worker_route_file_cleanup_failures_total[1h]))",
+          "legendFormat": "cleanup failures",
+          "refId": "B"
+        }
+      ],
+      "title": "Interrupted preview route cleanup (hourly)",
+      "type": "timeseries"
     }
   ],
   "refresh": "30s",

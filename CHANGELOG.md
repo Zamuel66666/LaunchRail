@@ -53,6 +53,7 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 - Added organization-authorized recent runtime log tails through a shared-secret API-to-worker endpoint.
 - Added 24-hour cleanup for unreferenced LaunchRail images while protecting database-recorded images and live build leases.
 - Added optional OpenTelemetry OTLP/HTTP export with W3C request spans, BullMQ producer/consumer propagation, worker processing spans, and bounded reconciliation spans.
+- Added recovery cleanup for stale, interrupted Traefik route-file writes with bounded-age checks and separate metrics.
 
 - Plain-language product scope, target users, core workflow, success criteria, and explicit non-goals.
 - Initial architecture for the web application, API, worker, persistence, queue, build/runtime, routing, and observability boundaries.

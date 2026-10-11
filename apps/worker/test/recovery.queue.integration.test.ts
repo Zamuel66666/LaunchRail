@@ -245,6 +245,18 @@ describeWithServices("deployment worker restart recovery", () => {
         remove: async () => undefined,
       },
       repositoryProvider: { resolveRevision },
+      // This suite exercises durable queue/source/build recovery, not Docker.
+      // Never inventory or prune resources owned by a live local deployment.
+      runtimeManager: {
+        checkReady: async () => true,
+        readLogs: async () => "",
+        start: async ({ signal }) =>
+          new Promise((_resolve, reject) => {
+            if (signal.aborted) reject(signal.reason);
+            else signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+          }),
+        stop: async () => undefined,
+      },
       version: "test-version",
       workerId: "worker-after-crash",
     });
@@ -298,6 +310,20 @@ describeWithServices("deployment worker restart recovery", () => {
         "absent",
     );
     await components.runtime.stop();
+
+    // An interrupted runtime fixture may leave its durable lease in place.
+    // Prove the next reconciliation can recover it before inspecting outcomes.
+    await waitFor(async () => {
+      await store.recoverExpired({ limit: 10 });
+      const runtimeJob = await client.db.query.deploymentJobs.findFirst({
+        where: (jobs, { and, eq }) =>
+          and(
+            eq(jobs.deploymentId, seeded.deploymentId),
+            eq(jobs.kind, "deployment.start_runtime"),
+          ),
+      });
+      return runtimeJob?.status !== "running";
+    });
 
     const jobs = await client.db.query.deploymentJobs.findMany({
       where: (jobs, { eq }) => eq(jobs.deploymentId, seeded.deploymentId),
@@ -355,7 +381,11 @@ describeWithServices("deployment worker restart recovery", () => {
     expect(jobs.find(({ kind }) => kind === "deployment.start_runtime")).toMatchObject({
       status: expect.stringMatching(/^(pending|retry_wait)$/),
     });
-    expect(deployment).toMatchObject({ attempt: 4, eventSequence: 3, state: "deploying" });
+    expect(deployment).toMatchObject({
+      attempt: jobs.reduce((total, job) => total + job.attemptCount, 0),
+      eventSequence: 3,
+      state: "deploying",
+    });
     expect(preparedSources).toEqual([
       expect.objectContaining({
         checkoutId: seeded.deploymentId,

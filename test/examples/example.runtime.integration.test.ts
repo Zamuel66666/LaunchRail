@@ -89,8 +89,16 @@ it.each(["healthy", "node", "python", "unhealthy"] as const)(
           "{{json .State}}",
           runtime.containerId,
         ]);
+        const processes = await execute("docker", ["top", runtime.containerId], {
+          maxBuffer: 65536,
+        });
+        const processStatus = await execute(
+          "docker",
+          ["exec", runtime.containerId, "cat", "/proc/1/status"],
+          { timeout: 5000, maxBuffer: 65536 },
+        ).catch(() => ({ stdout: "Process status unavailable" }));
         throw new Error(
-          `Example ${example} did not become reachable: ${state.stdout.trim()}\n${logs.stdout}${logs.stderr}`,
+          `Example ${example} did not become reachable: ${state.stdout.trim()}\n${logs.stdout}${logs.stderr}\n${processes.stdout}\n${processStatus.stdout}`,
         );
       }
       expect(response?.status).toBe(example === "unhealthy" ? 404 : 200);

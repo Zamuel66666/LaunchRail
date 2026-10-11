@@ -84,6 +84,7 @@ Phase 6's clean-service suites cover both identifier-only job kinds, transitions
 - Freeze time and random sources through injected clocks/ID generators in unit tests.
 - Use per-test organization/project IDs and database transactions or isolated schemas.
 - Label Docker/Traefik resources with a unique test-run ID and clean only matching resources.
+- Queue recovery fixtures inject a runtime adapter and never inventory the host Docker daemon. Do not run real runtime acceptance beside a worker connected to another database on the same Docker host: orphan reconciliation treats that database as authoritative for all managed resources.
 - Avoid external GitHub/network dependencies in normal CI; use fixtures and local HTTP servers.
 - Keep retry timings short and configurable in tests without changing production policy semantics.
 - Seeded randomized/property tests must print the seed on failure.

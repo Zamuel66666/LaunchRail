@@ -8,6 +8,7 @@ import type {
 } from "@launchrail/application";
 import { RuntimeStartError } from "@launchrail/application";
 import type { DeploymentStartRuntimeJob } from "@launchrail/contracts";
+import type { MetricsRegistry } from "@launchrail/observability";
 import { computeDeploymentJobBackoffMs } from "@launchrail/queue";
 import { HttpHealthCheckError, type HttpHealthCheckResult } from "@launchrail/runtime";
 import type { RouteManager } from "@launchrail/routing";
@@ -21,6 +22,7 @@ export interface DeploymentRuntimeProcessorOptions {
   readonly jobTimeoutMs: number;
   readonly leaseDurationMs: number;
   readonly logger: WorkerEventLogger;
+  readonly metrics?: MetricsRegistry;
   readonly runtimeManager: DeploymentRuntimeManager;
   readonly store: DeploymentJobStore;
   readonly transitionStore?: DeploymentTransitionStore;
@@ -101,6 +103,7 @@ export class DeploymentRuntimeProcessor {
   }
   private finish(): void {
     this.activeJobCount -= 1;
+    this.options.metrics?.setGauge("launchrail_worker_active_jobs", this.activeJobCount);
     if (this.activeJobCount === 0) {
       for (const resolve of this.waiters) resolve();
       this.waiters.clear();
@@ -146,6 +149,10 @@ export class DeploymentRuntimeProcessor {
     const signal = AbortSignal.any([shutdownSignal, timeout, leaseLost.signal]);
     const stopHeartbeat = this.startHeartbeat(lease, leaseLost);
     this.activeJobCount += 1;
+    this.options.metrics?.setGauge("launchrail_worker_active_jobs", this.activeJobCount);
+    this.options.metrics?.increment("launchrail_worker_jobs_started_total", {
+      kind: lease.kind,
+    });
     try {
       const loaded = await this.options.store.loadRuntimeInput({
         leaseToken: lease.leaseToken,
@@ -223,6 +230,17 @@ export class DeploymentRuntimeProcessor {
             timeoutMs: Math.min(this.options.jobTimeoutMs, 5_000),
           });
         } catch (error) {
+          if (error instanceof HttpHealthCheckError) {
+            this.options.metrics?.increment("launchrail_health_checks_total", {
+              category: error.code,
+              outcome: "failed",
+            });
+            this.options.metrics?.observe(
+              "launchrail_health_check_duration_seconds",
+              error.durationMs / 1_000,
+              { outcome: "failed" },
+            );
+          }
           await this.options.store.recordHealthCheck?.({
             checkedAt: new Date(),
             deploymentId: loaded.runtime.deploymentId,
@@ -241,6 +259,16 @@ export class DeploymentRuntimeProcessor {
           outcome: health.statusCode >= 200 && health.statusCode < 400 ? "passed" : "failed",
           statusCode: health.statusCode,
         });
+        const healthPassed = health.statusCode >= 200 && health.statusCode < 400;
+        this.options.metrics?.increment("launchrail_health_checks_total", {
+          category: healthPassed ? "none" : health.statusCode < 200 ? "invalid_response" : "unhealthy",
+          outcome: healthPassed ? "passed" : "failed",
+        });
+        this.options.metrics?.observe(
+          "launchrail_health_check_duration_seconds",
+          health.durationMs / 1_000,
+          { outcome: healthPassed ? "passed" : "failed" },
+        );
         if (health.statusCode < 200) {
           await stopStartedRuntime();
           if (signal.aborted) return "interrupted";
@@ -341,6 +369,9 @@ export class DeploymentRuntimeProcessor {
       },
       "Deployment runtime started and recorded",
     );
+      this.options.metrics?.increment("launchrail_runtime_handoffs_total", {
+        outcome: "completed",
+      });
     return "completed";
   }
 
@@ -363,8 +394,20 @@ export class DeploymentRuntimeProcessor {
       workItemId: lease.workItemId,
     };
     const result = await this.options.store.failRuntime(command).catch(() => undefined);
-    if (result?.kind === "retry_scheduled") return "retry_scheduled";
-    if (result?.kind === "dead_lettered") return "dead_lettered";
+    if (result?.kind === "retry_scheduled") {
+      this.options.metrics?.increment("launchrail_runtime_failures_total", {
+        category: failure.category,
+        outcome: "retry_scheduled",
+      });
+      return "retry_scheduled";
+    }
+    if (result?.kind === "dead_lettered") {
+      this.options.metrics?.increment("launchrail_runtime_failures_total", {
+        category: failure.category,
+        outcome: "dead_lettered",
+      });
+      return "dead_lettered";
+    }
     return "interrupted";
   }
 }

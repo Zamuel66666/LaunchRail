@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: LaunchRail
+    orgId: 1
+    folder: LaunchRail
+    type: file
+    disableDeletion: true
+    editable: false
+    options:
+      path: /etc/grafana/dashboards

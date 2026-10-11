@@ -4,7 +4,7 @@
 
 When a deployment is slow or fails, a user should see which stage failed and what they can do. An operator should be able to follow the same deployment across the browser request, queue job, worker steps, Docker resources, health checks, and route update without searching unrelated text logs.
 
-Phase 1 establishes structured Pino logging, shared credential redaction, and process-health endpoints. Phase 5 adds bounded completion, retry, dead-letter, fencing, reconciliation, infrastructure, heartbeat-failure, and shutdown control-plane events. Phase 6 adds safe source-prepared, source-retry/dead-letter, source-fencing, and source-failure-persistence events plus durable portable source metadata. API request metrics and correlation IDs plus worker process and reconciliation counters are scrapeable now; traces, dashboards, dependency-readiness endpoints, and richer stage metrics remain planned.
+Phase 1 establishes structured Pino logging, shared credential redaction, and process-health endpoints. Phase 5 adds bounded completion, retry, dead-letter, fencing, reconciliation, infrastructure, heartbeat-failure, and shutdown control-plane events. Phase 6 adds safe source-prepared, source-retry/dead-letter, source-fencing, and source-failure-persistence events plus durable portable source metadata. The API and worker now expose request, webhook, health, runtime, active-job, reconciliation, and runtime-orphan cleanup metrics; a versioned local Prometheus/Grafana dashboard is included. These additions await the independent verification requested for the current implementation pass.
 
 ## Correlation model
 
@@ -39,17 +39,16 @@ Application build/runtime output is a separate bounded stream, not mixed into co
 
 Prometheus-compatible metrics will use low-cardinality labels such as service, route template, method, status class, job type, deployment stage, outcome, and failure category.
 
-The API exposes request counters at `/metrics` with route-template, method, and status-class labels. The worker `/metrics` exposes process uptime/RSS and cumulative reconciliation, dispatch, dispatch-failure, ensure, recovery, and dead-letter counters. These counters intentionally contain no repository, organization, or deployment identifiers.
+The API exposes request counters/histograms and webhook processing counters/histograms at `/metrics` with bounded route-template, method, status-class, event-class, and outcome labels. The worker `/metrics` exposes process uptime/RSS, active-job gauge, reconciliation/dispatch counters, health-check counters/histograms, runtime handoff/failure counters, and orphan-runtime cleanup counters. Labels intentionally omit repository, organization, deployment, request, and delivery identifiers.
 
-Planned measurements:
+Measurements still to add:
 
-- HTTP request count and duration.
 - Active SSE streams, reconnects, dropped/limited chunks, and delivery lag.
 - Queue depth by supported state, job wait/run duration, retries, timeouts, and dead-letter count.
 - Deployment stage duration, end-to-end duration, success/failure/cancellation count.
 - Build cache outcome and duration without repository labels.
-- Runtime start/stop/cleanup duration and orphan count.
-- Health-check attempts, duration, outcome, and grace-period exhaustion.
+- Runtime start/stop/cleanup duration and current orphan inventory gauge.
+- Health-check grace-period exhaustion.
 - Route apply/reconcile duration, failures, and desired/observed mismatch count.
 - Worker heartbeat age, active jobs, and reconciliation results.
 
@@ -70,7 +69,7 @@ Queue propagation creates linked asynchronous traces rather than pretending the 
 
 ## Dashboards and alerts
 
-The first Grafana dashboard will answer:
+The provisioned local Grafana dashboard currently charts API request rate, webhook outcomes, health-check outcomes/duration, worker dispatch failures/memory, and orphan-runtime cleanup outcomes. Follow-on dashboard panels should answer:
 
 1. Are API and worker processes available?
 2. Is queued work growing or stuck?
@@ -78,7 +77,7 @@ The first Grafana dashboard will answer:
 4. Are health checks or route applications degrading?
 5. Are retries, dead letters, orphan resources, or reconciliation mismatches increasing?
 
-Local alert rules will focus on actionable conditions: stale worker heartbeat, sustained queue age, elevated failure ratio with a minimum sample, dead letters, route mismatch, and orphan growth. Thresholds will be measured and documented rather than invented in Phase 0.
+Local alert rules are not yet configured. They should focus on actionable conditions: stale worker heartbeat, sustained queue age, elevated failure ratio with a minimum sample, dead letters, route mismatch, and orphan growth. Thresholds must be measured and documented rather than invented.
 
 ## Redaction and access
 
@@ -89,11 +88,30 @@ One shared redaction package will sanitize control-plane logs, deployment events
 1. **Available:** establish JSON logging, baseline credential redaction, and process health conventions in the repository foundation.
 2. **Available:** safe completion/retry/dead-letter/fencing/reconciliation/shutdown events and durable worker heartbeat state are verified for Phase 5.
 3. **Available:** safe source success/retry/dead-letter/fencing/reconciliation events and immutable preparation metadata are verified for Phase 6.
-4. Add end-to-end correlation IDs and instrument API/queue boundaries when the deployment-start API is introduced.
-5. Add stage metrics and traces with each lifecycle implementation.
-6. Add dependency-readiness endpoints, dashboards, and documented queries.
-7. Run canary-secret and cardinality reviews before marking observability available.
+4. Instrument API latency, verified webhook outcomes, health attempts, active work, and runtime outcomes with low-cardinality metrics.
+5. Provision an optional local Prometheus/Grafana stack and version the operator dashboard.
+6. Add distributed trace propagation/export and dependency-readiness endpoints.
+7. Run canary-secret/cardinality reviews and demonstrate successful/failed flows before marking observability available.
 
 ## Evidence required
 
 Observability becomes “Available” only when a recorded demonstration can trace a successful and failed deployment across events/signals, dashboard queries are versioned, metrics scrape successfully, worker health is visible, and canary-secret tests prove sensitive values are absent.
+
+# Local metrics and dashboards
+
+The API and worker expose Prometheus text format at `/metrics`. The API includes route-template request counts and latency plus bounded GitHub delivery outcomes and processing duration. The worker reports process uptime/RSS, active jobs, job reconciliation/dispatch outcomes, runtime handoffs, health-check outcomes/duration, terminal/retryable runtime failures, and orphan-runtime cleanup results. Metric labels intentionally avoid organization, project, deployment, request, and delivery identifiers.
+
+The optional local dashboard stack is isolated from the default development services. It uses Linux host networking to reach API and worker metrics, so this overlay is currently supported on Linux hosts:
+
+```bash
+export GF_SECURITY_ADMIN_PASSWORD='choose-a-unique-local-password'
+docker compose -f compose.yaml -f compose.observability.yaml --profile observability up -d --wait
+```
+
+Start the API and worker with `pnpm dev`, then open Prometheus at `http://localhost:9090` and Grafana at `http://localhost:3001`. Grafana provisions a read-only Prometheus data source and the LaunchRail Operations dashboard automatically. The development dashboard is bound to loopback, uses local-only credentials, and retains Prometheus data for 15 days. Stop it without deleting its volume with:
+
+```bash
+docker compose -f compose.yaml -f compose.observability.yaml --profile observability down
+```
+
+The current request ID is returned as `x-request-id` and is attached to API logs. Worker logs include durable work-item IDs, while deployment events and webhook delivery IDs provide database pivots between the two. This is operational correlation, not distributed tracing: trace/span export, exemplars, alert policies, and remote log aggregation remain future work.

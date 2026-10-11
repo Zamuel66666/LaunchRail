@@ -27,6 +27,10 @@ interface BuildServerOptions {
   readonly projectStore?: ProjectManagementStore;
   readonly deploymentStore?: DeploymentJobStore;
   readonly deploymentCreationStore?: DeploymentCreationStore;
+  readonly deploymentWakeup?: (deployment: {
+    readonly deploymentId: string;
+    readonly organizationId: string;
+  }) => Promise<void>;
   readonly transitionStore?: DeploymentTransitionStore;
   readonly secureCookies?: boolean;
   readonly signInRateLimitMax?: number;
@@ -46,6 +50,7 @@ export function buildServer({
   projectStore,
   deploymentStore,
   deploymentCreationStore,
+  deploymentWakeup,
   transitionStore,
   secureCookies = false,
   signInRateLimitMax = 5,
@@ -77,13 +82,25 @@ export function buildServer({
   });
   server.addHook("onRequest", async (request, reply) => {
     reply.header("x-request-id", request.id);
+    (request as typeof request & { startedAt?: number }).startedAt = performance.now();
   });
   server.addHook("onResponse", async (request, reply) => {
+    const startedAt = (request as typeof request & { startedAt?: number }).startedAt;
     metrics.increment("launchrail_http_requests_total", {
       method: request.method,
       status_class: `${Math.floor(reply.statusCode / 100)}xx`,
       route: request.routeOptions.url ?? "unknown",
     });
+    if (startedAt !== undefined)
+      metrics.observe(
+        "launchrail_http_request_duration_seconds",
+        (performance.now() - startedAt) / 1_000,
+        {
+          method: request.method,
+          status_class: `${Math.floor(reply.statusCode / 100)}xx`,
+          route: request.routeOptions.url ?? "unknown",
+        },
+      );
   });
   server.get("/metrics", async (_request, reply) =>
     reply.type("text/plain; version=0.0.4").send(metrics.renderPrometheus()),
@@ -108,6 +125,18 @@ export function buildServer({
     server.post<{ Body: unknown; Headers: Record<string, string | undefined> }>(
       "/v1/webhooks/github",
       async (request, reply) => {
+        const startedAt = performance.now();
+        const recordWebhookMetric = (outcome: "duplicate" | "failed" | "ignored" | "processed") => {
+          metrics.increment("launchrail_webhook_deliveries_total", {
+            event: request.headers["x-github-event"] === "push" ? "push" : "other",
+            outcome,
+          });
+          metrics.observe(
+            "launchrail_webhook_processing_duration_seconds",
+            (performance.now() - startedAt) / 1_000,
+            { outcome },
+          );
+        };
         const signature = request.headers["x-hub-signature-256"];
         const deliveryId = request.headers["x-github-delivery"];
         const eventName = request.headers["x-github-event"];
@@ -151,6 +180,7 @@ export function buildServer({
           ...(verified && parsed !== null ? { push: parsed } : {}),
         });
         if (delivery.duplicate) {
+          recordWebhookMetric("duplicate");
           if (!verified)
             return reply.code(401).send({
               error: {
@@ -161,6 +191,7 @@ export function buildServer({
           return reply.code(200).send({ delivery });
         }
         if (!verified) {
+          recordWebhookMetric("failed");
           await webhookStore.mark({
             deliveryId,
             organizationId,
@@ -172,6 +203,7 @@ export function buildServer({
           });
         }
         if (eventName !== "push") {
+          recordWebhookMetric("ignored");
           await webhookStore.mark({
             deliveryId,
             organizationId,
@@ -183,6 +215,7 @@ export function buildServer({
           });
         }
         if (parsed === null) {
+          recordWebhookMetric("failed");
           await webhookStore.mark({
             deliveryId,
             organizationId,
@@ -194,6 +227,7 @@ export function buildServer({
           });
         }
         if (webhookTrigger === undefined) {
+          recordWebhookMetric("failed");
           await webhookStore.mark({
             deliveryId,
             organizationId,
@@ -206,6 +240,7 @@ export function buildServer({
         }
         try {
           await webhookTrigger.trigger({ deliveryId, organizationId, push: parsed });
+          recordWebhookMetric("processed");
           const processed = await webhookStore.mark({
             deliveryId,
             organizationId,
@@ -213,6 +248,7 @@ export function buildServer({
           });
           return reply.code(202).send({ delivery: processed, push: parsed });
         } catch (error) {
+          recordWebhookMetric("failed");
           request.log.warn({ error, requestId: request.id }, "GitHub webhook processing failed");
           const failed = await webhookStore.mark({
             deliveryId,
@@ -235,6 +271,7 @@ export function buildServer({
         ...(projectStore === undefined ? {} : { projectStore }),
         ...(deploymentStore === undefined ? {} : { deploymentStore }),
         ...(deploymentCreationStore === undefined ? {} : { deploymentCreationStore }),
+        ...(deploymentWakeup === undefined ? {} : { deploymentWakeup }),
         ...(transitionStore === undefined ? {} : { transitionStore }),
         ...(webhookStore === undefined ? {} : { webhookDeliveryStore: webhookStore }),
         ...(webhookTrigger === undefined ? {} : { webhookTrigger }),

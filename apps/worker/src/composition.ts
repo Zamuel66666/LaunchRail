@@ -173,6 +173,7 @@ export function createDeploymentWorkerComponents({
     jobTimeoutMs: config.WORKER_RUNTIME_TIMEOUT_MS,
     leaseDurationMs: config.WORKER_LEASE_MS,
     logger,
+    ...(metrics === undefined ? {} : { metrics }),
     healthCheck: checkHttpHealth,
     healthGraceMs: config.WORKER_HEALTH_GRACE_MS,
     routeManager: new TraefikFileRouteManager({

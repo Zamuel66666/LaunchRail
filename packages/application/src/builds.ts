@@ -66,6 +66,12 @@ export interface RemoveBuiltImageCommand {
 }
 
 export interface ImageBuilder {
+  cleanupOrphanedImages?(command: {
+    readonly knownImageIds: readonly string[];
+    readonly olderThan: Date;
+    readonly protectedWorkItemIds: readonly string[];
+    readonly signal: AbortSignal;
+  }): Promise<{ readonly failed: number; readonly removed: number }>;
   cleanupAbandonedStages?(command: {
     readonly olderThan: Date;
     readonly protectedWorkItemIds: readonly string[];

@@ -512,6 +512,7 @@ export interface WorkerResourceRecoveryState {
   readonly leasedBuildWorkItemIds: readonly string[];
   readonly leasedCheckoutKeys: readonly string[];
   readonly leasedWorkItemIds: readonly string[];
+  readonly knownImageIds: readonly string[];
 }
 
 export interface ListWorkerHeartbeatsQuery {

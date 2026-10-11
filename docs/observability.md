@@ -39,7 +39,7 @@ Application build/runtime output is a separate bounded stream, not mixed into co
 
 Prometheus-compatible metrics will use low-cardinality labels such as service, route template, method, status class, job type, deployment stage, outcome, and failure category.
 
-The API exposes request counters/histograms and webhook processing counters/histograms at `/metrics` with bounded route-template, method, status-class, event-class, and outcome labels. The worker `/metrics` exposes process uptime/RSS, active-job gauge, reconciliation/dispatch counters, health-check counters/histograms, runtime handoff/failure counters, and orphan-runtime cleanup counters. Labels intentionally omit repository, organization, deployment, request, and delivery identifiers.
+The API exposes request counters/histograms and webhook processing counters/histograms at `/metrics` with bounded route-template, method, status-class, event-class, and outcome labels. The worker `/metrics` exposes process uptime/RSS, active-job gauge, reconciliation/dispatch counters, health-check counters/histograms, runtime handoff/failure counters, and orphan-runtime, source/build-stage, completed-checkout, and orphan-image cleanup counters. Labels intentionally omit repository, organization, deployment, request, and delivery identifiers.
 
 Measurements still to add:
 
@@ -69,7 +69,7 @@ Queue propagation creates linked asynchronous traces rather than pretending the 
 
 ## Dashboards and alerts
 
-The provisioned local Grafana dashboard currently charts API request rate, webhook outcomes, health-check outcomes/duration, worker dispatch failures/memory, orphan-runtime cleanup outcomes, source/build staging cleanup volume/failures, and completed checkout removals. Follow-on dashboard panels should answer:
+The provisioned local Grafana dashboard currently charts API request rate, webhook outcomes, health-check outcomes/duration, worker dispatch failures/memory, orphan-runtime cleanup outcomes, source/build staging cleanup volume/failures, completed checkout removals, and orphan build-image cleanup outcomes. Follow-on dashboard panels should answer:
 
 1. Are API and worker processes available?
 2. Is queued work growing or stuck?

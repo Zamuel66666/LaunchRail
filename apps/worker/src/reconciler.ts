@@ -23,7 +23,7 @@ export interface DeploymentJobReconcilerOptions {
   readonly store: DeploymentJobStore;
   readonly routeManager?: RouteManager;
   readonly runtimeManager?: Pick<DeploymentRuntimeManager, "cleanupOrphan" | "listManagedRuntimes">;
-  readonly imageBuilder?: Pick<ImageBuilder, "cleanupAbandonedStages">;
+  readonly imageBuilder?: Pick<ImageBuilder, "cleanupAbandonedStages" | "cleanupOrphanedImages">;
   readonly repositoryCheckout?: Pick<RepositoryCheckout, "cleanupAbandonedStages" | "remove">;
 }
 
@@ -39,6 +39,8 @@ export interface DeploymentJobReconciliationResult {
   readonly buildStagesRemoved: number;
   readonly filesystemCleanupFailures: number;
   readonly finalCheckoutsRemoved: number;
+  readonly orphanImagesRemoved: number;
+  readonly orphanImageCleanupFailures: number;
 }
 
 export class DeploymentJobReconciler {
@@ -115,6 +117,8 @@ export class DeploymentJobReconciler {
     let buildStagesRemoved = 0;
     let finalCheckoutsRemoved = 0;
     let filesystemCleanupFailures = 0;
+    let orphanImagesRemoved = 0;
+    let orphanImageCleanupFailures = 0;
     if (this.store.listWorkerResourceRecoveryState !== undefined) {
       const recoveryState = await this.store.listWorkerResourceRecoveryState();
       const olderThan = new Date(Date.now() - 24 * 60 * 60 * 1_000);
@@ -158,6 +162,29 @@ export class DeploymentJobReconciler {
           this.logger.warn(
             { event: "orphan_build_stage_cleanup_failed" },
             "Abandoned build staging cleanup will be retried during reconciliation",
+          );
+        }
+      }
+      if (this.imageBuilder?.cleanupOrphanedImages !== undefined) {
+        try {
+          const cleanup = await this.imageBuilder.cleanupOrphanedImages({
+            knownImageIds: recoveryState.knownImageIds,
+            olderThan,
+            protectedWorkItemIds: recoveryState.leasedBuildWorkItemIds,
+            signal: AbortSignal.timeout(30_000),
+          });
+          orphanImagesRemoved = cleanup.removed;
+          orphanImageCleanupFailures = cleanup.failed;
+          if (cleanup.failed > 0)
+            this.logger.warn(
+              { event: "orphan_build_image_cleanup_failed", failed: cleanup.failed },
+              "Orphan build image cleanup will be retried during reconciliation",
+            );
+        } catch {
+          orphanImageCleanupFailures += 1;
+          this.logger.warn(
+            { event: "orphan_build_image_inventory_failed" },
+            "Orphan build image inventory will be retried during reconciliation",
           );
         }
       }
@@ -252,6 +279,8 @@ export class DeploymentJobReconciler {
       buildStagesRemoved,
       filesystemCleanupFailures,
       finalCheckoutsRemoved,
+      orphanImagesRemoved,
+      orphanImageCleanupFailures,
       recovered: recovered.length,
     };
     this.metrics?.increment("launchrail_worker_reconciliations_total");
@@ -282,6 +311,10 @@ export class DeploymentJobReconciler {
       this.metrics?.increment("launchrail_worker_filesystem_cleanup_failures_total");
     for (let index = 0; index < finalCheckoutsRemoved; index += 1)
       this.metrics?.increment("launchrail_worker_final_checkouts_removed_total");
+    for (let index = 0; index < orphanImagesRemoved; index += 1)
+      this.metrics?.increment("launchrail_worker_orphan_build_images_removed_total");
+    for (let index = 0; index < orphanImageCleanupFailures; index += 1)
+      this.metrics?.increment("launchrail_worker_orphan_build_image_cleanup_failures_total");
     this.logger.info(
       { event: "deployment_job_reconciliation", ...result },
       "Deployment job reconciliation pass completed",

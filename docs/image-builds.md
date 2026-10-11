@@ -39,10 +39,12 @@ provisions the pinned builder and runs this acceptance suite.
 
 The Docker daemon and BuildKit host are trusted infrastructure. Disabling build
 step networking does not prevent the builder from fetching base images or
-remote build inputs. This is not a hostile multi-tenant sandbox. Registry
-publication, signing, scanning, runtime log streaming, and distributed tracing
-remain unfinished. Manual deployments are created in the authenticated project
-workspace from an exact commit SHA; retained build logs are viewable there.
+remote build inputs. This is not a hostile multi-tenant sandbox. Reconciliation
+removes unreferenced LaunchRail images only after a 24-hour grace period while
+protecting database-recorded image IDs and live build leases. Registry
+publication, signing, scanning, and distributed tracing remain unfinished.
+Manual deployments are created in the authenticated project workspace from an
+exact commit SHA; retained build logs are viewable there.
 
 The acceptance builder disables external Dockerfile frontends. Dockerfiles that
 request an external `syntax` frontend are rejected; ordinary Dockerfiles use the

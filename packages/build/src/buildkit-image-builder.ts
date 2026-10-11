@@ -95,6 +95,7 @@ export interface BuildKitImageBuilderOptions {
 
 interface DockerImageInspection {
   readonly architecture: string;
+  readonly createdAt: string;
   readonly id: string;
   readonly labels: Readonly<Record<string, string>>;
   readonly os: string;
@@ -412,6 +413,7 @@ export class BuildKitImageBuilder implements ImageBuilder {
       typeof object.Id !== "string" ||
       !digestPattern.test(object.Id) ||
       typeof object.Architecture !== "string" ||
+      typeof object.Created !== "string" ||
       typeof object.Os !== "string" ||
       !Number.isSafeInteger(object.Size) ||
       (object.Size as number) < 0 ||
@@ -431,6 +433,7 @@ export class BuildKitImageBuilder implements ImageBuilder {
     }
     return {
       architecture: object.Architecture,
+      createdAt: object.Created,
       id: object.Id,
       labels: labels as Record<string, string>,
       os: object.Os,
@@ -892,6 +895,129 @@ export class BuildKitImageBuilder implements ImageBuilder {
         retryable: true,
       });
     }
+  }
+
+  public async cleanupOrphanedImages(command: {
+    readonly knownImageIds: readonly string[];
+    readonly olderThan: Date;
+    readonly protectedWorkItemIds: readonly string[];
+    readonly signal: AbortSignal;
+  }): Promise<{ readonly failed: number; readonly removed: number }> {
+    if (!Number.isFinite(command.olderThan.getTime()))
+      throw new RangeError("Stale image cutoff must be a valid date");
+    if (command.signal.aborted) throw command.signal.reason;
+    await this.prepareDockerConfiguration();
+    const root = await preparePrivateBuildRoot(this.buildRootDirectory);
+    let output;
+    try {
+      output = await this.executor.execute({
+        arguments: [
+          "image",
+          "ls",
+          "--quiet",
+          "--no-trunc",
+          "--filter",
+          `label=${launchRailBuildLabelKeys.managed}=true`,
+        ],
+        binary: this.dockerBinary,
+        cwd: root,
+        environment: this.environment(root),
+        maxLineBytes: this.limits.maxInspectBytes,
+        maxOutputBytes: this.limits.maxInspectBytes,
+        signal: command.signal,
+      });
+    } catch {
+      if (command.signal.aborted) throw command.signal.reason;
+      throw buildError({
+        code: "buildkit_unavailable",
+        failureCategory: "infrastructure_unavailable",
+        message: "The managed image inventory is unavailable",
+        retryable: true,
+      });
+    }
+    const ids = output.stdout.split(/\s+/u).filter(Boolean);
+    if (ids.length > 1_000)
+      throw buildError({
+        code: "buildkit_unavailable",
+        failureCategory: "infrastructure_unavailable",
+        message: "The managed image inventory exceeds its safe bound",
+        retryable: false,
+      });
+    const known = new Set(command.knownImageIds);
+    const protectedWorkItems = new Set(command.protectedWorkItemIds);
+    let removed = 0;
+    let failed = 0;
+    let cursor = 0;
+    await Promise.all(
+      Array.from({ length: Math.min(4, ids.length) }, async () => {
+        while (cursor < ids.length) {
+          if (command.signal.aborted) throw command.signal.reason;
+          const imageId = ids[cursor++];
+          if (imageId === undefined || !digestPattern.test(imageId) || known.has(imageId)) continue;
+          try {
+            const inspection = await this.executeInspect(imageId, root, command.signal);
+            if (inspection === undefined || inspection.id !== imageId) continue;
+            const labels = inspection.labels;
+            const deploymentId = labels[launchRailBuildLabelKeys.deploymentId] ?? "";
+            const organizationId = labels[launchRailBuildLabelKeys.organizationId] ?? "";
+            const projectId = labels[launchRailBuildLabelKeys.projectId] ?? "";
+            const workItemId = labels[launchRailBuildLabelKeys.workItemId] ?? "";
+            const attempt = labels[launchRailBuildLabelKeys.attempt] ?? "";
+            const sourceRevision = labels[launchRailBuildLabelKeys.sourceRevision] ?? "";
+            const treeRevision = labels[launchRailBuildLabelKeys.treeRevision] ?? "";
+            const contextSha256 = labels[launchRailBuildLabelKeys.contextSha256] ?? "";
+            const dockerfileSha256 = labels[launchRailBuildLabelKeys.dockerfileSha256] ?? "";
+            const platform = labels[launchRailBuildLabelKeys.platform] ?? "";
+            const reference = `launchrail.local/launchrail/${projectId}/${deploymentId}:build-v1`;
+            const createdAt = Date.parse(inspection.createdAt);
+            if (
+              labels[launchRailBuildLabelKeys.managed] !== "true" ||
+              !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(
+                deploymentId,
+              ) ||
+              !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(
+                organizationId,
+              ) ||
+              !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(
+                projectId,
+              ) ||
+              !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(
+                workItemId,
+              ) ||
+              !/^[1-9][0-9]{0,2}$/u.test(attempt) ||
+              Number(attempt) > 100 ||
+              !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u.test(sourceRevision) ||
+              !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u.test(treeRevision) ||
+              !/^[0-9a-f]{64}$/u.test(contextSha256) ||
+              !/^[0-9a-f]{64}$/u.test(dockerfileSha256) ||
+              !["linux/amd64", "linux/arm64"].includes(platform) ||
+              protectedWorkItems.has(workItemId) ||
+              !Number.isFinite(createdAt) ||
+              createdAt >= command.olderThan.getTime() ||
+              !inspection.repoTags.includes(reference) ||
+              inspection.os !== "linux" ||
+              inspection.architecture !== platform.slice("linux/".length)
+            )
+              continue;
+            const ownedLabels = Object.fromEntries(
+              Object.values(launchRailBuildLabelKeys).map((key) => [key, labels[key] ?? ""]),
+            ) as BuildLabelRecord;
+            await this.removeExactImage(imageId, inspection, ownedLabels, root, command.signal);
+            const paths = this.resultPaths(root, workItemId);
+            await Promise.all(
+              [paths.marker, paths.metadata, paths.iid].map((path) =>
+                rm(path, { force: true, recursive: false }),
+              ),
+            );
+            removed += 1;
+          } catch {
+            if (command.signal.aborted) throw command.signal.reason;
+            failed += 1;
+          }
+        }
+      }),
+    );
+    return { failed, removed };
   }
 
   public async cleanupAbandonedStages(command: {

@@ -2841,93 +2841,101 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
   }
 
   public async listWorkerResourceRecoveryState(): Promise<WorkerResourceRecoveryState> {
-    const [known, cleanupTargets, leased, leasedSource, leasedBuild, cleanupCheckouts] =
-      await Promise.all([
-        this.db
-          .select({ containerId: runtimeInstances.containerId })
-          .from(runtimeInstances)
-          .where(sql`${runtimeInstances.containerId} is not null`),
-        this.db
-          .select({ containerId: runtimeInstances.containerId })
-          .from(runtimeInstances)
-          .innerJoin(
-            deployments,
-            and(
-              eq(deployments.id, runtimeInstances.deploymentId),
-              eq(deployments.organizationId, runtimeInstances.organizationId),
-            ),
-          )
-          .where(
-            and(
-              sql`${runtimeInstances.containerId} is not null`,
-              sql`(${runtimeInstances.cleanupState} in ('pending', 'failed') or ${runtimeInstances.state} in ('stopped', 'failed', 'orphaned') or ${deployments.state} in ('cancelled', 'build_failed', 'deployment_failed', 'rolled_back', 'stopped'))`,
-            ),
+    const [
+      known,
+      cleanupTargets,
+      leased,
+      leasedSource,
+      leasedBuild,
+      cleanupCheckouts,
+      knownImages,
+    ] = await Promise.all([
+      this.db
+        .select({ containerId: runtimeInstances.containerId })
+        .from(runtimeInstances)
+        .where(sql`${runtimeInstances.containerId} is not null`),
+      this.db
+        .select({ containerId: runtimeInstances.containerId })
+        .from(runtimeInstances)
+        .innerJoin(
+          deployments,
+          and(
+            eq(deployments.id, runtimeInstances.deploymentId),
+            eq(deployments.organizationId, runtimeInstances.organizationId),
           ),
-        this.db
-          .select({ workItemId: deploymentJobs.id })
-          .from(deploymentJobs)
-          .where(
-            and(
-              eq(deploymentJobs.kind, deploymentStartRuntimeJobKind),
-              eq(deploymentJobs.status, "running"),
-              sql`${deploymentJobs.leaseExpiresAt} > clock_timestamp()`,
-            ),
+        )
+        .where(
+          and(
+            sql`${runtimeInstances.containerId} is not null`,
+            sql`(${runtimeInstances.cleanupState} in ('pending', 'failed') or ${runtimeInstances.state} in ('stopped', 'failed', 'orphaned') or ${deployments.state} in ('cancelled', 'build_failed', 'deployment_failed', 'rolled_back', 'stopped'))`,
           ),
-        this.db
-          .select({ deploymentId: deploymentJobs.deploymentId })
-          .from(deploymentJobs)
-          .where(
-            and(
-              eq(deploymentJobs.kind, deploymentPrepareSourceJobKind),
-              eq(deploymentJobs.status, "running"),
-              sql`${deploymentJobs.leaseExpiresAt} > clock_timestamp()`,
-            ),
+        ),
+      this.db
+        .select({ workItemId: deploymentJobs.id })
+        .from(deploymentJobs)
+        .where(
+          and(
+            eq(deploymentJobs.kind, deploymentStartRuntimeJobKind),
+            eq(deploymentJobs.status, "running"),
+            sql`${deploymentJobs.leaseExpiresAt} > clock_timestamp()`,
           ),
-        this.db
-          .select({ deploymentId: deploymentJobs.deploymentId, workItemId: deploymentJobs.id })
-          .from(deploymentJobs)
-          .where(
-            and(
-              eq(deploymentJobs.kind, deploymentBuildJobKind),
-              eq(deploymentJobs.status, "running"),
-              sql`${deploymentJobs.leaseExpiresAt} > clock_timestamp()`,
-            ),
+        ),
+      this.db
+        .select({ deploymentId: deploymentJobs.deploymentId })
+        .from(deploymentJobs)
+        .where(
+          and(
+            eq(deploymentJobs.kind, deploymentPrepareSourceJobKind),
+            eq(deploymentJobs.status, "running"),
+            sql`${deploymentJobs.leaseExpiresAt} > clock_timestamp()`,
           ),
-        this.db
-          .select({ checkoutId: deploymentSourcePreparations.checkoutId })
-          .from(deploymentSourcePreparations)
-          .innerJoin(
-            deployments,
-            and(
-              eq(deployments.id, deploymentSourcePreparations.deploymentId),
-              eq(deployments.organizationId, deploymentSourcePreparations.organizationId),
-            ),
-          )
-          .where(
-            and(
-              sql`${deploymentSourcePreparations.checkoutRemovedAt} is null`,
-              sql`${deployments.state} not in ('queued', 'cloning', 'building')`,
-              notExists(
-                this.db
-                  .select({ id: deploymentJobs.id })
-                  .from(deploymentJobs)
-                  .where(
-                    and(
-                      eq(deploymentJobs.deploymentId, deploymentSourcePreparations.deploymentId),
-                      inArray(deploymentJobs.kind, [
-                        deploymentPrepareSourceJobKind,
-                        deploymentBuildJobKind,
-                      ]),
-                      eq(deploymentJobs.status, "running"),
-                      sql`${deploymentJobs.leaseExpiresAt} > clock_timestamp()`,
-                    ),
+        ),
+      this.db
+        .select({ deploymentId: deploymentJobs.deploymentId, workItemId: deploymentJobs.id })
+        .from(deploymentJobs)
+        .where(
+          and(
+            eq(deploymentJobs.kind, deploymentBuildJobKind),
+            eq(deploymentJobs.status, "running"),
+            sql`${deploymentJobs.leaseExpiresAt} > clock_timestamp()`,
+          ),
+        ),
+      this.db
+        .select({ checkoutId: deploymentSourcePreparations.checkoutId })
+        .from(deploymentSourcePreparations)
+        .innerJoin(
+          deployments,
+          and(
+            eq(deployments.id, deploymentSourcePreparations.deploymentId),
+            eq(deployments.organizationId, deploymentSourcePreparations.organizationId),
+          ),
+        )
+        .where(
+          and(
+            sql`${deploymentSourcePreparations.checkoutRemovedAt} is null`,
+            sql`${deployments.state} not in ('queued', 'cloning', 'building')`,
+            notExists(
+              this.db
+                .select({ id: deploymentJobs.id })
+                .from(deploymentJobs)
+                .where(
+                  and(
+                    eq(deploymentJobs.deploymentId, deploymentSourcePreparations.deploymentId),
+                    inArray(deploymentJobs.kind, [
+                      deploymentPrepareSourceJobKind,
+                      deploymentBuildJobKind,
+                    ]),
+                    eq(deploymentJobs.status, "running"),
+                    sql`${deploymentJobs.leaseExpiresAt} > clock_timestamp()`,
                   ),
-              ),
+                ),
             ),
-          )
-          .orderBy(asc(deploymentSourcePreparations.preparedAt))
-          .limit(1_000),
-      ]);
+          ),
+        )
+        .orderBy(asc(deploymentSourcePreparations.preparedAt))
+        .limit(1_000),
+      this.db.select({ imageId: deploymentBuildArtifacts.imageId }).from(deploymentBuildArtifacts),
+    ]);
     return {
       cleanupContainerIds: cleanupTargets.flatMap((row) =>
         row.containerId === null ? [] : [row.containerId],
@@ -2944,6 +2952,7 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
         ]),
       ],
       leasedWorkItemIds: leased.map((row) => row.workItemId),
+      knownImageIds: knownImages.map((row) => row.imageId),
     };
   }
 

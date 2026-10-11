@@ -175,6 +175,36 @@
       ],
       "title": "Completed source checkouts removed (hourly)",
       "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "launchrail-prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 40 },
+      "id": 12,
+      "targets": [
+        {
+          "expr": "sum(increase(launchrail_worker_orphan_build_images_removed_total[1h]))",
+          "legendFormat": "images removed",
+          "refId": "A"
+        }
+      ],
+      "title": "Orphan build images removed (hourly)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "launchrail-prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 48 },
+      "id": 13,
+      "targets": [
+        {
+          "expr": "sum(increase(launchrail_worker_orphan_build_image_cleanup_failures_total[1h]))",
+          "legendFormat": "cleanup failures",
+          "refId": "A"
+        }
+      ],
+      "title": "Orphan build image cleanup failures (hourly)",
+      "type": "timeseries"
     }
   ],
   "refresh": "30s",

@@ -51,6 +51,7 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 - Added 24-hour, lease-aware cleanup for abandoned source-checkout and private build-context staging directories.
 - Added lease-aware removal and PostgreSQL cleanup markers for completed source-checkout directories.
 - Added organization-authorized recent runtime log tails through a shared-secret API-to-worker endpoint.
+- Added 24-hour cleanup for unreferenced LaunchRail images while protecting database-recorded images and live build leases.
 
 - Plain-language product scope, target users, core workflow, success criteria, and explicit non-goals.
 - Initial architecture for the web application, API, worker, persistence, queue, build/runtime, routing, and observability boundaries.

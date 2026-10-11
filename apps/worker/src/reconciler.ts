@@ -44,6 +44,7 @@ export interface DeploymentJobReconciliationResult {
   readonly orphanImageCleanupFailures: number;
   readonly interruptedRouteFilesRemoved: number;
   readonly routeFileCleanupFailures: number;
+  readonly routeReconciliationFailures: number;
 }
 
 export class DeploymentJobReconciler {
@@ -104,18 +105,27 @@ export class DeploymentJobReconciler {
     });
     const dispatchable = await this.store.listDispatchable({ limit: this.batchSize });
     const olderThan = new Date(Date.now() - 24 * 60 * 60 * 1_000);
+    let routeReconciliationFailures = 0;
     if (
       this.routeManager?.reconcile !== undefined &&
       this.store.listRoutableRuntimes !== undefined
     ) {
-      const runtimes = await this.store.listRoutableRuntimes();
-      await this.routeManager.reconcile(
-        runtimes.map((runtime) => ({
-          deploymentId: runtime.deploymentId,
-          hostname: `d-${runtime.deploymentId}.localhost`,
-          target: { hostPort: runtime.hostPort },
-        })),
-      );
+      try {
+        const runtimes = await this.store.listRoutableRuntimes();
+        await this.routeManager.reconcile(
+          runtimes.map((runtime) => ({
+            deploymentId: runtime.deploymentId,
+            hostname: `d-${runtime.deploymentId}.localhost`,
+            target: { hostPort: runtime.hostPort },
+          })),
+        );
+      } catch {
+        routeReconciliationFailures += 1;
+        this.logger.warn(
+          { event: "preview_route_reconciliation_failed" },
+          "Preview route restoration will be retried during reconciliation",
+        );
+      }
     }
     let interruptedRouteFilesRemoved = 0;
     let routeFileCleanupFailures = 0;
@@ -301,6 +311,7 @@ export class DeploymentJobReconciler {
       orphanImageCleanupFailures,
       interruptedRouteFilesRemoved,
       routeFileCleanupFailures,
+      routeReconciliationFailures,
       recovered: recovered.length,
     };
     this.metrics?.increment("launchrail_worker_reconciliations_total");
@@ -339,6 +350,8 @@ export class DeploymentJobReconciler {
       this.metrics?.increment("launchrail_worker_interrupted_route_files_removed_total");
     for (let index = 0; index < routeFileCleanupFailures; index += 1)
       this.metrics?.increment("launchrail_worker_route_file_cleanup_failures_total");
+    for (let index = 0; index < routeReconciliationFailures; index += 1)
+      this.metrics?.increment("launchrail_worker_route_reconciliation_failures_total");
     this.logger.info(
       { event: "deployment_job_reconciliation", ...result },
       "Deployment job reconciliation pass completed",

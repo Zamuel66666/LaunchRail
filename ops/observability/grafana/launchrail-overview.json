@@ -221,9 +221,14 @@
           "expr": "sum(increase(launchrail_worker_route_file_cleanup_failures_total[1h]))",
           "legendFormat": "cleanup failures",
           "refId": "B"
+        },
+        {
+          "expr": "sum(increase(launchrail_worker_route_reconciliation_failures_total[1h]))",
+          "legendFormat": "route reconciliation failures",
+          "refId": "C"
         }
       ],
-      "title": "Interrupted preview route cleanup (hourly)",
+      "title": "Preview route recovery outcomes (hourly)",
       "type": "timeseries"
     }
   ],

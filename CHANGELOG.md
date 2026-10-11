@@ -60,6 +60,7 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 - Improved confirmation-dialog labels and Escape-key dismissal, and honored reduced-motion preferences.
 - Instrumented API and worker readiness outcomes with bounded metrics.
 - Worker readiness now rechecks PostgreSQL and Redis on an isolated bounded probe connection, without interfering with BullMQ's blocking consumer.
+- Route restoration failures no longer abort a reconciliation pass before it republishes durable deployment work.
 
 - Plain-language product scope, target users, core workflow, success criteria, and explicit non-goals.
 - Initial architecture for the web application, API, worker, persistence, queue, build/runtime, routing, and observability boundaries.

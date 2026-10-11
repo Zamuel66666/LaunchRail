@@ -55,6 +55,7 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 - Added optional OpenTelemetry OTLP/HTTP export with W3C request spans, BullMQ producer/consumer propagation, worker processing spans, and bounded reconciliation spans.
 - Added recovery cleanup for stale, interrupted Traefik route-file writes with bounded-age checks and separate metrics.
 - Added an in-app demo walkthrough covering prerequisites, the exact-revision release flow, and explicit product boundaries.
+- Added an opt-in exact-SHA deployment benchmark that records request-to-healthy-release latency without exposing its session cookie.
 
 - Plain-language product scope, target users, core workflow, success criteria, and explicit non-goals.
 - Initial architecture for the web application, API, worker, persistence, queue, build/runtime, routing, and observability boundaries.

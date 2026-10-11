@@ -26,7 +26,7 @@ The roadmap reports verified repository state, not aspirations as completed feat
 - **Phase 13 — Observability:** route-level metrics, lifecycle/health metrics, a local dashboard, bounded API database readiness, worker startup readiness, W3C API request spans, and queue-to-worker trace propagation with OTLP/HTTP export are implemented; independent verification and remote aggregation remain.
 - **Phase 14 — Failure recovery:** reconciliation inventories managed Docker containers and BuildKit images, protects active resources with durable leases/records, prunes unreferenced images and stale source/build/proxy staging files after 24 hours, and removes completed source checkouts after source/build leases end; BuildKit daemon recovery, broad interruption coverage, and independent verification remain.
 - **Phase 15 — User experience and accessibility:** operators can start a deployment for an exact commit SHA and inspect retained build output plus an on-demand bounded runtime log tail in the project timeline; a guided `/demo` walkthrough is available, while onboarding polish and independent accessibility/user-flow verification remain.
-- **Phase 16 — Benchmarks and public release:** a bounded loopback API liveness benchmark and public release checklist are available; deployment benchmarks, measured results, and clean-release evidence remain.
+- **Phase 16 — Benchmarks and public release:** bounded loopback API liveness and explicitly opted-in end-to-end deployment benchmark scripts plus a public release checklist are available; measured results and clean-release evidence remain.
 
 ### Planned later
 
@@ -262,9 +262,9 @@ Exit gate: Playwright accessibility/user-flow checks pass, logs and deployment c
 
 ### Phase 16 — Benchmarks and public release
 
-**Status:** In progress — API liveness benchmark and release checklist implemented; independent evidence deferred
+**Status:** In progress — API liveness and opt-in deployment benchmarks plus the release checklist are implemented; controlled results and independent evidence are deferred
 
-The versioned `pnpm benchmark:api` scenario reports loopback health latency, throughput, status counts, and environment metadata as JSON. The public release checklist defines clean-clone, integration, recovery, benchmark, security, review, and publishing gates. Other deployment-specific performance scenarios and all measured results remain intentionally absent until run on a controlled host.
+The versioned `pnpm benchmark:api` scenario reports loopback health latency, throughput, status counts, and environment metadata as JSON. `pnpm benchmark:deployment` can measure one exact-SHA request through healthy activation on an explicitly opted-in dedicated local project; it creates durable records and may replace the active release, and it deliberately does not auto-clean resources. The public release checklist defines clean-clone, integration, recovery, benchmark, security, review, and publishing gates. Stage-isolated scenarios and all measured results remain absent until run on a controlled host.
 
 Exit gate: clean setup is independently reproducible, controlled results include methodology and environment, known limitations are current, and release notes describe user outcomes.
 

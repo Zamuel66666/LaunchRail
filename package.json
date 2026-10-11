@@ -12,6 +12,7 @@
   "scripts": {
     "auth:bootstrap": "pnpm build:packages && pnpm --filter @launchrail/database auth:bootstrap",
     "benchmark:api": "node scripts/benchmark-api.mjs",
+    "benchmark:deployment": "node scripts/benchmark-deployment.mjs",
     "build": "pnpm build:packages && pnpm --filter './apps/*' --parallel build",
     "build:packages": "pnpm --filter './packages/*' build",
     "db:generate": "pnpm --filter @launchrail/domain build && pnpm --filter @launchrail/database db:generate",

@@ -2,7 +2,7 @@
 
 ## Current status
 
-No benchmarks have been run and LaunchRail publishes no performance results. A versioned API liveness benchmark is now available; the broader deployment, queue, build, recovery, webhook, and resource scenarios remain planned. Do not treat the script or its output as production-capacity evidence.
+No benchmarks have been run and LaunchRail publishes no performance results. Versioned API liveness and opt-in end-to-end deployment benchmark scripts are available; queue-stage isolation, build/recovery, webhook, and resource scenarios remain planned. Do not treat a script or its output as production-capacity evidence.
 
 This document prevents unsupported claims by defining how results must be collected and reported.
 
@@ -32,17 +32,18 @@ Every report includes:
 
 ## Planned scenarios
 
-| Scenario               | Primary measurements                                 | Correctness checks                                   |
-| ---------------------- | ---------------------------------------------------- | ---------------------------------------------------- |
-| API latency            | requests/second, median/p95 latency, error ratio     | response schema and authorization remain correct     |
-| Concurrent log streams | connection success, delivery lag, throughput, memory | ordering, reconnect, bounds, no cross-tenant output  |
-| Queue throughput       | enqueue-to-start, completion rate, retry overhead    | no lost authoritative work or duplicate side effects |
-| Deployment transitions | command-to-persisted-event latency, conflict rate    | valid states/events and one active release           |
-| Rollback               | request-to-observed-route duration                   | target healthy, route correct, previous release safe |
-| Build cache            | cold/warm duration, bytes/resources used             | same source/image outcome and declared cache state   |
-| Worker recovery        | interruption-to-convergence duration                 | no duplicate resources, explicit final state         |
-| Duplicate webhook      | deliveries/second, deduplication latency             | exactly one deployment intent per delivery key       |
-| Resource use           | CPU, memory, disk, network over scenario             | no limit violation or leaked orphan resource         |
+| Scenario               | Primary measurements                                 | Correctness checks                                       |
+| ---------------------- | ---------------------------------------------------- | -------------------------------------------------------- |
+| API latency            | requests/second, median/p95 latency, error ratio     | response schema and authorization remain correct         |
+| Deployment lifecycle   | exact-SHA request-to-healthy-release duration        | health-gated state and route safety remain authoritative |
+| Concurrent log streams | connection success, delivery lag, throughput, memory | ordering, reconnect, bounds, no cross-tenant output      |
+| Queue throughput       | enqueue-to-start, completion rate, retry overhead    | no lost authoritative work or duplicate side effects     |
+| Deployment transitions | command-to-persisted-event latency, conflict rate    | valid states/events and one active release               |
+| Rollback               | request-to-observed-route duration                   | target healthy, route correct, previous release safe     |
+| Build cache            | cold/warm duration, bytes/resources used             | same source/image outcome and declared cache state       |
+| Worker recovery        | interruption-to-convergence duration                 | no duplicate resources, explicit final state             |
+| Duplicate webhook      | deliveries/second, deduplication latency             | exactly one deployment intent per delivery key           |
+| Resource use           | CPU, memory, disk, network over scenario             | no limit violation or leaked orphan resource             |
 
 ## Run protocol
 
@@ -55,6 +56,34 @@ pnpm benchmark:api --requests=1000 --concurrency=10 --warmup=100
 ```
 
 The default target is `http://127.0.0.1:4000/health`. `LAUNCHRAIL_BENCHMARK_URL` may select another loopback `/health` URL only. The command emits one JSON report with request count, concurrency, throughput, median/p95 latency, response codes, Node/platform metadata, and run time. It deliberately does not save a result file; retain the stdout artifact alongside the exact commit, OS/kernel, CPU/memory/storage, API configuration, and host load if publishing a result. The health endpoint measures process liveness only.
+
+### End-to-end deployment baseline
+
+This scenario creates a real deployment and may activate it, replacing the project's current
+release. Use only a dedicated local demo project with a selected exact commit. It does not clean up
+the deployment or runtime afterwards. Do not point it at production or a shared project.
+
+Set the API origin, organization/project UUIDs, full lowercase commit SHA, and a dedicated
+`launchrail_session` cookie in the environment. Then require the explicit mutation acknowledgement
+and run once:
+
+```bash
+export LAUNCHRAIL_BENCHMARK_API_URL='http://127.0.0.1:4000'
+export LAUNCHRAIL_BENCHMARK_ORGANIZATION_ID='00000000-0000-4000-8000-000000000001'
+export LAUNCHRAIL_BENCHMARK_PROJECT_ID='00000000-0000-4000-8000-000000000002'
+export LAUNCHRAIL_BENCHMARK_SOURCE_REVISION='<full-lowercase-commit-sha>'
+export LAUNCHRAIL_BENCHMARK_SESSION_COOKIE='launchrail_session=<dedicated-session-value>'
+export LAUNCHRAIL_BENCHMARK_ALLOW_RELEASE_MUTATION='I_UNDERSTAND_THIS_CREATES_A_DEPLOYMENT'
+pnpm benchmark:deployment
+```
+
+The script restricts the destination to loopback, creates exactly one deployment, polls the
+organization/project-scoped deployment history until activation or terminal failure, and emits one
+JSON report. It does not output the cookie. The duration includes queue wait, source preparation,
+build/cache, runtime start, health grace, and promotion; it is an end-to-end measurement, not a
+stage-level diagnosis. A timed-out run remains in progress and must be inspected or stopped through
+the UI. Record cache state, exact LaunchRail revision, service versions, resource limits, and host
+load separately.
 
 1. Start from the documented clean environment and verify health.
 2. Record versions/configuration and confirm no unrelated workloads.

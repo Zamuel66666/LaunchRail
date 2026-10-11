@@ -14,6 +14,8 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 
 ### Added
 
+- Added `pnpm setup:local` to generate private local credentials, prepare proxy configuration, and provision the pinned constrained BuildKit daemon in the worker's isolated Docker configuration.
+
 - Pinned Traefik file-provider routing with collision-resistant deployment hostnames, atomic private route files, bounded targets, stale-file reconciliation, and real proxy acceptance coverage.
 - Added a loopback-only HTTP health-check adapter with strict path, port, timeout bounds, and worker runtime-completion gating.
 - Completed the routing milestone with persisted preview-route ownership, restart reconciliation, organization fencing, promotion preservation, and terminal cleanup.

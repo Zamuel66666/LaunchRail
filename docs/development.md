@@ -8,7 +8,7 @@ The repository now includes the runnable web/API/worker workspace, authenticated
 
 - Node.js 22.22 or newer (the exact development version is in `.nvmrc`).
 - Corepack with pnpm 11.9.0.
-- Docker Engine and Docker Compose for PostgreSQL and Redis.
+- Docker Engine, Docker Compose, and Buildx v0.36.1 for PostgreSQL, Redis, Traefik, and the pinned BuildKit builder.
 - Linux with Git available at `/usr/bin/git` for the production source adapter.
 
 The workspace pins application dependencies in `pnpm-lock.yaml`. Do not replace a frozen install with an unreviewed lockfile update in CI or setup instructions.
@@ -20,17 +20,14 @@ From a fresh clone:
 ```bash
 corepack enable
 pnpm install --frozen-lockfile
-cp .env.example .env
-# Generate a local 32-byte project-secret key without printing it.
-node -e "process.stdout.write('LAUNCHRAIL_SECRET_KEYRING=1:'+require('node:crypto').randomBytes(32).toString('base64url')+'\nLAUNCHRAIL_ACTIVE_SECRET_KEY_VERSION=1\n')" >> .env
-pnpm services:up
+pnpm setup:local
 pnpm db:migrate
 # Configure LAUNCHRAIL_BOOTSTRAP_* in .env for a new database.
 pnpm auth:bootstrap
 pnpm dev
 ```
 
-`pnpm services:up` waits until PostgreSQL and Redis pass their container health checks. `pnpm dev` builds shared packages once, then starts the web, API, and worker processes together.
+`pnpm setup:local` creates a private untracked `.env` with fresh encryption and worker-log credentials on first use, prepares the private Traefik directory, starts PostgreSQL, Redis, Traefik, and the constrained pinned BuildKit daemon, and registers the named builder in the worker's isolated Docker configuration. Existing `.env` credentials are preserved. The builder uses the trusted local Docker daemon and runs privileged; it is isolated infrastructure for the documented single-operator demonstration. Install the required Buildx client before setup. `pnpm services:up` starts only the default database, Redis, and proxy services after checking the directory configuration. `pnpm dev` builds shared packages once, then starts the web, API, and worker processes together.
 
 Open:
 
@@ -61,7 +58,7 @@ The timestamp varies. `/health` endpoints prove process liveness only. `/ready` 
 Stop the foreground application processes with `Ctrl+C`. Stop development services while preserving database/Redis volumes:
 
 ```bash
-pnpm services:down
+docker compose --profile build down
 ```
 
 Inspect service state with `pnpm services:status`. To intentionally delete local service data, run:

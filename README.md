@@ -116,10 +116,7 @@ Prerequisites: Node.js 22.22 or newer, Corepack/pnpm 11.9, Docker, and Docker Co
 ```bash
 corepack enable
 pnpm install --frozen-lockfile
-cp .env.example .env
-# Generate a local project-secret key directly into the untracked .env file.
-node -e "process.stdout.write('LAUNCHRAIL_SECRET_KEYRING=1:'+require('node:crypto').randomBytes(32).toString('base64url')+'\nLAUNCHRAIL_ACTIVE_SECRET_KEY_VERSION=1\n')" >> .env
-pnpm services:up
+pnpm setup:local
 pnpm db:migrate
 # Set the LAUNCHRAIL_BOOTSTRAP_* values in .env, then run:
 pnpm auth:bootstrap

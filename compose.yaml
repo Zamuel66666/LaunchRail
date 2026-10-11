@@ -1,6 +1,20 @@
 name: launchrail
 
 services:
+  buildkit:
+    profiles: [build]
+    container_name: launchrail-buildkit
+    image: moby/buildkit:v0.32.2@sha256:28a898719c18a33f4e8000685287fa36fd0dd9560c6440227d3a732d79bb41d8
+    privileged: true
+    mem_limit: 2g
+    memswap_limit: 2g
+    cpu_period: 100000
+    cpu_quota: 200000
+    command: [--config, /etc/buildkit/buildkitd.toml, --oci-worker-net=bridge]
+    volumes:
+      - ./.github/buildkitd.toml:/etc/buildkit/buildkitd.toml:ro
+    restart: unless-stopped
+
   postgres:
     image: postgres:18-alpine
     environment:

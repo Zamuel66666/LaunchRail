@@ -22,6 +22,7 @@ import {
   deployments,
   projects,
   previewRoutes,
+  runtimeInstances,
 } from "./schema.js";
 import { DeploymentNotFoundError, DeploymentPersistenceConflictError } from "./errors.js";
 
@@ -37,6 +38,10 @@ const finalDeploymentStates = new Set<DeploymentState>([
   "rolled_back",
   "stopped",
 ]);
+
+function isFinalDeploymentOutcome(state: DeploymentState): state is FinalDeploymentOutcome {
+  return finalDeploymentStates.has(state);
+}
 
 async function readDatabaseClock(transaction: LaunchRailTransaction): Promise<Date> {
   const result = await transaction.execute<{ now_milliseconds: number }>(
@@ -315,7 +320,7 @@ export class PostgresDeploymentTransitionStore implements DeploymentTransitionSt
     const result = await this.db.transaction((transaction) =>
       transitionDeploymentInTransaction(transaction, command),
     );
-    if (!result.idempotentReplay && finalDeploymentStates.has(command.to))
+    if (!result.idempotentReplay && isFinalDeploymentOutcome(command.to))
       await this.recordFinalOutcome(command.deploymentId, command.organizationId, command.to);
     return result;
   }

@@ -99,7 +99,7 @@ function createProcessor(
 
 describe("DeploymentRuntimeProcessor health gate", () => {
   it("records unhealthy HTTP responses, stops the candidate, and fails without retry", async () => {
-    const { failRuntime, metrics, processor, promote, recordHealthCheck, stop } = createProcessor(
+    const { failRuntime, processor, promote, recordHealthCheck, stop } = createProcessor(
       async () => ({ durationMs: 12, statusCode: 503 }),
     );
 

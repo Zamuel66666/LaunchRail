@@ -29,8 +29,10 @@ export interface TracingRuntime {
 }
 
 interface BullMqSpan {
+  addEvent(name: string, attributes?: Readonly<Record<string, unknown>>): void;
   end(): void;
   recordException(error: unknown): void;
+  setAttribute(key: string, value: unknown): void;
   setAttributes(attributes: Readonly<Record<string, unknown>>): void;
   setSpanOnContext(traceContext: unknown): unknown;
 }
@@ -45,7 +47,7 @@ export interface BullMqTelemetryBridge {
   readonly tracer: {
     startSpan(
       name: string,
-      options: { readonly kind: number },
+      options?: { readonly kind: number },
       parentContext?: unknown,
     ): BullMqSpan;
   };
@@ -80,22 +82,22 @@ export function initializeTracing(options: {
   readonly serviceName: "launchrail-api" | "launchrail-worker";
   readonly version: string;
 }): TracingRuntime {
+  const endpoint =
+    options.endpoint === undefined ? undefined : normalizedTraceEndpoint(options.endpoint);
   const contextManager = new AsyncLocalStorageContextManager().enable();
   context.setGlobalContextManager(contextManager);
   propagation.setGlobalPropagator(new W3CTraceContextPropagator());
   const spanProcessors =
-    options.endpoint === undefined
+    endpoint === undefined
       ? []
       : [
-          new BatchSpanProcessor(
-            new OTLPTraceExporter({ url: normalizedTraceEndpoint(options.endpoint) }),
-            {
-              exportTimeoutMillis: 5_000,
-              maxExportBatchSize: 256,
-              maxQueueSize: 1_024,
-              scheduledDelayMillis: 2_000,
-            },
-          ),
+          new BatchSpanProcessor({
+            exporter: new OTLPTraceExporter({ url: endpoint, timeoutMillis: 5_000 }),
+            exportTimeoutMillis: 5_000,
+            maxExportBatchSize: 256,
+            maxQueueSize: 1_024,
+            scheduledDelayMillis: 2_000,
+          }),
         ];
   const provider = new TracerProvider({
     resource: resourceFromAttributes({
@@ -120,7 +122,6 @@ export function startHttpServerTrace(
 ): RequestTrace {
   const carrier: TraceHeaders = {
     ...(typeof headers["traceparent"] === "string" ? { traceparent: headers["traceparent"] } : {}),
-    ...(typeof headers["tracestate"] === "string" ? { tracestate: headers["tracestate"] } : {}),
   };
   const parentContext = propagation.extract(context.active(), carrier);
   const span = trace.getTracer("launchrail-http").startSpan(
@@ -156,9 +157,47 @@ export function traceHeadersFromContext(traceContext: Context): TraceHeaders {
   propagation.inject(traceContext, carrier);
   return {
     ...(carrier.traceparent === undefined ? {} : { traceparent: carrier.traceparent }),
-    ...(carrier.tracestate === undefined ? {} : { tracestate: carrier.tracestate }),
   };
 }
+
+const queueOperations = new Set([
+  "add",
+  "addBulk",
+  "getNextJob",
+  "process",
+  "pause",
+  "resume",
+  "close",
+  "rateLimit",
+  "startStalledCheckTimer",
+  "moveStalledJobsToWait",
+  "remove",
+  "drain",
+  "clean",
+  "obliterate",
+  "retryJobs",
+  "promoteJobs",
+  "trimEvents",
+  "updateJobProgress",
+  "removeRepeatable",
+  "removeRepeatableByKey",
+  "removeDebounceKey",
+  "removeDeduplicationKey",
+]);
+const queueJobKinds = new Set([
+  "deployment.claim",
+  "deployment.prepare_source",
+  "deployment.build",
+  "deployment.start_runtime",
+]);
+const numericQueueAttributes = new Set([
+  "bullmq.job.attempts.made",
+  "bullmq.job.bulk.count",
+  "bullmq.worker.failed.jobs",
+  "bullmq.worker.stalled.jobs",
+  "bullmq.queue.clean.limit",
+  "bullmq.queue.drain.delay",
+]);
 
 export function createBullMqTelemetryBridge(): BullMqTelemetryBridge {
   const tracer = trace.getTracer("launchrail-bullmq");
@@ -176,9 +215,6 @@ export function createBullMqTelemetryBridge(): BullMqTelemetryBridge {
             ...(typeof candidate.traceparent === "string" && candidate.traceparent.length <= 128
               ? { traceparent: candidate.traceparent }
               : {}),
-            ...(typeof candidate.tracestate === "string" && candidate.tracestate.length <= 512
-              ? { tracestate: candidate.tracestate }
-              : {}),
           };
           return propagation.extract(activeContext as Context, carrier);
         } catch {
@@ -190,35 +226,53 @@ export function createBullMqTelemetryBridge(): BullMqTelemetryBridge {
         propagation.inject(traceContext as Context, carrier);
         const bounded: TraceHeaders = {
           ...(carrier.traceparent === undefined ? {} : { traceparent: carrier.traceparent }),
-          ...(carrier.tracestate === undefined
-            ? {}
-            : { tracestate: carrier.tracestate.slice(0, 512) }),
         };
         return JSON.stringify(bounded).slice(0, 2_048);
       },
       with: (traceContext, operation) => context.with(traceContext as Context, operation),
     },
     tracer: {
-      startSpan(name, options, parentContext) {
+      startSpan(name, options = { kind: SpanKind.INTERNAL }, parentContext) {
+        const operation = name.split(" ", 1)[0] ?? "unknown";
         const spanOptions: SpanOptions = { kind: options.kind as SpanKind };
-        const span = tracer.startSpan(name, spanOptions, parentContext as Context | undefined);
+        const span = tracer.startSpan(
+          `bullmq.${queueOperations.has(operation) ? operation : "operation"}`,
+          spanOptions,
+          parentContext as Context | undefined,
+        );
+        const setAttribute = (key: string, value: unknown): void => {
+          if (
+            key === "bullmq.queue.operation" &&
+            typeof value === "string" &&
+            queueOperations.has(value)
+          )
+            span.setAttribute(key, value);
+          else if (
+            key === "bullmq.job.name" &&
+            typeof value === "string" &&
+            queueJobKinds.has(value)
+          )
+            span.setAttribute(key, value);
+          else if (
+            numericQueueAttributes.has(key) &&
+            typeof value === "number" &&
+            Number.isFinite(value) &&
+            value >= 0
+          )
+            span.setAttribute(key, value);
+        };
         return {
+          addEvent: (name) => {
+            if (name === "job completed" || name === "job failed") span.addEvent(name);
+          },
           end: () => span.end(),
           recordException: () => {
             span.setAttribute("error.type", "queue_operation_failed");
             span.setStatus({ code: SpanStatusCode.ERROR });
           },
+          setAttribute,
           setAttributes: (attributes) => {
-            const safe: Record<string, string | number | boolean> = {};
-            for (const [key, value] of Object.entries(attributes)) {
-              if (
-                (typeof value === "string" && value.length <= 512) ||
-                typeof value === "number" ||
-                typeof value === "boolean"
-              )
-                safe[key] = value as string | number | boolean;
-            }
-            span.setAttributes(safe);
+            for (const [key, value] of Object.entries(attributes)) setAttribute(key, value);
           },
           setSpanOnContext: (traceContext) => trace.setSpan(traceContext as Context, span),
         };
@@ -232,7 +286,9 @@ export async function withTraceHeaders<T>(
   operation: () => Promise<T>,
 ): Promise<T> {
   const activeContext =
-    headers === undefined ? context.active() : propagation.extract(context.active(), headers);
+    headers === undefined
+      ? context.active()
+      : propagation.extract(context.active(), { traceparent: headers.traceparent });
   return await context.with(activeContext, operation);
 }
 

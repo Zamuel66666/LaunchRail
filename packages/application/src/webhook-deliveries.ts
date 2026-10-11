@@ -48,4 +48,3 @@ export interface WebhookDeploymentTrigger {
     };
   }): Promise<void>;
 }
-import type { GitHubPushEvent } from "./webhooks.js";

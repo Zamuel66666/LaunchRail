@@ -45,16 +45,20 @@ describe("GitHub webhook deployment trigger", () => {
     expect(createDeployment).toHaveBeenCalledWith({
       organizationId,
       projectId: "44444444-4444-4444-8444-444444444444",
+      sourceEvent: { deliveryId: "github-delivery-1", provider: "github" },
       sourceRevision: "a".repeat(40),
     });
     expect(ensurePendingClaim).toHaveBeenCalledWith(
       expect.objectContaining({ deploymentId, maxAttempts: 5, organizationId }),
     );
-    expect(enqueue).toHaveBeenCalledWith({
-      contractVersion: 1,
-      kind: "deployment.claim",
-      workItemId,
-    });
+    expect(enqueue).toHaveBeenCalledWith(
+      {
+        contractVersion: 1,
+        kind: "deployment.claim",
+        workItemId,
+      },
+      undefined,
+    );
   });
 
   it("keeps the durable deployment for reconciliation when direct publication is unavailable", async () => {

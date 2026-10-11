@@ -93,7 +93,7 @@ The shared redaction package sanitizes control-plane logs, deployment events, ad
 
 Observability becomes “Available” only when a recorded demonstration can trace a successful and failed deployment across events/signals, dashboard queries are versioned, metrics scrape successfully, worker health is visible, and canary-secret tests prove sensitive values are absent.
 
-# Local metrics and dashboards
+## Local metrics and dashboards
 
 The API and worker expose Prometheus text format at `/metrics`. The API includes route-template request counts and latency plus bounded GitHub delivery outcomes and processing duration. The worker reports process uptime/RSS, queue depth by state, active jobs and queue handlers, queue wait and handler-processing durations, durable per-stage processing duration/outcome by supported job kind, build cache hit/miss step counts, job reconciliation/dispatch outcomes, runtime handoffs, health-check outcomes/duration, terminal/retryable runtime failures, and resource cleanup results. Queue depth refreshes on the worker heartbeat interval. Metric labels intentionally avoid organization, project, deployment, request, and delivery identifiers.
 

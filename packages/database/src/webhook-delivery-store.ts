@@ -23,7 +23,7 @@ export class PostgresWebhookDeliveryStore implements WebhookDeliveryStore {
         attemptCount: 1,
         processingState: "pending",
         provider: command.provider,
-        pushPayload: command.push ?? null,
+        pushPayload: command.push === undefined ? null : { ...command.push },
         verificationState: command.verificationState,
       })
       .onConflictDoNothing()
@@ -97,7 +97,6 @@ export class PostgresWebhookDeliveryStore implements WebhookDeliveryStore {
         processedAt: command.processingState === "pending" ? null : sql`clock_timestamp()`,
         processingError: command.processingError ?? null,
         processingState: command.processingState,
-        updatedAt: sql`clock_timestamp()`,
       })
       .where(
         and(

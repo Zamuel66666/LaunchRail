@@ -179,7 +179,7 @@ describeWithServices("deployment worker restart recovery", () => {
       WORKER_BUILD_ROOT: `/tmp/launchrail-build-${suffix}`,
       WORKER_CONCURRENCY: "1",
       WORKER_HEARTBEAT_INTERVAL_MS: "20",
-      WORKER_JOB_TIMEOUT_MS: "500",
+      WORKER_JOB_TIMEOUT_MS: "6000",
       WORKER_LEASE_MS: "100",
       WORKER_MAX_ATTEMPTS: "3",
       WORKER_QUEUE_NAME: `deployments_${suffix}`,

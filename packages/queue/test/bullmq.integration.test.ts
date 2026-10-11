@@ -184,6 +184,39 @@ describeWithRedis("BullMQ deployment job queue", () => {
     await waitFor(async () => (await publisher.getState(payload.workItemId)) === "absent");
   });
 
+  it.each([
+    "deployment.claim",
+    "deployment.prepare_source",
+    "deployment.build",
+    "deployment.start_runtime",
+  ] as const)("consumes %s and reports real queue depth", async (kind) => {
+    const publisher = createPublisher();
+    const metrics = new MetricsRegistry();
+    let received: DeploymentJob | undefined;
+    const consumer = createConsumer(
+      async (payload) => {
+        received = payload;
+      },
+      undefined,
+      metrics,
+    );
+    await publisher.waitUntilReady();
+    const payload = { contractVersion: 1, kind, workItemId: randomUUID() } satisfies DeploymentJob;
+    await publisher.enqueue(payload);
+    await expect(consumer.refreshQueueMetrics()).resolves.toBe(true);
+    expect(metrics.renderPrometheus()).toContain('launchrail_worker_queue_jobs{state="waiting"} 1');
+    consumer.start();
+    await consumer.waitUntilReady();
+    await waitFor(() => received !== undefined);
+    expect(received).toEqual(payload);
+    await waitFor(async () => (await publisher.getState(payload.workItemId, kind)) === "absent");
+    await expect(consumer.refreshQueueMetrics()).resolves.toBe(true);
+    expect(metrics.renderPrometheus()).toContain('launchrail_worker_queue_jobs{state="waiting"} 0');
+    expect(metrics.renderPrometheus()).toContain(
+      `launchrail_worker_jobs_processed_total{kind="${kind}",outcome="completed"} 1`,
+    );
+  });
+
   it("allows PostgreSQL reconciliation to republish after failed and completed wake-ups", async () => {
     const publisher = createPublisher();
     let invocationCount = 0;

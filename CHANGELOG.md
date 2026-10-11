@@ -4,6 +4,14 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 
 ## [Unreleased]
 
+### Verification fixes
+
+- Restored the complete deployment queue path, including runtime-start wake-ups and queue-depth collection through the supported BullMQ queue API.
+- Completed the BullMQ tracing bridge so failed/completed jobs do not interrupt consumption; allowlisted trace attributes and events exclude IDs, queue configuration, error text, and arbitrary tracestate.
+- Fixed OpenTelemetry initialization, webhook retry persistence, API configuration/types, and active-runtime transition imports exposed by full compilation and service tests.
+- Accepted Docker image-store manifest identities while retaining exact BuildKit metadata and inspected-image checks; made output-limit/redaction acceptance independent of warm build caches.
+- Verified 304 unit, 14 HTTP integration, 73 PostgreSQL, 15 queue/restart, seven BuildKit, one constrained runtime, and one real Traefik routing acceptance tests, plus application builds and health smoke checks. Release recovery, browser, benchmark, and dependency gates remain open.
+
 ### Added
 
 - Pinned Traefik file-provider routing with collision-resistant deployment hostnames, atomic private route files, bounded targets, stale-file reconciliation, and real proxy acceptance coverage.

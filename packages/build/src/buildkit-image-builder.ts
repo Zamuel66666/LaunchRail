@@ -525,10 +525,11 @@ export class BuildKitImageBuilder implements ImageBuilder {
     if (
       typeof imageDigest !== "string" ||
       !digestPattern.test(imageDigest) ||
-      typeof configDigest !== "string" ||
-      !digestPattern.test(configDigest) ||
       !digestPattern.test(imageId) ||
-      imageId !== configDigest
+      (imageId !== imageDigest &&
+        (typeof configDigest !== "string" ||
+          !digestPattern.test(configDigest) ||
+          imageId !== configDigest))
     ) {
       throw buildError({
         code: "image_metadata_invalid",

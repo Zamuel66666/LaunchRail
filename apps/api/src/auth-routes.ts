@@ -353,11 +353,12 @@ export function registerAuthRoutes(
         );
         if (authorization === null) return;
         const trigger = options.webhookTrigger;
-        if (trigger === undefined)
+        const deliveryStore = options.webhookDeliveryStore;
+        if (trigger === undefined || deliveryStore === undefined)
           return reply
             .code(503)
             .send(errorBody("retry_unavailable", "Webhook retry is unavailable"));
-        const retry = await options.webhookDeliveryStore?.loadRetry(
+        const retry = await deliveryStore.loadRetry(
           request.params.organizationId,
           request.params.deliveryId,
         );
@@ -365,7 +366,7 @@ export function registerAuthRoutes(
           return reply
             .code(409)
             .send(errorBody("delivery_not_retryable", "Delivery cannot be retried"));
-        await options.webhookDeliveryStore.mark({
+        await deliveryStore.mark({
           deliveryId: retry.deliveryId,
           organizationId: request.params.organizationId,
           processingState: "pending",
@@ -378,7 +379,7 @@ export function registerAuthRoutes(
             push: retry.push,
           });
           return {
-            delivery: await options.webhookDeliveryStore.mark({
+            delivery: await deliveryStore.mark({
               deliveryId: retry.deliveryId,
               organizationId: request.params.organizationId,
               processingState: "processed",
@@ -386,7 +387,7 @@ export function registerAuthRoutes(
           };
         } catch (error) {
           request.log.warn({ error, requestId: request.id }, "GitHub webhook retry failed");
-          const delivery = await options.webhookDeliveryStore.mark({
+          const delivery = await deliveryStore.mark({
             deliveryId: retry.deliveryId,
             organizationId: request.params.organizationId,
             processingError: "retry_failed",
@@ -446,7 +447,7 @@ export function registerAuthRoutes(
     },
   );
 
-  server.get<{ Params: OrganizationParams }>(
+  server.get<{ Params: OrganizationParams; Querystring: { limit?: string; targetId?: string } }>(
     "/v1/organizations/:organizationId/audit-events",
     {
       schema: {

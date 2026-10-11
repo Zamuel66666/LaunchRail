@@ -192,7 +192,7 @@ export class BullMqDeploymentQueuePublisher {
     const location = resolveLocation(options);
     const notify = safeInfrastructureNotifier("publisher", options.onInfrastructureEvent);
     this.connection = createProducerConnection(location.redisUrl, notify);
-    const telemetry = createBullMqTelemetryBridge() as unknown as QueueOptions["telemetry"];
+    const telemetry: NonNullable<QueueOptions["telemetry"]> = createBullMqTelemetryBridge();
     this.queue = new Queue<DeploymentJob, void, DeploymentJob["kind"]>(location.queueName, {
       connection: this.connection,
       defaultJobOptions: {
@@ -301,6 +301,7 @@ export class BullMqDeploymentQueueConsumer {
   private readonly activeRuns = new Set<Promise<void>>();
   private readonly connection: Redis;
   private readonly readinessConnection: Redis;
+  private readonly metricsQueue: Queue;
   private readonly notify: (code: QueueInfrastructureEvent["code"]) => void;
   private readonly metrics: MetricsRegistry | undefined;
   private readonly worker: Worker<unknown, void, string>;
@@ -315,8 +316,13 @@ export class BullMqDeploymentQueueConsumer {
     const concurrency = requirePositiveSafeInteger("concurrency", options.concurrency ?? 1);
     this.connection = createWorkerConnection(location.redisUrl, notify);
     this.readinessConnection = createReadinessConnection(location.redisUrl, notify);
+    this.metricsQueue = new Queue(location.queueName, {
+      connection: this.readinessConnection,
+      prefix: location.prefix,
+    });
+    this.metricsQueue.on("error", () => notify("queue_error"));
     this.metrics?.setGauge("launchrail_worker_active_queue_handlers", 0);
-    const telemetry = createBullMqTelemetryBridge() as unknown as WorkerOptions["telemetry"];
+    const telemetry: NonNullable<WorkerOptions["telemetry"]> = createBullMqTelemetryBridge();
     this.worker = new Worker<unknown, void, string>(
       location.queueName,
       async (job, _token, signal) => {
@@ -360,7 +366,8 @@ export class BullMqDeploymentQueueConsumer {
     const supportedKind =
       name === "deployment.build" ||
       name === "deployment.claim" ||
-      name === "deployment.prepare_source";
+      name === "deployment.prepare_source" ||
+      name === "deployment.start_runtime";
     const kind = supportedKind ? name : "invalid";
     const queuedAtMs = Number.isSafeInteger(queuedAt) ? queuedAt : Date.now();
     this.metrics?.observe(
@@ -419,7 +426,7 @@ export class BullMqDeploymentQueueConsumer {
   public async refreshQueueMetrics(): Promise<boolean> {
     if (this.metrics === undefined) return true;
     try {
-      const counts = await this.worker.getJobCounts(...measuredQueueStates);
+      const counts = await this.metricsQueue.getJobCounts(...measuredQueueStates);
       for (const state of measuredQueueStates)
         this.metrics.setGauge("launchrail_worker_queue_jobs", counts[state] ?? 0, { state });
       return true;
@@ -459,7 +466,11 @@ export class BullMqDeploymentQueueConsumer {
         try {
           await closeOwnedConnection(this.connection);
         } finally {
-          await closeOwnedConnection(this.readinessConnection);
+          try {
+            await this.metricsQueue.close();
+          } finally {
+            await closeOwnedConnection(this.readinessConnection);
+          }
         }
       }
     })();

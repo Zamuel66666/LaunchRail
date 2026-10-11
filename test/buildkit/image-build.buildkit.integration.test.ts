@@ -79,7 +79,7 @@ describe("real BuildKit image lifecycle", () => {
   });
 
   it("redacts build output before delivery", async () => {
-    const context = await createFixtureBuildContext("redaction");
+    const context = await createFixtureBuildContext("redaction", { cacheBust: true });
     const command = {
       attempt: 1,
       context,
@@ -166,7 +166,7 @@ describe("real BuildKit image lifecycle", () => {
   });
 
   it("rejects excessive raw build output", async () => {
-    const context = await createFixtureBuildContext("output-limit");
+    const context = await createFixtureBuildContext("output-limit", { cacheBust: true });
     const command = {
       attempt: 1,
       context,

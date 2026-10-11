@@ -389,10 +389,7 @@ export class PostgresIdentityStore implements IdentityStore {
       .where(
         targetId === undefined
           ? eq(auditEvents.organizationId, organizationId)
-          : and(
-              eq(auditEvents.organizationId, organizationId),
-              eq(auditEvents.targetId, targetId),
-            ),
+          : and(eq(auditEvents.organizationId, organizationId), eq(auditEvents.targetId, targetId)),
       )
       .orderBy(desc(auditEvents.createdAt))
       .limit(limit);

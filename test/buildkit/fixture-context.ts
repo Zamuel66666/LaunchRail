@@ -1,5 +1,15 @@
-import { createHash } from "node:crypto";
-import { cp, lstat, mkdir, mkdtemp, opendir, readFile, readlink, rm } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import {
+  cp,
+  lstat,
+  mkdir,
+  mkdtemp,
+  opendir,
+  readFile,
+  readlink,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 
@@ -70,7 +80,10 @@ async function manifestEntries(root: string): Promise<readonly RepositoryContext
   return entries;
 }
 
-export async function createFixtureBuildContext(name: string): Promise<FixtureBuildContext> {
+export async function createFixtureBuildContext(
+  name: string,
+  options: { cacheBust?: boolean } = {},
+): Promise<FixtureBuildContext> {
   if (!/^[a-z][a-z-]*$/.test(name)) {
     throw new Error("Build fixture name must be a safe lowercase identifier");
   }
@@ -80,6 +93,15 @@ export async function createFixtureBuildContext(name: string): Promise<FixtureBu
   await mkdir(contextDirectory, { mode: 0o700 });
   await cp(fixtureDirectory, contextDirectory, { recursive: true });
 
+  if (options.cacheBust === true) {
+    await writeFile(join(contextDirectory, ".acceptance-nonce"), randomUUID(), { mode: 0o600 });
+    const original = await readFile(join(contextDirectory, "Dockerfile"), "utf8");
+    if (!/^RUN /mu.test(original)) throw new Error("Cache-busting fixture must contain a RUN step");
+    await writeFile(
+      join(contextDirectory, "Dockerfile"),
+      original.replace(/^RUN /mu, "COPY .acceptance-nonce /.acceptance-nonce\nRUN "),
+    );
+  }
   const dockerfile = await readFile(join(contextDirectory, "Dockerfile"));
   const contextSha256 = computeRepositoryContextSha256(await manifestEntries(contextDirectory));
 

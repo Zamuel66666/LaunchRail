@@ -97,6 +97,7 @@ const apiSchema = sharedServiceSchema.extend({
   GITHUB_WEBHOOK_SECRET: optionalEnvironmentValue(z.string().min(1)),
   GITHUB_WEBHOOK_ORGANIZATION_ID: optionalEnvironmentValue(z.string().uuid()),
   GITHUB_WEBHOOK_MAX_ATTEMPTS: positiveIntegerSchema.max(20).default(5),
+  WORKER_MAX_ATTEMPTS: positiveIntegerSchema.max(20).default(5),
   LAUNCHRAIL_ACTIVE_SECRET_KEY_VERSION: positiveIntegerSchema,
   LAUNCHRAIL_SECRET_KEYRING: secretKeyringSchema,
   SESSION_ABSOLUTE_TTL_HOURS: positiveIntegerSchema.max(168).default(24),

@@ -126,7 +126,6 @@ function LoadingState({ label }: Readonly<{ label: string }>) {
 function ProjectCard({
   canArchive,
   canCreateDeployment,
-  canControlDeployments,
   canReadAudit,
   canEdit,
   canManageSecrets,
@@ -139,7 +138,6 @@ function ProjectCard({
 }: Readonly<{
   canArchive: boolean;
   canCreateDeployment: boolean;
-  canControlDeployments: boolean;
   canReadAudit: boolean;
   canEdit: boolean;
   canManageSecrets: boolean;
@@ -1248,7 +1246,6 @@ export function ProjectWorkspace() {
                   <ProjectCard
                     canArchive={canArchive}
                     canCreateDeployment={canCreateDeployment}
-                    canControlDeployments={canControlDeployments}
                     canReadAudit={canReadAudit}
                     canEdit={canEdit}
                     canManageSecrets={canManageSecrets}

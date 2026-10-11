@@ -112,6 +112,9 @@ describeWithDatabase("PostgresDeploymentJobStore", () => {
 
     await client.db.insert(schema.deployments).values({
       configurationSnapshot: { projectVersion: 1 },
+      healthCheckedAt: ["active", "superseded", "rolled_back"].includes(options.state ?? "queued")
+        ? new Date()
+        : null,
       id: deploymentId,
       organizationId,
       projectId,

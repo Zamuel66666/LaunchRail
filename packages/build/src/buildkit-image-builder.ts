@@ -442,6 +442,19 @@ export class BuildKitImageBuilder implements ImageBuilder {
     };
   }
 
+  private async bootstrapBuilder(cwd: string, home: string, signal: AbortSignal): Promise<void> {
+    await this.executor.execute({
+      arguments: ["buildx", "inspect", "--builder", this.builderName, "--bootstrap"],
+      binary: this.dockerBinary,
+      cwd,
+      environment: this.environment(home),
+      maxLineBytes: 4_096,
+      maxOutputBytes: 16_384,
+      retainOutput: false,
+      signal,
+    });
+  }
+
   private assertInspection(
     inspection: DockerImageInspection,
     labels: BuildLabelRecord,
@@ -622,6 +635,7 @@ export class BuildKitImageBuilder implements ImageBuilder {
     try {
       await this.prepareDockerConfiguration();
       const root = await preparePrivateBuildRoot(this.buildRootDirectory);
+      await this.bootstrapBuilder(root, join(root, "home"), signal);
       const paths = this.resultPaths(root, command.identity.workItemId);
       await mkdir(parse(paths.marker).dir, { mode: 0o700, recursive: true });
       const reference = createStableImageReference(command.identity);

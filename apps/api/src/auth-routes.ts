@@ -385,8 +385,11 @@ export function registerAuthRoutes(
               processingState: "processed",
             }),
           };
-        } catch (error) {
-          request.log.warn({ error, requestId: request.id }, "GitHub webhook retry failed");
+        } catch {
+          request.log.warn(
+            { code: "webhook_retry_failed", requestId: request.id },
+            "GitHub webhook retry failed",
+          );
           const delivery = await deliveryStore.mark({
             deliveryId: retry.deliveryId,
             organizationId: request.params.organizationId,

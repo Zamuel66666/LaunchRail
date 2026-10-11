@@ -101,3 +101,7 @@ The current baseline is `pnpm test` for package/web unit tests (including fake-H
 ## Defect workflow
 
 Reproduce a defect at the lowest layer that captures the observable failure, add a regression test where practical, implement the focused correction, and run adjacent integration coverage. Do not weaken an invariant or assertion merely to make a failure disappear.
+
+### Deployment creation regressions
+
+The PostgreSQL creation-store suite verifies that the initial event starts at positive sequence 1 and the deployment, claim job, immutable configuration, and audit record commit atomically. It covers configured attempt limits, concurrent verified-delivery deduplication, rollback on invalid delivery references, and foreign/archived project concealment. Creation locks the current project configuration so archival cannot race a new intent. Unhandled API and webhook-retry errors log fixed codes and request IDs, never raw persistence errors or SQL parameters.

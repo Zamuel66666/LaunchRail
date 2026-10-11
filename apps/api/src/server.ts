@@ -363,7 +363,10 @@ export function buildServer({
       return;
     }
 
-    request.log.error({ error }, "Unhandled API error");
+    request.log.error(
+      { code: "unhandled_api_error", requestId: request.id },
+      "Unhandled API error",
+    );
     void reply.code(500).send({
       error: { code: "internal_error", message: "An internal error occurred" },
     });

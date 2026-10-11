@@ -43,6 +43,7 @@ describe("GitHub webhook deployment trigger", () => {
     });
 
     expect(createDeployment).toHaveBeenCalledWith({
+      maxAttempts: 5,
       organizationId,
       projectId: "44444444-4444-4444-8444-444444444444",
       sourceEvent: { deliveryId: "github-delivery-1", provider: "github" },

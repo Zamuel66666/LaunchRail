@@ -73,7 +73,7 @@ async function main(): Promise<void> {
     "webhooks",
   );
   const deploymentCreationStore = traceDatabaseStore(
-    new PostgresDeploymentCreationStore(databaseClient.db),
+    new PostgresDeploymentCreationStore(databaseClient.db, config.WORKER_MAX_ATTEMPTS),
     "deployment_creation",
   );
   const deploymentPublisher = new BullMqDeploymentQueuePublisher({

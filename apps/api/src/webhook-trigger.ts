@@ -53,6 +53,7 @@ export function createGitHubWebhookDeploymentTrigger({
           continue;
         }
         const deployment = await deploymentCreationStore.createDeployment({
+          maxAttempts,
           organizationId: event.organizationId,
           projectId: project.id,
           sourceEvent: { deliveryId: event.deliveryId, provider: "github" },

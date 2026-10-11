@@ -10,16 +10,23 @@ import type { LaunchRailDatabase } from "./client.js";
 import {
   auditEvents,
   deploymentEvents,
+  deploymentJobs,
   deployments,
   projects,
   webhookDeploymentTriggers,
 } from "./schema.js";
-import { DeploymentNotFoundError } from "./errors.js";
+import { DeploymentNotFoundError, DeploymentPersistenceConflictError } from "./errors.js";
 
 export class PostgresDeploymentCreationStore implements DeploymentCreationStore {
-  public constructor(private readonly db: LaunchRailDatabase) {}
+  public constructor(
+    private readonly db: LaunchRailDatabase,
+    private readonly defaultMaxAttempts = 5,
+  ) {}
 
   public async createDeployment(command: CreateDeploymentCommand): Promise<CreatedDeployment> {
+    const maxAttempts = command.maxAttempts ?? this.defaultMaxAttempts;
+    if (!Number.isSafeInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 20)
+      throw new RangeError("Deployment attempts must be between 1 and 20");
     let sourceRevision = command.sourceRevision;
     if (sourceRevision === undefined && command.retryOfDeploymentId !== undefined) {
       const [original] = await this.db
@@ -100,12 +107,27 @@ export class PostgresDeploymentCreationStore implements DeploymentCreationStore 
       if (original === undefined || original.projectId !== projectId)
         throw new DeploymentNotFoundError();
       if (!["build_failed", "deployment_failed", "cancelled"].includes(original.state))
-        throw new Error("Only terminal failed deployments can be retried");
+        throw new DeploymentPersistenceConflictError(
+          "Only terminal failed deployments can be retried",
+        );
     }
     const deploymentId = randomUUID();
     try {
       await this.db.transaction(async (transaction) => {
+        const [project] = await transaction
+          .select()
+          .from(projects)
+          .where(
+            and(
+              eq(projects.id, projectId),
+              eq(projects.organizationId, command.organizationId),
+              isNull(projects.archivedAt),
+            ),
+          )
+          .for("update");
+        if (project === undefined) throw new DeploymentNotFoundError();
         await transaction.insert(deployments).values({
+          eventSequence: 1,
           configurationSnapshot: {
             defaultBranch: project.defaultBranch,
             dockerfilePath: project.dockerfilePath,
@@ -133,8 +155,16 @@ export class PostgresDeploymentCreationStore implements DeploymentCreationStore 
           kind: "deployment_created",
           metadata: {},
           organizationId: command.organizationId,
-          sequence: 0,
+          sequence: 1,
           toState: "queued",
+        });
+        await transaction.insert(deploymentJobs).values({
+          contractVersion: 1,
+          deploymentId,
+          organizationId: command.organizationId,
+          kind: "deployment.claim",
+          availableAt: new Date(),
+          maxAttempts,
         });
         await transaction.insert(auditEvents).values({
           action: "deployment.create",

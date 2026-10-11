@@ -1,5 +1,6 @@
 export interface CreateDeploymentCommand {
   readonly actorUserId?: string;
+  readonly maxAttempts?: number;
   readonly organizationId: string;
   readonly projectId?: string;
   readonly retryOfDeploymentId?: string;

@@ -290,6 +290,21 @@
       ],
       "title": "Deployment stage outcomes per second",
       "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "launchrail-prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 80 },
+      "id": 19,
+      "targets": [
+        {
+          "expr": "sum by (result) (rate(launchrail_worker_build_cache_steps_sum[5m]))",
+          "legendFormat": "cache {{result}} steps/s",
+          "refId": "A"
+        }
+      ],
+      "title": "Build cache hits and misses per second",
+      "type": "timeseries"
     }
   ],
   "refresh": "30s",

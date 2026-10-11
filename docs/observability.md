@@ -39,14 +39,14 @@ Application build/runtime output is a separate bounded stream, not mixed into co
 
 Prometheus-compatible metrics will use low-cardinality labels such as service, route template, method, status class, job type, deployment stage, outcome, and failure category.
 
-The API exposes request counters/histograms and webhook processing counters/histograms at `/metrics` with bounded route-template, method, status-class, event-class, and outcome labels. API and worker readiness probes also expose bounded ready/not-ready counters; the API records readiness-check duration. The worker `/metrics` exposes process uptime/RSS, active-job and active-queue-handler gauges, queue depth by fixed BullMQ state, queue wait and handler-processing histograms, durable deployment-job outcome counters and processing histograms by supported kind, reconciliation/dispatch counters, health-check counters/histograms, runtime handoff/failure counters, orphan-runtime, source/build-stage, completed-checkout, orphan-image, interrupted-route-file, route-restoration, and resource-recovery failure counters. Queue depth is refreshed on the worker heartbeat interval, so it is an operational snapshot rather than an instantaneous guarantee. Queue metrics label only fixed states, supported job kinds, and fixed outcomes; labels intentionally omit repository, organization, deployment, request, and delivery identifiers.
+The API exposes request counters/histograms and webhook processing counters/histograms at `/metrics` with bounded route-template, method, status-class, event-class, and outcome labels. API and worker readiness probes also expose bounded ready/not-ready counters; the API records readiness-check duration. The worker `/metrics` exposes process uptime/RSS, active-job and active-queue-handler gauges, queue depth by fixed BullMQ state, queue wait and handler-processing histograms, durable deployment-job outcome counters and processing histograms by supported kind, build-cache hit/miss step histograms, reconciliation/dispatch counters, health-check counters/histograms, runtime handoff/failure counters, orphan-runtime, source/build-stage, completed-checkout, orphan-image, interrupted-route-file, route-restoration, and resource-recovery failure counters. Queue depth is refreshed on the worker heartbeat interval, so it is an operational snapshot rather than an instantaneous guarantee. Queue metrics label only fixed states, supported job kinds, and fixed outcomes; labels intentionally omit repository, organization, deployment, request, and delivery identifiers.
 
 Measurements still to add:
 
 - Active SSE streams, reconnects, dropped/limited chunks, and delivery lag.
 - Queue retries and timeout counts.
 - End-to-end deployment duration and success/failure/cancellation totals across all stages.
-- Build cache outcome and duration without repository labels.
+- Build duration without repository labels.
 - Runtime start/stop/cleanup duration and current orphan inventory gauge.
 - Health-check grace-period exhaustion.
 - Route apply/reconcile duration, failures, and desired/observed mismatch count.
@@ -99,7 +99,7 @@ Observability becomes “Available” only when a recorded demonstration can tra
 
 # Local metrics and dashboards
 
-The API and worker expose Prometheus text format at `/metrics`. The API includes route-template request counts and latency plus bounded GitHub delivery outcomes and processing duration. The worker reports process uptime/RSS, queue depth by state, active jobs and queue handlers, queue wait and handler-processing durations, durable per-stage processing duration/outcome by supported job kind, job reconciliation/dispatch outcomes, runtime handoffs, health-check outcomes/duration, terminal/retryable runtime failures, and resource cleanup results. Queue depth refreshes on the worker heartbeat interval. Metric labels intentionally avoid organization, project, deployment, request, and delivery identifiers.
+The API and worker expose Prometheus text format at `/metrics`. The API includes route-template request counts and latency plus bounded GitHub delivery outcomes and processing duration. The worker reports process uptime/RSS, queue depth by state, active jobs and queue handlers, queue wait and handler-processing durations, durable per-stage processing duration/outcome by supported job kind, build cache hit/miss step counts, job reconciliation/dispatch outcomes, runtime handoffs, health-check outcomes/duration, terminal/retryable runtime failures, and resource cleanup results. Queue depth refreshes on the worker heartbeat interval. Metric labels intentionally avoid organization, project, deployment, request, and delivery identifiers.
 
 The optional local dashboard stack is isolated from the default development services. It uses Linux host networking to reach API and worker metrics, so this overlay is currently supported on Linux hosts:
 

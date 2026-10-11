@@ -89,7 +89,7 @@ LaunchRail will use a modular monolith for the web/API boundary and a separate w
 - Runtime health failures are categorized and recorded before terminal failure, preserve the previous active release and preview route, and interrupted startup grace cleans the candidate runtime without probing or promoting it.
 - Owner/admin users can expand deployment-scoped audit entries alongside lifecycle events.
 - Signed webhook outcomes are persisted, reviewable by audit readers, and failed verified deliveries can be retried without duplicating a deployment for the same delivery/project pair.
-- The API and worker expose route, webhook, queue-depth, queue-wait, durable stage-outcome/duration, runtime, and health metrics; an optional loopback-only Prometheus/Grafana overlay provisions the LaunchRail Operations dashboard.
+- The API and worker expose route, webhook, queue-depth, queue-wait, durable stage-outcome/duration, build-cache, runtime, and health metrics; an optional loopback-only Prometheus/Grafana overlay provisions the LaunchRail Operations dashboard.
 - Deployment controllers can start a project deployment from a full exact Git commit SHA; durable work is persisted before the best-effort queue wake-up.
 - Organization readers can open bounded, retained build output from each deployment in the project timeline.
 - Worker reconciliation inventories LaunchRail-labeled containers, protects live leased runtimes, and cleans unrecorded or terminal runtime containers with persisted cleanup outcomes.

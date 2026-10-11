@@ -169,6 +169,7 @@ export function createDeploymentWorkerComponents({
     leaseDurationMs: config.WORKER_LEASE_MS,
     logMaxRetainedBytes: config.WORKER_BUILD_LOG_MAX_BYTES,
     logger,
+    ...(metrics === undefined ? {} : { metrics }),
     repositoryCheckout: checkout,
     sourceRoot: config.WORKER_SOURCE_ROOT,
     store,

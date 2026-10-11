@@ -11,6 +11,7 @@ import type {
 } from "@launchrail/application";
 import { ImageBuildError } from "@launchrail/application";
 import type { DeploymentBuildJob } from "@launchrail/contracts";
+import type { MetricsRegistry } from "@launchrail/observability";
 import { computeDeploymentJobBackoffMs } from "@launchrail/queue";
 
 import type { DeploymentJobProcessingOutcome, WorkerEventLogger } from "./processor.js";
@@ -28,6 +29,7 @@ export interface DeploymentBuildProcessorOptions {
   readonly sourceRoot: string;
   readonly store: DeploymentJobStore;
   readonly workerId: string;
+  readonly metrics?: MetricsRegistry;
 }
 
 interface SafeBuildFailure {
@@ -120,6 +122,7 @@ export class DeploymentBuildProcessor {
   private readonly sourceRoot: string;
   private readonly store: DeploymentJobStore;
   private readonly workerId: string;
+  private readonly metrics: MetricsRegistry | undefined;
 
   public constructor({
     backoffBaseMs,
@@ -134,6 +137,7 @@ export class DeploymentBuildProcessor {
     sourceRoot,
     store,
     workerId,
+    metrics,
   }: DeploymentBuildProcessorOptions) {
     this.backoffBaseMs = backoffBaseMs;
     this.backoffCapMs = backoffCapMs;
@@ -147,6 +151,7 @@ export class DeploymentBuildProcessor {
     this.sourceRoot = sourceRoot;
     this.store = store;
     this.workerId = workerId;
+    this.metrics = metrics;
   }
 
   public getActiveJobCount(): number {
@@ -459,6 +464,14 @@ export class DeploymentBuildProcessor {
         }
 
         if (built !== undefined) {
+          if (!built.adopted) {
+            this.metrics?.observe("launchrail_worker_build_cache_steps", built.cacheHitCount, {
+              result: "hit",
+            });
+            this.metrics?.observe("launchrail_worker_build_cache_steps", built.cacheMissCount, {
+              result: "miss",
+            });
+          }
           const completion = await runWithSignal(
             trackOperation(
               this.store.completeBuild({

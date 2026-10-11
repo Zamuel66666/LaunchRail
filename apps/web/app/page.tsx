@@ -17,6 +17,9 @@ const milestoneItems = [
   "Manual deployment by exact Git commit and organization-scoped retained build-log viewing",
   "Organization-authorized runtime log tails via a private API-to-worker endpoint",
   "Lease-aware cleanup of orphaned runtimes and stale source/build staging directories",
+  "Stale interrupted preview-route writes removed after a safe age threshold",
+  "W3C trace propagation from API requests through BullMQ into worker spans",
+  "Separate API database and worker startup readiness from process liveness",
   "Reproducible API liveness benchmark output and a public-release readiness checklist",
 ];
 
@@ -32,12 +35,15 @@ export default function HomePage() {
         </p>
         <div className="status" role="status">
           <span className="status-dot" aria-hidden="true" />
-          Core deployment stages through operator recovery, exact-SHA starts, build/runtime output,
-          and release preparation are implemented; independent verification remains
+          Core deployment stages, trace propagation, dependency readiness, exact-SHA starts, and
+          operator recovery are implemented; independent verification remains
         </div>
         <div className="hero-actions">
           <Link className="primary-link" href="/projects">
             Open project workspace <span aria-hidden="true">→</span>
+          </Link>
+          <Link className="secondary-link" href="/demo">
+            Follow the demo walkthrough
           </Link>
           <Link className="secondary-link" href="/sign-in">
             Manage session
@@ -47,9 +53,7 @@ export default function HomePage() {
 
       <section className="panel" aria-labelledby="milestone-title">
         <p className="section-label">Current milestone</p>
-        <h2 id="milestone-title">
-          Recovery, manual deployment, runtime logs, and release preparation are implemented
-        </h2>
+        <h2 id="milestone-title">Current implementation status</h2>
         <ul>
           {milestoneItems.map((item) => (
             <li key={item}>{item}</li>
@@ -59,13 +63,11 @@ export default function HomePage() {
 
       <section className="next" aria-labelledby="next-title">
         <p className="section-label">Next milestone</p>
-        <h2 id="next-title">Close failure recovery, traceability, and operator-control gaps</h2>
+        <h2 id="next-title">Finish recovery, onboarding, and release evidence</h2>
         <p>
-          The workspace exposes health, lifecycle activity, operator audit, webhook outcomes,
-          exact-SHA deployment starts, and bounded build/runtime output. Remaining implementation
-          work centers on recovering every external resource type, distributed tracing, broader
-          benchmarks, and accessible end-to-end onboarding; recent additions still need independent
-          validation.
+          Next: recover BuildKit daemon interruptions and remaining control races, complete an
+          accessible first-run walkthrough, and add repeatable deployment benchmarks. Recent
+          recovery and tracing additions still need independent validation; no release is claimed.
         </p>
       </section>
     </main>

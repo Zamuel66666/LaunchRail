@@ -138,6 +138,7 @@ See the [development guide](docs/development.md) for verification, configuration
 ## Documentation
 
 - [Product scope](docs/product-scope.md)
+- The running web app includes a guided `/demo` walkthrough.
 - [Architecture](ARCHITECTURE.md)
 - [Deployment lifecycle](docs/deployment-lifecycle.md)
 - [Security policy](SECURITY.md) and [threat model](docs/threat-model.md)

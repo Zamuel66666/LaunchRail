@@ -181,6 +181,66 @@ li::before {
   line-height: 1.65;
 }
 
+.demo-panel > p:not(.section-label) {
+  max-width: 54rem;
+  color: #b8c9d9;
+  line-height: 1.65;
+}
+
+.demo-panel > a,
+.demo-boundary > a {
+  color: #8eeaff;
+  font-weight: 700;
+  text-underline-offset: 0.22rem;
+}
+
+.demo-steps {
+  display: grid;
+  gap: 1.2rem;
+  margin: 0;
+  padding-left: 1.6rem;
+}
+
+.demo-steps li {
+  padding-left: 0.45rem;
+  color: #79d9ef;
+  line-height: 1.6;
+}
+
+.demo-steps li::before {
+  content: none;
+}
+
+.demo-steps h3 {
+  margin: 0 0 0.35rem;
+  color: #eef6ff;
+  font-size: 1rem;
+}
+
+.demo-steps p,
+.demo-boundary p {
+  margin: 0;
+  color: #b8c9d9;
+  line-height: 1.65;
+}
+
+.demo-boundary {
+  margin-top: 1rem;
+  padding: clamp(1.5rem, 4vw, 2.5rem);
+  border: 1px solid #674848;
+  border-radius: 1rem;
+  background: rgb(47 23 25 / 35%);
+}
+
+.demo-boundary h2 {
+  font-size: 1.3rem;
+}
+
+.demo-boundary p {
+  max-width: 54rem;
+  margin-bottom: 1rem;
+}
+
 .auth-shell {
   display: grid;
   min-height: 100vh;

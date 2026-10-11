@@ -2,7 +2,7 @@
 
 ## Current repository state
 
-Phases 1 through 6 provide the currently accepted runnable TypeScript workspace, web/API/worker processes, deployment-domain/PostgreSQL transition persistence, authenticated organization/project routes, encrypted environment-variable storage, PostgreSQL-authoritative BullMQ work, and hardened public GitHub source preparation through `building`. No deployment-start use case, HTTP route, web flow, or image build exists yet.
+The repository now includes the runnable web/API/worker workspace, authenticated project management, PostgreSQL-authoritative source/build/runtime jobs, exact-SHA deployments, health-gated promotion, preview routing, operator controls, signed push webhooks, retained build/runtime logs, recovery cleanup, metrics, and optional distributed tracing. Phases 10–16 remain in progress because independent acceptance, recovery coverage, accessibility, benchmark results, and release evidence are incomplete; consult the [roadmap](../ROADMAP.md) for exact boundaries.
 
 ## Prerequisites
 
@@ -36,9 +36,12 @@ Open:
 
 - Web application: `http://localhost:3000`
 - Project workspace: `http://localhost:3000/projects`
+- Guided demo walkthrough: `http://localhost:3000/demo`
 - Web health: `http://localhost:3000/api/health`
 - API health: `http://localhost:4000/health`
 - Worker health: `http://localhost:4001/health`
+- API readiness: `http://localhost:4000/ready`
+- Worker startup readiness: `http://localhost:4001/ready`
 
 Each health response uses the shared contract:
 
@@ -51,7 +54,7 @@ Each health response uses the shared contract:
 }
 ```
 
-The timestamp varies. These endpoints prove process liveness only. The worker's durable heartbeat and queue integration do not turn `/health` or the health smoke test into a queue/database readiness check.
+The timestamp varies. `/health` endpoints prove process liveness only. `/ready` checks API PostgreSQL reachability within the pool's bounded query timeout and reports worker readiness after runtime startup and reconciliation. Worker readiness is not a continuous dependency-health or queue-depth monitor; the health smoke test intentionally does not initialize dependencies.
 
 ## Stopping and cleanup
 

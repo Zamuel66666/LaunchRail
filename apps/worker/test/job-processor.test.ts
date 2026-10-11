@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { MetricsRegistry } from "@launchrail/observability";
 
 import { DeploymentJobProcessor } from "../src/job-processor.js";
 
@@ -24,6 +25,7 @@ describe("DeploymentJobProcessor", () => {
     const sourceProcess = vi.fn(async () => "dead_lettered" as const);
     const buildProcess = vi.fn(async () => "completed" as const);
     const runtimeProcess = vi.fn(async () => "completed" as const);
+    const metrics = new MetricsRegistry();
     const processor = new DeploymentJobProcessor({
       buildProcessor: {
         getActiveJobCount: () => 0,
@@ -45,6 +47,7 @@ describe("DeploymentJobProcessor", () => {
         process: runtimeProcess,
         waitForIdle: vi.fn(async () => undefined),
       } as never,
+      metrics,
     });
     const signal = new AbortController().signal;
 
@@ -54,6 +57,13 @@ describe("DeploymentJobProcessor", () => {
     expect(buildProcess).toHaveBeenCalledWith(buildJob, signal);
     expect(claimProcess).toHaveBeenCalledWith(claimJob, signal);
     expect(sourceProcess).toHaveBeenCalledWith(sourceJob, signal);
+    const output = metrics.renderPrometheus();
+    expect(output).toContain(
+      'launchrail_worker_deployment_jobs_processed_total{kind="deployment.prepare_source",outcome="dead_lettered"} 1',
+    );
+    expect(output).toContain(
+      'launchrail_worker_deployment_job_processing_duration_seconds_count{kind="deployment.build",outcome="completed"} 1',
+    );
   });
 
   it("aggregates activity and waits for all processor classes to become idle", async () => {

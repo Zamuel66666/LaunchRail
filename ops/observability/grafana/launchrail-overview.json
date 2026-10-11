@@ -275,6 +275,21 @@
       ],
       "title": "Deployment queue depth by state",
       "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "launchrail-prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 72 },
+      "id": 18,
+      "targets": [
+        {
+          "expr": "sum by (kind, outcome) (rate(launchrail_worker_deployment_jobs_processed_total[5m]))",
+          "legendFormat": "{{kind}} {{outcome}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Deployment stage outcomes per second",
+      "type": "timeseries"
     }
   ],
   "refresh": "30s",

@@ -229,6 +229,8 @@ export class DeploymentWorkerRuntime {
     this.assertStarting();
     await this.consumer.waitUntilReady();
     this.assertStarting();
+    await this.consumer.refreshQueueMetrics?.();
+    this.assertStarting();
     await this.reconciler.runOnce();
     this.assertStarting();
     await this.queueHeartbeat("ready", true);

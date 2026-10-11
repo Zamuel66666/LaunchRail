@@ -195,6 +195,7 @@ export function createDeploymentWorkerComponents({
   const processor = new DeploymentJobProcessor({
     buildProcessor,
     claimProcessor,
+    ...(metrics === undefined ? {} : { metrics }),
     runtimeProcessor,
     sourceProcessor,
   });

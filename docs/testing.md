@@ -113,3 +113,7 @@ Build staging remains private to the worker's user, but copied Git files use can
 ### Runtime startup health regressions
 
 HTTP health checks allow connection-refused startup races to retry within the original bounded health window. They do not turn non-success HTTP responses into success or extend the deadline. Delayed listening and aborted response bodies have focused regression coverage; aborted bodies settle with a typed error rather than hanging.
+
+### Completed source cleanup
+
+Migration `0012_allow_source_cleanup_marker` permits only the one-way null-to-timestamp checkout cleanup marker update. All source identity fields remain immutable, and the marker cannot be cleared or replaced. PostgreSQL tests verify repeated cleanup recording is idempotent and immutable metadata remains protected. Apply migrations before restarting a worker with existing source-preparation records.

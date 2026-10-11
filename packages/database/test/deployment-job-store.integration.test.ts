@@ -1106,6 +1106,19 @@ describeWithDatabase("PostgresDeploymentJobStore", () => {
       code: "23514",
       message: "prepared deployment source metadata is immutable",
     });
+    await store.recordSourceCheckoutCleanup({ checkoutKey: metadata.checkoutId });
+    await store.recordSourceCheckoutCleanup({ checkoutKey: metadata.checkoutId });
+    const [cleanedSource] = await client.db
+      .select()
+      .from(schema.deploymentSourcePreparations)
+      .where(eq(schema.deploymentSourcePreparations.deploymentId, deployment.deploymentId));
+    expect(cleanedSource).toMatchObject({ ...metadata, checkoutRemovedAt: expect.any(Date) });
+    await expect(
+      client.db
+        .update(schema.deploymentSourcePreparations)
+        .set({ checkoutRemovedAt: null })
+        .where(eq(schema.deploymentSourcePreparations.deploymentId, deployment.deploymentId)),
+    ).rejects.toThrow();
   });
 
   it("rolls back source metadata and transition when the final lease fence expires", async () => {

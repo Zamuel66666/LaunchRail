@@ -4,6 +4,7 @@ import type { WorkerEventLogger } from "./processor.js";
 import type { DeploymentJobReconciler } from "./reconciler.js";
 
 export interface DeploymentQueueConsumerLifecycle {
+  checkReady?(): Promise<boolean>;
   cancelActive(): void;
   close(force?: boolean): Promise<void>;
   drain(): Promise<void>;
@@ -13,6 +14,7 @@ export interface DeploymentQueueConsumerLifecycle {
 }
 
 export interface DeploymentQueuePublisherLifecycle {
+  checkReady?(): Promise<boolean>;
   close(): Promise<void>;
   waitUntilReady(): Promise<void>;
 }
@@ -115,6 +117,15 @@ export class DeploymentWorkerRuntime {
 
   public getState(): RuntimeState {
     return this.state;
+  }
+
+  public async checkReady(): Promise<boolean> {
+    if (this.state !== "ready") return false;
+    const [publisherReady, consumerReady] = await Promise.all([
+      this.publisher.checkReady?.() ?? Promise.resolve(true),
+      this.consumer.checkReady?.() ?? Promise.resolve(true),
+    ]);
+    return publisherReady && consumerReady;
   }
 
   private async persistHeartbeat(status: WorkerHeartbeatStatus, required: boolean): Promise<void> {

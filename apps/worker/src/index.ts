@@ -31,7 +31,15 @@ async function main(): Promise<void> {
   const startupFinished = new Promise<void>((resolve) => {
     markStartupFinished = resolve;
   });
-  healthServer.configureReadiness(() => runtimeReady && !shutdownRequested);
+  healthServer.configureReadiness(async () => {
+    if (!runtimeReady || shutdownRequested || runtime === undefined || databaseClient === undefined)
+      return false;
+    const [databaseReady, queueReady] = await Promise.all([
+      databaseClient.checkReady(),
+      runtime.checkReady(),
+    ]);
+    return databaseReady && queueReady;
+  });
 
   const closeDatabase = async (): Promise<void> => {
     if (databaseClient === undefined) {

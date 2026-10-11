@@ -41,7 +41,7 @@ Open:
 - API health: `http://localhost:4000/health`
 - Worker health: `http://localhost:4001/health`
 - API readiness: `http://localhost:4000/ready`
-- Worker startup readiness: `http://localhost:4001/ready`
+- Worker dependency readiness: `http://localhost:4001/ready`
 
 Each health response uses the shared contract:
 
@@ -54,7 +54,7 @@ Each health response uses the shared contract:
 }
 ```
 
-The timestamp varies. `/health` endpoints prove process liveness only. `/ready` checks API PostgreSQL reachability within the pool's bounded query timeout and reports worker readiness after runtime startup and reconciliation. Worker readiness is not a continuous dependency-health or queue-depth monitor; the health smoke test intentionally does not initialize dependencies.
+The timestamp varies. `/health` endpoints prove process liveness only. `/ready` checks API PostgreSQL reachability and, for the worker, PostgreSQL plus both Redis queue connections after runtime startup and reconciliation. These bounded probes do not report queue depth or BuildKit/Docker/proxy health; the health smoke test intentionally does not initialize dependencies.
 
 ## Stopping and cleanup
 

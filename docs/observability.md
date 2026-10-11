@@ -63,8 +63,8 @@ Queue propagation creates linked asynchronous traces rather than pretending the 
 ## Health and readiness
 
 - API `/health` reports process liveness. `/ready` executes a bounded PostgreSQL `SELECT 1`, returning only a generic 200/503 result; pool queries have a 2-second timeout.
-- Worker `/health` reports process liveness. `/ready` is 200 only after database/Redis-backed runtime startup and initial reconciliation have completed, and returns 503 during health-only mode, startup, or shutdown. Health-only smoke mode intentionally does not connect to PostgreSQL or Redis.
-- Phase 6 persists worker status/heartbeat/active-job records for operational inspection. Lease expiry, not the worker-heartbeat row, drives work recovery; readiness is not a queue-depth or ongoing dependency-health guarantee.
+- Worker `/health` reports process liveness. `/ready` rechecks PostgreSQL and both Redis queue connections with bounded probes after runtime startup and initial reconciliation; it returns 503 during health-only mode, startup, shutdown, or a failed dependency probe. Health-only smoke mode intentionally does not connect to PostgreSQL or Redis.
+- Phase 6 persists worker status/heartbeat/active-job records for operational inspection. Lease expiry, not the worker-heartbeat row, drives work recovery; readiness is not a queue-depth or BuildKit/Docker/proxy health guarantee.
 - Docker, BuildKit, and proxy dependency state appears in operator diagnostics without leaking configuration secrets.
 
 ## Dashboards and alerts

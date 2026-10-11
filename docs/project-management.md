@@ -115,5 +115,5 @@ Run the repository gates from [development.md](development.md). Real-database cl
 - Private repositories, Git LFS, submodules, and arbitrary Git hosts are not available. Manual deployment creation requires an exact full commit SHA.
 - Saved project configuration and decrypted values are not yet placed in queue messages, builds, or runtime environments.
 - Identifier-only queue consumption, source/build/runtime processing, health checks, previews, deployment controls, rollback, and retained build-log viewing are implemented; runtime log viewing and broader recovery remain unfinished.
-- Authentication is local-password only. `/health` reports liveness; `/ready` reports bounded API database readiness and worker startup readiness but does not continuously monitor dependency health.
+- Authentication is local-password only. `/health` reports liveness; `/ready` reports bounded API database and worker database/Redis readiness but does not monitor queue depth or build/runtime infrastructure.
 - Automated key re-encryption and external key-management integration are not implemented.

@@ -136,6 +136,21 @@ function createWorkerConnection(
   return connection;
 }
 
+function createReadinessConnection(
+  redisUrl: string,
+  notify: (code: QueueInfrastructureEvent["code"]) => void,
+): Redis {
+  const connection = new Redis(redisUrl, {
+    commandTimeout: 2_000,
+    connectTimeout: 2_000,
+    enableOfflineQueue: false,
+    maxRetriesPerRequest: 1,
+    retryStrategy: (attempt) => Math.min(attempt * 100, 1_000),
+  });
+  connection.on("error", () => notify("redis_connection_error"));
+  return connection;
+}
+
 async function closeOwnedConnection(connection: Redis): Promise<void> {
   if (connection.status === "end") {
     return;
@@ -180,6 +195,14 @@ export class BullMqDeploymentQueuePublisher {
 
   public async waitUntilReady(): Promise<void> {
     await this.queue.waitUntilReady();
+  }
+
+  public async checkReady(): Promise<boolean> {
+    try {
+      return (await this.connection.ping()) === "PONG";
+    } catch {
+      return false;
+    }
   }
 
   public async enqueue(
@@ -264,6 +287,7 @@ export class BullMqDeploymentQueuePublisher {
 export class BullMqDeploymentQueueConsumer {
   private readonly activeRuns = new Set<Promise<void>>();
   private readonly connection: Redis;
+  private readonly readinessConnection: Redis;
   private readonly notify: (code: QueueInfrastructureEvent["code"]) => void;
   private readonly worker: Worker<unknown, void, string>;
   private closePromise: Promise<void> | undefined;
@@ -275,6 +299,7 @@ export class BullMqDeploymentQueueConsumer {
     this.notify = notify;
     const concurrency = requirePositiveSafeInteger("concurrency", options.concurrency ?? 1);
     this.connection = createWorkerConnection(location.redisUrl, notify);
+    this.readinessConnection = createReadinessConnection(location.redisUrl, notify);
     const telemetry = createBullMqTelemetryBridge() as unknown as WorkerOptions["telemetry"];
     this.worker = new Worker<unknown, void, string>(
       location.queueName,
@@ -347,6 +372,14 @@ export class BullMqDeploymentQueueConsumer {
     await this.worker.waitUntilReady();
   }
 
+  public async checkReady(): Promise<boolean> {
+    try {
+      return (await this.readinessConnection.ping()) === "PONG";
+    } catch {
+      return false;
+    }
+  }
+
   /** Stops new work after BullMQ's fetched and active jobs reach a safe pause point. */
   public async pause(): Promise<void> {
     await this.worker.pause();
@@ -374,7 +407,11 @@ export class BullMqDeploymentQueueConsumer {
       try {
         await this.worker.close(force);
       } finally {
-        await closeOwnedConnection(this.connection);
+        try {
+          await closeOwnedConnection(this.connection);
+        } finally {
+          await closeOwnedConnection(this.readinessConnection);
+        }
       }
     })();
     return this.closePromise;

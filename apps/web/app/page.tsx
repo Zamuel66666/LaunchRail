@@ -67,9 +67,10 @@ export default function HomePage() {
         <p className="section-label">Next milestone</p>
         <h2 id="next-title">Finish recovery, onboarding, and release evidence</h2>
         <p>
-          Next: recover BuildKit daemon interruptions and remaining control races, complete an
-          accessible first-run walkthrough, and add repeatable deployment benchmarks. Recent
-          recovery and tracing additions still need independent validation; no release is claimed.
+          Next: close the remaining daemon-loss and control-race recovery gaps, finish the
+          accessibility review, and collect controlled deployment benchmark results. The guided
+          walkthrough and benchmark tooling are available, but recent recovery and tracing changes
+          still need independent validation; no release is claimed.
         </p>
       </section>
     </main>

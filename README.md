@@ -2,7 +2,7 @@
 
 **A self-hosted platform that turns a GitHub repository into a health-checked application deployment with live logs, preview URLs, release history, and safe rollback.**
 
-> **Phases 0–9 are Available.** Phase 10's health outcomes, route-preservation, and interruption implementation is in place, with independent verification deferred at the user's request. Phases 11–16 still have implementation and acceptance work.
+> **Phases 0–9 are Available.** Phase 10's health outcomes, route-preservation, and interruption implementation is in place; independent verification is deferred at the user's request. Phase 11 now includes scoped operator audit history. Webhook operations, complete telemetry, recovery, UX, and release work remain.
 
 ## What LaunchRail does
 
@@ -86,6 +86,7 @@ LaunchRail will use a modular monolith for the web/API boundary and a separate w
 - API request counters and correlation IDs plus worker process metrics are available at Prometheus-compatible metrics endpoints.
 - The project workspace shows each deployment's recorded health attempts and ordered lifecycle activity, and confirms stop/cancel/rollback actions before sending them.
 - Runtime health failures are categorized and recorded before terminal failure, preserve the previous active release and preview route, and interrupted startup grace cleans the candidate runtime without probing or promoting it.
+- Owner/admin users can expand deployment-scoped audit entries alongside lifecycle events.
 
 ### Planned next
 

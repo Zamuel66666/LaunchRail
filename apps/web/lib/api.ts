@@ -96,6 +96,16 @@ export interface DeploymentHealthCheckSummary {
   readonly statusCode: number | null;
 }
 
+export interface AuditEventSummary {
+  readonly action: string;
+  readonly actorUserId: string | null;
+  readonly createdAt: string;
+  readonly id: string;
+  readonly outcome: "failed" | "rejected" | "succeeded";
+  readonly targetId: string;
+  readonly targetType: string;
+}
+
 interface ApiErrorBody {
   readonly error?: {
     readonly code?: string;
@@ -223,6 +233,19 @@ export async function listDeploymentHealthChecks(
     signal === undefined ? {} : { signal },
   );
   return response.checks;
+}
+
+export async function listAuditEvents(
+  organizationId: string,
+  targetId: string,
+  signal?: AbortSignal,
+): Promise<readonly AuditEventSummary[]> {
+  const query = new URLSearchParams({ limit: "50", targetId });
+  const response = await apiRequest<{ readonly events: readonly AuditEventSummary[] }>(
+    `/v1/organizations/${encodeURIComponent(organizationId)}/audit-events?${query.toString()}`,
+    signal === undefined ? {} : { signal },
+  );
+  return response.events;
 }
 
 export async function retryDeployment(

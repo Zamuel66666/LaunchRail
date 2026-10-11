@@ -222,7 +222,10 @@ export function registerAuthRoutes(
     return principal === null ? undefined : { organizations: principal.memberships };
   });
 
-  server.get<{ Params: OrganizationParams }>(
+  server.get<{
+    Params: OrganizationParams;
+    Querystring: { limit?: string; targetId?: string };
+  }>(
     "/v1/organizations/:organizationId",
     {
       schema: {
@@ -314,7 +317,19 @@ export function registerAuthRoutes(
 
   server.get<{ Params: OrganizationParams }>(
     "/v1/organizations/:organizationId/audit-events",
-    { schema: { params: organizationParamsSchema } },
+    {
+      schema: {
+        params: organizationParamsSchema,
+        querystring: {
+          additionalProperties: false,
+          properties: {
+            limit: { pattern: "^[0-9]{1,3}$", type: "string" },
+            targetId: { pattern: uuidPattern, type: "string" },
+          },
+          type: "object",
+        },
+      },
+    },
     async (request, reply) => {
       const authorization = await authorizeOrganization(
         request,
@@ -322,11 +337,18 @@ export function registerAuthRoutes(
         request.params.organizationId,
         "audit:read",
       );
-      return authorization === null
-        ? undefined
-        : {
-            events: await options.identityStore.listAuditEvents(request.params.organizationId, 100),
-          };
+      if (authorization === null) return;
+      const query = request.query;
+      const limit = query.limit === undefined ? 100 : Number(query.limit);
+      if (!Number.isSafeInteger(limit) || limit < 1 || limit > 200)
+        return reply.code(400).send(errorBody("invalid_request", "Invalid audit history limit"));
+      return {
+        events: await options.identityStore.listAuditEvents(
+          request.params.organizationId,
+          limit,
+          query.targetId,
+        ),
+      };
     },
   );
 

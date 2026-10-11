@@ -14,6 +14,7 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 - Added authenticated retry creation for terminal failed deployments, preserving the original source revision and linking the retry lineage.
 - Added bounded organization/project deployment history reads for timeline consumers.
 - Added a basic project-workspace deployment timeline backed by the deployment history API.
+- Added deployment-scoped audit-history filtering and owner/admin audit presentation in the project timeline.
 - Added retry actions for terminal failed deployments directly in the project timeline.
 - Added an active-release stop action to the project timeline.
 - Added per-deployment health attempt history to the project workspace.

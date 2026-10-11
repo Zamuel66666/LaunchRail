@@ -373,6 +373,7 @@ export class PostgresIdentityStore implements IdentityStore {
   public listAuditEvents(
     organizationId: string,
     limit: number,
+    targetId?: string,
   ): Promise<readonly AuditEventSummary[]> {
     return this.db
       .select({
@@ -385,7 +386,14 @@ export class PostgresIdentityStore implements IdentityStore {
         targetType: auditEvents.targetType,
       })
       .from(auditEvents)
-      .where(eq(auditEvents.organizationId, organizationId))
+      .where(
+        targetId === undefined
+          ? eq(auditEvents.organizationId, organizationId)
+          : and(
+              eq(auditEvents.organizationId, organizationId),
+              eq(auditEvents.targetId, targetId),
+            ),
+      )
       .orderBy(desc(auditEvents.createdAt))
       .limit(limit);
   }

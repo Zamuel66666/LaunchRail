@@ -14,6 +14,7 @@ import {
   listDeployments,
   listDeploymentEvents,
   listDeploymentHealthChecks,
+  listAuditEvents,
   retryDeployment,
   controlDeployment,
   signOut,
@@ -22,6 +23,7 @@ import {
   type DeploymentEventSummary,
   type DeploymentHealthCheckSummary,
   type DeploymentHistorySummary,
+  type AuditEventSummary,
   type Membership,
   type ProjectInput,
   type ProjectSummary,
@@ -116,6 +118,7 @@ function LoadingState({ label }: Readonly<{ label: string }>) {
 
 function ProjectCard({
   canArchive,
+  canReadAudit,
   canEdit,
   canManageSecrets,
   canReadSecrets,
@@ -126,6 +129,7 @@ function ProjectCard({
   project,
 }: Readonly<{
   canArchive: boolean;
+  canReadAudit: boolean;
   canEdit: boolean;
   canManageSecrets: boolean;
   canReadSecrets: boolean;
@@ -150,6 +154,11 @@ function ProjectCard({
   >({});
   const [healthChecksError, setHealthChecksError] = useState("");
   const [loadingHealthChecksId, setLoadingHealthChecksId] = useState<string | null>(null);
+  const [auditEvents, setAuditEvents] = useState<
+    Readonly<Record<string, readonly AuditEventSummary[]>>
+  >({});
+  const [loadingAuditEventsId, setLoadingAuditEventsId] = useState<string | null>(null);
+  const [auditEventsError, setAuditEventsError] = useState("");
   const [pendingDeploymentControl, setPendingDeploymentControl] =
     useState<PendingDeploymentControl | null>(null);
   useEffect(() => {
@@ -215,6 +224,18 @@ function ProjectCard({
         setHealthChecksError(actionError(error, "Health check history could not be loaded.")),
       )
       .finally(() => setLoadingHealthChecksId(null));
+  }
+
+  function loadDeploymentAuditEvents(deploymentId: string) {
+    if (auditEvents[deploymentId] !== undefined || loadingAuditEventsId !== null) return;
+    setAuditEventsError("");
+    setLoadingAuditEventsId(deploymentId);
+    void listAuditEvents(organizationId, deploymentId)
+      .then((events) => setAuditEvents((current) => ({ ...current, [deploymentId]: events })))
+      .catch((error: unknown) =>
+        setAuditEventsError(actionError(error, "Audit history could not be loaded.")),
+      )
+      .finally(() => setLoadingAuditEventsId(null));
   }
 
   return (
@@ -283,6 +304,11 @@ function ProjectCard({
         {healthChecksError.length === 0 ? null : (
           <p className="deployment-action-error" role="alert">
             {healthChecksError}
+          </p>
+        )}
+        {auditEventsError.length === 0 ? null : (
+          <p className="deployment-action-error" role="alert">
+            {auditEventsError}
           </p>
         )}
         {pendingDeploymentControl === null ? null : (
@@ -383,6 +409,35 @@ function ProjectCard({
                     </ol>
                   )}
                 </details>
+                {canReadAudit ? (
+                  <details
+                    className="deployment-audit"
+                    onToggle={(event) => {
+                      if (event.currentTarget.open)
+                        loadDeploymentAuditEvents(deployment.deploymentId);
+                    }}
+                  >
+                    <summary>Operator audit</summary>
+                    {loadingAuditEventsId === deployment.deploymentId ? (
+                      <p role="status">Loading audit history…</p>
+                    ) : auditEvents[deployment.deploymentId] === undefined ? (
+                      <p>Open to load recorded operator actions.</p>
+                    ) : auditEvents[deployment.deploymentId]?.length === 0 ? (
+                      <p>No operator actions recorded.</p>
+                    ) : (
+                      <ol>
+                        {auditEvents[deployment.deploymentId]?.map((event) => (
+                          <li key={event.id}>
+                            <strong>{event.action.replaceAll(".", " ").replaceAll("_", " ")}</strong>
+                            {` · ${event.outcome}`}
+                            <br />
+                            <span>{formatDate(event.createdAt)}</span>
+                          </li>
+                        ))}
+                      </ol>
+                    )}
+                  </details>
+                ) : null}
                 {deployment.state === "build_failed" ||
                 deployment.state === "deployment_failed" ||
                 deployment.state === "cancelled" ? (
@@ -567,6 +622,7 @@ export function ProjectWorkspace() {
   const canArchive = permissions.includes("project:delete");
   const canManageSecrets = permissions.includes("secret:manage");
   const canReadSecrets = permissions.includes("secret:read-metadata");
+  const canReadAudit = permissions.includes("audit:read");
 
   function openEditor(project: ProjectSummary | null): void {
     setProjectError("");
@@ -926,6 +982,7 @@ export function ProjectWorkspace() {
                 {projects.map((project) => (
                   <ProjectCard
                     canArchive={canArchive}
+                    canReadAudit={canReadAudit}
                     canEdit={canEdit}
                     canManageSecrets={canManageSecrets}
                     canReadSecrets={canReadSecrets}

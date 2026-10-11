@@ -907,6 +907,10 @@ button:disabled {
   margin-top: 0.65rem;
 }
 
+.deployment-audit {
+  margin-top: 0.65rem;
+}
+
 .deployment-health {
   margin-top: 0.65rem;
 }
@@ -934,14 +938,26 @@ button:disabled {
   font-size: 0.82rem;
 }
 
+.deployment-audit > summary {
+  color: #9fc9da;
+  cursor: pointer;
+  font-size: 0.82rem;
+}
+
 .deployment-activity p,
-.deployment-activity ol {
+.deployment-activity ol,
+.deployment-audit p,
+.deployment-audit ol {
   margin: 0.55rem 0 0;
   color: #a9c1cf;
   font-size: 0.8rem;
 }
 
 .deployment-activity li + li {
+  margin-top: 0.45rem;
+}
+
+.deployment-audit li + li {
   margin-top: 0.45rem;
 }
 

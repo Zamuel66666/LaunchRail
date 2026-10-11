@@ -55,7 +55,11 @@ export interface BootstrapOwnerCommand {
 export interface IdentityStore {
   bootstrapOwner(command: BootstrapOwnerCommand, now: Date): Promise<SessionPrincipal>;
   getOrganization(organizationId: string): Promise<OrganizationSummary | null>;
-  listAuditEvents(organizationId: string, limit: number): Promise<readonly AuditEventSummary[]>;
+  listAuditEvents(
+    organizationId: string,
+    limit: number,
+    targetId?: string,
+  ): Promise<readonly AuditEventSummary[]>;
   listMembers(organizationId: string): Promise<readonly OrganizationMember[]>;
   resolveSession(token: string, now: Date): Promise<SessionPrincipal | null>;
   revokeSession(token: string, now: Date): Promise<boolean>;

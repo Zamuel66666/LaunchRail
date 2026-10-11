@@ -21,7 +21,7 @@ The roadmap reports verified repository state, not aspirations as completed feat
 ### In progress
 
 - **Phase 10 — Health checks and activation:** health outcomes, prior-route preservation, and interrupted-grace cleanup are implemented; independent verification is deferred by request.
-- **Phase 11 — Deployment controls:** API controls, retry lineage, timeline history, confirmations, and actionable browser feedback are implemented; broader audit presentation and concurrency/failure-injection coverage remain.
+- **Phase 11 — Deployment controls:** API controls, retry lineage, timeline history, confirmations, actionable browser feedback, and deployment-scoped operator audit history are implemented; independent race/failure-injection verification is deferred.
 - **Phase 12 — GitHub webhooks:** signed push ingestion creates matching queued deployment snapshots; direct queue publication and richer delivery processing remain.
 - **Phase 13 — Observability:** request/process metrics and correlation IDs are available; deployment/queue/health metrics, traces, and dashboards remain.
 
@@ -219,11 +219,11 @@ Implementation evidence: unit and PostgreSQL acceptance cases cover delayed chec
 
 ### Phase 11 — Deployment controls
 
-**Status:** In progress
+**Status:** In progress — implementation complete; race/failure-injection verification deferred by request
 
-Organization-scoped deployment listing/event history, idempotent promotion, cancellation, stop controls, transactional rollback, authenticated retry creation, and a recruiter-readable timeline are available with permission checks and bounded inputs. Browser controls require confirmation, surface actionable client-safe errors, and reveal recorded activity on demand. Control-race failure injection remains to be implemented.
+Organization-scoped deployment listing/event history, idempotent promotion, cancellation, stop controls, transactional rollback, authenticated retry creation, and a recruiter-readable timeline are available with permission checks and bounded inputs. Browser controls require confirmation, surface actionable client-safe errors, and reveal recorded activity on demand. Owner/admin audit readers can now inspect the scoped audit actions associated with each deployment.
 
-Exit gate: concurrency and failure-injection tests prove safe control races and route switching.
+Exit gate: independent concurrency and failure-injection verification proves safe control races and route switching.
 
 ### Phase 12 — GitHub webhooks
 

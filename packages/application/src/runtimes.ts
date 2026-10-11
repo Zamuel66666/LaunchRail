@@ -52,7 +52,18 @@ export interface ReadDeploymentRuntimeLogsCommand {
   readonly tail: number;
 }
 
+export interface ManagedDeploymentRuntime {
+  readonly containerId: string;
+  readonly identity: DeploymentRuntimeIdentity;
+}
+
+export interface CleanupOrphanDeploymentRuntimeCommand extends ManagedDeploymentRuntime {
+  readonly signal: AbortSignal;
+}
+
 export interface DeploymentRuntimeManager {
+  cleanupOrphan?(command: CleanupOrphanDeploymentRuntimeCommand): Promise<void>;
+  listManagedRuntimes?(signal: AbortSignal): Promise<readonly ManagedDeploymentRuntime[]>;
   readLogs(command: ReadDeploymentRuntimeLogsCommand): Promise<string>;
   start(command: StartDeploymentRuntimeCommand): Promise<StartedDeploymentRuntime>;
   stop(command: StopDeploymentRuntimeCommand): Promise<void>;

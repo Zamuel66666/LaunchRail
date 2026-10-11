@@ -231,6 +231,21 @@ export interface AppendDeploymentBuildLogsCommand {
   readonly workItemId: string;
 }
 
+export interface DeploymentBuildLogSummary {
+  readonly attempt: number;
+  readonly content: string;
+  readonly createdAt: Date;
+  readonly sequence: number;
+  readonly stream: DeploymentBuildLogStream;
+}
+
+export interface ListDeploymentBuildLogsQuery {
+  readonly afterSequence?: number;
+  readonly deploymentId: string;
+  readonly limit: number;
+  readonly organizationId: string;
+}
+
 export type AppendDeploymentBuildLogsResult =
   | {
       readonly acceptedBytes: number;
@@ -490,6 +505,12 @@ export interface WorkerHeartbeatSummary {
   readonly workerId: string;
 }
 
+export interface RuntimeRecoveryState {
+  readonly cleanupContainerIds: readonly string[];
+  readonly knownContainerIds: readonly string[];
+  readonly leasedWorkItemIds: readonly string[];
+}
+
 export interface ListWorkerHeartbeatsQuery {
   readonly staleAfterMs: number;
 }
@@ -518,6 +539,9 @@ export interface DeploymentJobStore {
   appendBuildLogs(
     command: AppendDeploymentBuildLogsCommand,
   ): Promise<AppendDeploymentBuildLogsResult>;
+  listBuildLogs?(
+    query: ListDeploymentBuildLogsQuery,
+  ): Promise<readonly DeploymentBuildLogSummary[]>;
   claim(command: ClaimDeploymentJobCommand): Promise<ClaimDeploymentJobResult>;
   completeClaimTransition(
     command: CompleteDeploymentClaimTransitionCommand,
@@ -552,6 +576,12 @@ export interface DeploymentJobStore {
     query: ListWorkerHeartbeatsQuery,
   ): Promise<readonly WorkerHeartbeatSummary[]>;
   listRoutableRuntimes?: () => Promise<readonly DeploymentRuntimeInstanceSummary[]>;
+  listRuntimeRecoveryState?: () => Promise<RuntimeRecoveryState>;
+  recordRuntimeCleanup?(command: {
+    readonly containerId: string;
+    readonly organizationId: string;
+    readonly state: "complete" | "failed";
+  }): Promise<void>;
   recordWorkerHeartbeat(
     command: RecordWorkerHeartbeatCommand,
   ): Promise<RecordWorkerHeartbeatResult>;

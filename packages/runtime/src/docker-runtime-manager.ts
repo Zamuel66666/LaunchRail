@@ -3,7 +3,9 @@ import { isAbsolute, join, parse, resolve } from "node:path";
 
 import {
   RuntimeStartError,
+  type CleanupOrphanDeploymentRuntimeCommand,
   type DeploymentRuntimeManager,
+  type ManagedDeploymentRuntime,
   type ReadDeploymentRuntimeLogsCommand,
   type StartDeploymentRuntimeCommand,
   type StartedDeploymentRuntime,
@@ -350,6 +352,71 @@ export class DockerDeploymentRuntimeManager implements DeploymentRuntimeManager 
         command.signal,
       )
     ).stdout;
+  }
+
+  public async listManagedRuntimes(signal: AbortSignal): Promise<readonly ManagedDeploymentRuntime[]> {
+    await this.prepareDockerConfiguration();
+    const output = await this.execute(
+      ["ps", "--all", "--quiet", "--no-trunc", "--filter", "label=dev.launchrail.managed=true"],
+      signal,
+    );
+    const ids = output.stdout.split(/\s+/u).filter(Boolean);
+    if (ids.length > 1_000)
+      throw fail("runtime_unavailable", "Managed runtime inventory exceeds its safe bound", false);
+    const resources: ManagedDeploymentRuntime[] = [];
+    let cursor = 0;
+    await Promise.all(
+      Array.from({ length: Math.min(8, ids.length) }, async () => {
+        while (cursor < ids.length) {
+          const containerId = ids[cursor++];
+          if (containerId === undefined || !idPattern.test(containerId)) continue;
+          const inspected = await this.inspect(containerId, signal);
+          if (inspected?.Id !== containerId) continue;
+          const actual = inspected.Config?.Labels ?? {};
+          const identity = {
+            deploymentId: actual["dev.launchrail.deployment-id"] ?? "",
+            organizationId: actual["dev.launchrail.organization-id"] ?? "",
+            projectId: actual["dev.launchrail.project-id"] ?? "",
+            workItemId: actual["dev.launchrail.work-item-id"] ?? "",
+          };
+          if (
+            actual["dev.launchrail.managed"] !== "true" ||
+            !Object.values(identity).every((value) => uuidPattern.test(value))
+          )
+            continue;
+          resources.push({ containerId, identity });
+        }
+      }),
+    );
+    return resources;
+  }
+
+  public async cleanupOrphan(command: CleanupOrphanDeploymentRuntimeCommand): Promise<void> {
+    const { containerId, identity, signal } = command;
+    if (!idPattern.test(containerId) || !Object.values(identity).every((value) => uuidPattern.test(value)))
+      throw new RangeError("Orphan runtime identity is invalid");
+    await this.prepareDockerConfiguration();
+    const inspected = await this.inspect(containerId, signal);
+    const actual = inspected?.Config?.Labels ?? {};
+    if (
+      inspected?.Id !== containerId ||
+      actual["dev.launchrail.managed"] !== "true" ||
+      actual["dev.launchrail.deployment-id"] !== identity.deploymentId ||
+      actual["dev.launchrail.organization-id"] !== identity.organizationId ||
+      actual["dev.launchrail.project-id"] !== identity.projectId ||
+      actual["dev.launchrail.work-item-id"] !== identity.workItemId
+    )
+      throw fail("runtime_metadata_invalid", "Orphan runtime ownership could not be verified", false);
+    try {
+      await this.execute(["stop", "--time", String(this.limits.stopGraceSeconds), containerId], signal);
+    } catch {
+      // An already-stopped managed container is still safe to remove after the ownership check.
+    }
+    try {
+      await this.execute(["rm", containerId], signal);
+    } catch {
+      throw fail("runtime_cleanup_failed", "The orphan runtime could not be removed", true);
+    }
   }
 
   public async stop(command: StopDeploymentRuntimeCommand): Promise<void> {

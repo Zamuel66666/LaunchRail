@@ -73,6 +73,12 @@ export function createDeploymentWorkerComponents({
 }: CreateDeploymentWorkerComponentsOptions): DeploymentWorkerComponents {
   const store = new PostgresDeploymentJobStore(database);
   const transitionStore = new PostgresDeploymentTransitionStore(database);
+  const deploymentRuntimeManager =
+    runtimeManager ??
+    new DockerDeploymentRuntimeManager({
+      dockerConfigDirectory: join(config.WORKER_BUILD_ROOT, "runtime-docker-config"),
+      timeoutMs: config.WORKER_RUNTIME_TIMEOUT_MS,
+    });
   const queueOptions = {
     onInfrastructureEvent: (event: QueueInfrastructureEvent): void => {
       logger.error(
@@ -179,12 +185,7 @@ export function createDeploymentWorkerComponents({
     routeManager: new TraefikFileRouteManager({
       configurationDirectory: config.WORKER_TRAEFIK_DYNAMIC_CONFIG_DIR,
     }),
-    runtimeManager:
-      runtimeManager ??
-      new DockerDeploymentRuntimeManager({
-        dockerConfigDirectory: join(config.WORKER_BUILD_ROOT, "runtime-docker-config"),
-        timeoutMs: config.WORKER_RUNTIME_TIMEOUT_MS,
-      }),
+    runtimeManager: deploymentRuntimeManager,
     store,
     transitionStore,
     workerId,
@@ -210,6 +211,7 @@ export function createDeploymentWorkerComponents({
     routeManager: new TraefikFileRouteManager({
       configurationDirectory: config.WORKER_TRAEFIK_DYNAMIC_CONFIG_DIR,
     }),
+    runtimeManager: deploymentRuntimeManager,
   });
   const runtime = new DeploymentWorkerRuntime({
     consumer,

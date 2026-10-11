@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import type {
   AppendDeploymentBuildLogsCommand,
   AppendDeploymentBuildLogsResult,
+  DeploymentBuildLogSummary,
   BuiltDeploymentImageMetadata,
   BuiltDeploymentImageSummary,
   ClaimDeploymentJobCommand,
@@ -38,6 +39,7 @@ import type {
   HeartbeatDeploymentJobResult,
   ListDispatchableDeploymentJobsQuery,
   ListWorkerHeartbeatsQuery,
+  ListDeploymentBuildLogsQuery,
   LoadDeploymentBuildInputCommand,
   LoadDeploymentBuildInputResult,
   LoadDeploymentRuntimeInputCommand,
@@ -52,6 +54,7 @@ import type {
   RecoverExpiredDeploymentJobsCommand,
   RecoveredDeploymentJob,
   WorkerHeartbeatFreshness,
+  RuntimeRecoveryState,
   WorkerHeartbeatStatus,
   WorkerHeartbeatSummary,
 } from "@launchrail/application";
@@ -1679,6 +1682,38 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
     }
   }
 
+  public async listBuildLogs(
+    query: ListDeploymentBuildLogsQuery,
+  ): Promise<readonly DeploymentBuildLogSummary[]> {
+    if (!Number.isSafeInteger(query.limit) || query.limit < 1 || query.limit > 500)
+      throw new RangeError("Build log limit must be between 1 and 500");
+    if (
+      query.afterSequence !== undefined &&
+      (!Number.isSafeInteger(query.afterSequence) || query.afterSequence < 0)
+    )
+      throw new RangeError("Build log sequence cursor must be a non-negative integer");
+    return this.db
+      .select({
+        attempt: buildLogs.attempt,
+        content: buildLogs.content,
+        createdAt: buildLogs.createdAt,
+        sequence: buildLogs.sequence,
+        stream: buildLogs.stream,
+      })
+      .from(buildLogs)
+      .where(
+        and(
+          eq(buildLogs.organizationId, query.organizationId),
+          eq(buildLogs.deploymentId, query.deploymentId),
+          query.afterSequence === undefined
+            ? undefined
+            : gt(buildLogs.sequence, query.afterSequence),
+        ),
+      )
+      .orderBy(asc(buildLogs.sequence))
+      .limit(query.limit) as Promise<readonly DeploymentBuildLogSummary[]>;
+  }
+
   public async completeSourcePreparation(
     command: CompleteDeploymentSourcePreparationCommand,
   ): Promise<CompleteDeploymentSourcePreparationResult> {
@@ -2803,5 +2838,69 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
           : toRuntimeSummary(runtime),
       )
       .filter((runtime): runtime is DeploymentRuntimeInstanceSummary => runtime !== null);
+  }
+
+  public async listRuntimeRecoveryState(): Promise<RuntimeRecoveryState> {
+    const [known, cleanupTargets, leased] = await Promise.all([
+      this.db
+        .select({ containerId: runtimeInstances.containerId })
+        .from(runtimeInstances)
+        .where(sql`${runtimeInstances.containerId} is not null`),
+      this.db
+        .select({ containerId: runtimeInstances.containerId })
+        .from(runtimeInstances)
+        .innerJoin(
+          deployments,
+          and(
+            eq(deployments.id, runtimeInstances.deploymentId),
+            eq(deployments.organizationId, runtimeInstances.organizationId),
+          ),
+        )
+        .where(
+          and(
+            sql`${runtimeInstances.containerId} is not null`,
+            sql`${runtimeInstances.cleanupState} in ('pending', 'failed') or ${runtimeInstances.state} in ('stopped', 'failed', 'orphaned') or ${deployments.state} in ('cancelled', 'build_failed', 'deployment_failed', 'stopped')`,
+          ),
+        ),
+      this.db
+        .select({ workItemId: deploymentJobs.id })
+        .from(deploymentJobs)
+        .where(
+          and(
+            eq(deploymentJobs.kind, deploymentStartRuntimeJobKind),
+            eq(deploymentJobs.status, "running"),
+            sql`${deploymentJobs.leaseExpiresAt} > clock_timestamp()`,
+          ),
+        ),
+    ]);
+    return {
+      cleanupContainerIds: cleanupTargets.flatMap((row) =>
+        row.containerId === null ? [] : [row.containerId],
+      ),
+      knownContainerIds: known.flatMap((row) =>
+        row.containerId === null ? [] : [row.containerId],
+      ),
+      leasedWorkItemIds: leased.map((row) => row.workItemId),
+    };
+  }
+
+  public async recordRuntimeCleanup(command: {
+    readonly containerId: string;
+    readonly organizationId: string;
+    readonly state: "complete" | "failed";
+  }): Promise<void> {
+    await this.db
+      .update(runtimeInstances)
+      .set({
+        cleanupState: command.state,
+        state: command.state === "complete" ? "stopped" : "orphaned",
+        updatedAt: sql<Date>`clock_timestamp()`,
+      })
+      .where(
+        and(
+          eq(runtimeInstances.containerId, command.containerId),
+          eq(runtimeInstances.organizationId, command.organizationId),
+        ),
+      );
   }
 }

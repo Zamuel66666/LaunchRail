@@ -30,6 +30,8 @@ export {
   workerHeartbeatStatuses,
   type AppendDeploymentBuildLogsCommand,
   type AppendDeploymentBuildLogsResult,
+  type DeploymentBuildLogSummary,
+  type ListDeploymentBuildLogsQuery,
   type BuiltDeploymentImageMetadata,
   type BuiltDeploymentImageSummary,
   type ClaimDeploymentJobCommand,
@@ -90,6 +92,7 @@ export {
   type WorkerHeartbeatFreshness,
   type WorkerHeartbeatStatus,
   type WorkerHeartbeatSummary,
+  type RuntimeRecoveryState,
 } from "./deployment-jobs.js";
 export {
   MembershipUpdateConflictError,
@@ -173,6 +176,8 @@ export {
   runtimeStartErrorCodes,
   type DeploymentRuntimeIdentity,
   type DeploymentRuntimeManager,
+  type ManagedDeploymentRuntime,
+  type CleanupOrphanDeploymentRuntimeCommand,
   type ReadDeploymentRuntimeLogsCommand,
   type RuntimeImage,
   type RuntimeStartErrorCode,

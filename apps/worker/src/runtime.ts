@@ -1,4 +1,5 @@
 import type { DeploymentJobStore, WorkerHeartbeatStatus } from "@launchrail/application";
+import type { MetricsRegistry } from "@launchrail/observability";
 
 import type { WorkerEventLogger } from "./processor.js";
 import type { DeploymentJobReconciler } from "./reconciler.js";
@@ -29,6 +30,7 @@ export interface DeploymentWorkerRuntimeOptions {
   readonly consumer: DeploymentQueueConsumerLifecycle;
   readonly heartbeatIntervalMs: number;
   readonly logger: WorkerEventLogger;
+  readonly metrics?: MetricsRegistry;
   readonly processor: DeploymentProcessorLifecycle;
   readonly publisher: DeploymentQueuePublisherLifecycle;
   readonly reconciliationIntervalMs: number;
@@ -76,6 +78,7 @@ export class DeploymentWorkerRuntime {
   private heartbeatWrites = Promise.resolve();
   private readonly heartbeatIntervalMs: number;
   private readonly logger: WorkerEventLogger;
+  private readonly metrics: MetricsRegistry | undefined;
   private readonly processor: DeploymentProcessorLifecycle;
   private readonly publisher: DeploymentQueuePublisherLifecycle;
   private periodicHeartbeat: Promise<void> | undefined;
@@ -94,6 +97,7 @@ export class DeploymentWorkerRuntime {
     consumer,
     heartbeatIntervalMs,
     logger,
+    metrics,
     processor,
     publisher,
     reconciliationIntervalMs,
@@ -106,6 +110,7 @@ export class DeploymentWorkerRuntime {
     this.consumer = consumer;
     this.heartbeatIntervalMs = heartbeatIntervalMs;
     this.logger = logger;
+    this.metrics = metrics;
     this.processor = processor;
     this.publisher = publisher;
     this.reconciliationIntervalMs = reconciliationIntervalMs;
@@ -140,6 +145,10 @@ export class DeploymentWorkerRuntime {
       if (result.kind === "invalid_transition" || result.kind === "version_mismatch") {
         throw new Error("Worker heartbeat ownership was rejected");
       }
+      this.metrics?.setGauge(
+        "launchrail_worker_last_successful_heartbeat_timestamp_seconds",
+        Date.now() / 1_000,
+      );
     } catch (error) {
       this.logger.error(
         { event: "worker_heartbeat_failed", status, workerId: this.workerId },

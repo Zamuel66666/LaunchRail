@@ -224,6 +224,7 @@ export function createDeploymentWorkerComponents({
     consumer,
     heartbeatIntervalMs: config.WORKER_HEARTBEAT_INTERVAL_MS,
     logger,
+    ...(metrics === undefined ? {} : { metrics }),
     processor,
     publisher,
     reconciliationIntervalMs: config.WORKER_RECONCILIATION_INTERVAL_MS,

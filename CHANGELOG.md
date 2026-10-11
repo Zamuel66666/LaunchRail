@@ -67,6 +67,8 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 - Added bounded worker metrics for queue depth by state, queue wait, job processing duration/outcome, and active queue handlers, with Grafana panels and integration coverage.
 - Added separate durable deployment-job outcome and processing-duration metrics so scheduled retries and dead letters are not confused with successful queue-handler execution.
 - Added privacy-safe BuildKit cache-hit and cache-miss step histograms, excluding recovered/adopted builds to avoid double-counting.
+- Added bounded runtime start/stop and preview-route apply/reconciliation timings plus a Prometheus-computable worker heartbeat-age gauge and dashboard panels.
+- Route adapter exceptions now persist a fixed operator-safe failure message rather than arbitrary thrown text.
 
 - Plain-language product scope, target users, core workflow, success criteria, and explicit non-goals.
 - Initial architecture for the web application, API, worker, persistence, queue, build/runtime, routing, and observability boundaries.

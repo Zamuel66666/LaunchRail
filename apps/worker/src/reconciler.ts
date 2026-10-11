@@ -111,6 +111,8 @@ export class DeploymentJobReconciler {
       this.routeManager?.reconcile !== undefined &&
       this.store.listRoutableRuntimes !== undefined
     ) {
+      const routeTime = performance.now();
+      let routeOutcome: "reconciled" | "failed" = "reconciled";
       try {
         const runtimes = await this.store.listRoutableRuntimes();
         await this.routeManager.reconcile(
@@ -121,10 +123,17 @@ export class DeploymentJobReconciler {
           })),
         );
       } catch {
+        routeOutcome = "failed";
         routeReconciliationFailures += 1;
         this.logger.warn(
           { event: "preview_route_reconciliation_failed" },
           "Preview route restoration will be retried during reconciliation",
+        );
+      } finally {
+        this.metrics?.observe(
+          "launchrail_worker_route_reconciliation_duration_seconds",
+          Math.max(0, performance.now() - routeTime) / 1_000,
+          { outcome: routeOutcome },
         );
       }
     }

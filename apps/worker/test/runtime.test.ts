@@ -1,4 +1,5 @@
 import type { DeploymentJobStore, RecordWorkerHeartbeatCommand } from "@launchrail/application";
+import { MetricsRegistry } from "@launchrail/observability";
 import { describe, expect, it, vi } from "vitest";
 
 import type { WorkerEventLogger } from "../src/processor.js";
@@ -56,6 +57,7 @@ describe("DeploymentWorkerRuntime", () => {
   it("starts dependencies, reconciles, and records the full graceful lifecycle", async () => {
     const statuses: string[] = [];
     const calls: string[] = [];
+    const metrics = new MetricsRegistry();
     const runtime = new DeploymentWorkerRuntime({
       consumer: {
         cancelActive: vi.fn(() => calls.push("cancel")),
@@ -67,6 +69,7 @@ describe("DeploymentWorkerRuntime", () => {
       },
       heartbeatIntervalMs: 60_000,
       logger,
+      metrics,
       processor: {
         getActiveJobCount: () => 0,
         waitForIdle: vi.fn(async () => undefined),
@@ -110,6 +113,9 @@ describe("DeploymentWorkerRuntime", () => {
       "publisher.close",
     ]);
     expect(runtime.getState()).toBe("stopped");
+    expect(metrics.renderPrometheus()).toContain(
+      "launchrail_worker_last_successful_heartbeat_timestamp_seconds",
+    );
   });
 
   it("returns at the shutdown deadline even when active work never settles", async () => {

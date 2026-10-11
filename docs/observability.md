@@ -39,7 +39,7 @@ Application build/runtime output is a separate bounded stream, not mixed into co
 
 Prometheus-compatible metrics will use low-cardinality labels such as service, route template, method, status class, job type, deployment stage, outcome, and failure category.
 
-The API exposes request counters/histograms and webhook processing counters/histograms at `/metrics` with bounded route-template, method, status-class, event-class, and outcome labels. API and worker readiness probes also expose bounded ready/not-ready counters; the API records readiness-check duration. The worker `/metrics` exposes process uptime/RSS, active-job and active-queue-handler gauges, queue depth by fixed BullMQ state, queue wait and handler-processing histograms, durable deployment-job outcome counters and processing histograms by supported kind, build-cache hit/miss step histograms, reconciliation/dispatch counters, health-check counters/histograms, runtime handoff/failure counters, orphan-runtime, source/build-stage, completed-checkout, orphan-image, interrupted-route-file, route-restoration, and resource-recovery failure counters. Queue depth is refreshed on the worker heartbeat interval, so it is an operational snapshot rather than an instantaneous guarantee. Queue metrics label only fixed states, supported job kinds, and fixed outcomes; labels intentionally omit repository, organization, deployment, request, and delivery identifiers.
+The API exposes request counters/histograms and webhook processing counters/histograms at `/metrics` with bounded route-template, method, status-class, event-class, and outcome labels. API and worker readiness probes also expose bounded ready/not-ready counters; the API records readiness-check duration. The worker `/metrics` exposes process uptime/RSS, active-job and active-queue-handler gauges, a last-successful-heartbeat timestamp, queue depth by fixed BullMQ state, queue wait and handler-processing histograms, durable deployment-job outcome counters and processing histograms by supported kind, build-cache hit/miss step histograms, runtime start/stop and preview-route apply/reconciliation duration histograms, reconciliation/dispatch counters, health-check counters/histograms, runtime handoff/failure counters, orphan-runtime, source/build-stage, completed-checkout, orphan-image, interrupted-route-file, route-restoration, and resource-recovery failure counters. Queue depth is refreshed on the worker heartbeat interval, so it is an operational snapshot rather than an instantaneous guarantee. Queue metrics label only fixed states, supported job kinds, and fixed outcomes; labels intentionally omit repository, organization, deployment, request, and delivery identifiers.
 
 Measurements still to add:
 
@@ -47,10 +47,9 @@ Measurements still to add:
 - Queue retries and timeout counts.
 - End-to-end deployment duration and success/failure/cancellation totals across all stages.
 - Build duration without repository labels.
-- Runtime start/stop/cleanup duration and current orphan inventory gauge.
+- Runtime cleanup duration and current orphan inventory gauge.
 - Health-check grace-period exhaustion.
-- Route apply/reconcile duration, failures, and desired/observed mismatch count.
-- Worker heartbeat age, active jobs, and reconciliation results.
+- Route desired/observed mismatch count.
 
 Per-deployment investigation uses traces, events, and logs rather than a high-cardinality `deployment_id` metric label.
 
@@ -69,7 +68,7 @@ Queue propagation creates linked asynchronous traces rather than pretending the 
 
 ## Dashboards and alerts
 
-The provisioned local Grafana dashboard currently charts API request rate, webhook outcomes, health-check outcomes/duration, worker dispatch failures/memory, orphan-runtime cleanup outcomes, source/build staging cleanup volume/failures, completed checkout removals, and orphan build-image cleanup outcomes. Follow-on dashboard panels should answer:
+The provisioned local Grafana dashboard currently charts API request rate, webhook outcomes, health-check outcomes/duration, worker dispatch failures/memory, orphan-runtime cleanup outcomes, source/build staging cleanup volume/failures, completed checkout removals, orphan build-image cleanup outcomes, queue depth/wait, durable deployment stage outcomes, cache reuse, runtime start/stop duration, route apply/reconciliation duration, and worker heartbeat age. Follow-on dashboard panels should answer:
 
 1. Are API and worker processes available?
 2. Is queued work growing or stuck?

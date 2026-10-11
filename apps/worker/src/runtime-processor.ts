@@ -169,7 +169,11 @@ export class DeploymentRuntimeProcessor {
           signal,
         );
       if (loaded.kind !== "loaded") return "interrupted";
-      let started;
+      let started: Awaited<ReturnType<DeploymentRuntimeManager["start"]>> | undefined;
+      const startTime = performance.now();
+      let startOutcome: "started" | "failed" = "failed";
+      let startFailed = false;
+      let startError: unknown;
       try {
         started = await this.options.runtimeManager.start({
           healthCheckPort: loaded.runtime.healthCheckPort,
@@ -188,14 +192,27 @@ export class DeploymentRuntimeProcessor {
           runtimeConfig: loaded.runtime.runtimeConfig,
           signal,
         });
+        startOutcome = "started";
       } catch (error) {
+        startFailed = true;
+        startError = error;
+      } finally {
+        this.options.metrics?.observe(
+          "launchrail_worker_runtime_start_duration_seconds",
+          Math.max(0, performance.now() - startTime) / 1_000,
+          { outcome: startOutcome },
+        );
+      }
+      if (startFailed || started === undefined) {
         if (signal.aborted) return "interrupted";
-        return await this.persistFailure(lease, safeFailure(error), signal);
+        return await this.persistFailure(lease, safeFailure(startError), signal);
       }
       const stopStartedRuntime = async (): Promise<void> => {
         const cleanupSignal = signal.aborted ? new AbortController().signal : signal;
-        await this.options.runtimeManager
-          .stop({
+        const stopTime = performance.now();
+        let stopOutcome: "removed" | "failed" = "removed";
+        try {
+          await this.options.runtimeManager.stop({
             containerId: started.containerId,
             identity: {
               deploymentId: loaded.runtime.deploymentId,
@@ -204,8 +221,16 @@ export class DeploymentRuntimeProcessor {
               workItemId: loaded.runtime.workItemId,
             },
             signal: cleanupSignal,
-          })
-          .catch(() => undefined);
+          });
+        } catch {
+          stopOutcome = "failed";
+        } finally {
+          this.options.metrics?.observe(
+            "launchrail_worker_runtime_stop_duration_seconds",
+            Math.max(0, performance.now() - stopTime) / 1_000,
+            { outcome: stopOutcome },
+          );
+        }
       };
       try {
         if (this.options.healthCheck === undefined)
@@ -261,7 +286,11 @@ export class DeploymentRuntimeProcessor {
         });
         const healthPassed = health.statusCode >= 200 && health.statusCode < 400;
         this.options.metrics?.increment("launchrail_health_checks_total", {
-          category: healthPassed ? "none" : health.statusCode < 200 ? "invalid_response" : "unhealthy",
+          category: healthPassed
+            ? "none"
+            : health.statusCode < 200
+              ? "invalid_response"
+              : "unhealthy",
           outcome: healthPassed ? "passed" : "failed",
         });
         this.options.metrics?.observe(
@@ -301,6 +330,9 @@ export class DeploymentRuntimeProcessor {
         return await this.persistFailure(lease, safeFailure(error), signal);
       }
       if (this.options.routeManager !== undefined) {
+        const routeTime = performance.now();
+        let routeOutcome: "applied" | "failed" = "failed";
+        let routeFailed = false;
         try {
           await this.options.routeManager.apply(
             {
@@ -309,14 +341,23 @@ export class DeploymentRuntimeProcessor {
             },
             { hostPort: started.hostPort },
           );
-        } catch (error) {
+          routeOutcome = "applied";
+        } catch {
+          routeFailed = true;
+        } finally {
+          this.options.metrics?.observe(
+            "launchrail_worker_route_apply_duration_seconds",
+            Math.max(0, performance.now() - routeTime) / 1_000,
+            { outcome: routeOutcome },
+          );
+        }
+        if (routeFailed) {
           await stopStartedRuntime();
           return await this.persistFailure(
             lease,
             {
               category: "infrastructure_unavailable",
-              message:
-                error instanceof Error ? error.message : "Preview route could not be registered",
+              message: "Preview route could not be registered",
               retryable: true,
             },
             signal,
@@ -369,9 +410,9 @@ export class DeploymentRuntimeProcessor {
       },
       "Deployment runtime started and recorded",
     );
-      this.options.metrics?.increment("launchrail_runtime_handoffs_total", {
-        outcome: "completed",
-      });
+    this.options.metrics?.increment("launchrail_runtime_handoffs_total", {
+      outcome: "completed",
+    });
     return "completed";
   }
 

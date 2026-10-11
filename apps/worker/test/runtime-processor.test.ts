@@ -1,4 +1,5 @@
 import { HttpHealthCheckError } from "@launchrail/runtime";
+import { MetricsRegistry } from "@launchrail/observability";
 import { describe, expect, it, vi } from "vitest";
 
 import { DeploymentRuntimeProcessor } from "../src/runtime-processor.js";
@@ -44,6 +45,7 @@ const runtime = {
 function createProcessor(
   healthCheck: () => Promise<{ durationMs: number; statusCode: number }>,
   healthGraceMs = 0,
+  applyRoute: () => Promise<void> = async () => undefined,
 ) {
   const check = vi.fn(healthCheck);
   const recordHealthCheck = vi.fn(async () => undefined);
@@ -59,6 +61,7 @@ function createProcessor(
     hostPort: 40_000,
     resourceMetadata: {},
   }));
+  const metrics = new MetricsRegistry();
   const processor = new DeploymentRuntimeProcessor({
     backoffBaseMs: 100,
     backoffCapMs: 1_000,
@@ -68,10 +71,12 @@ function createProcessor(
     jobTimeoutMs: 10_000,
     leaseDurationMs: 60_000,
     logger: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
+    metrics,
     runtimeManager: {
       start,
       stop,
     } as never,
+    routeManager: { apply: vi.fn(applyRoute) } as never,
     store: {
       claim: vi.fn(async () => ({ kind: "claimed" as const, lease })),
       completeRuntime: vi.fn(async () => ({
@@ -89,12 +94,12 @@ function createProcessor(
     },
     workerId: "worker-test",
   });
-  return { check, failRuntime, processor, promote, recordHealthCheck, start, stop };
+  return { check, failRuntime, metrics, processor, promote, recordHealthCheck, start, stop };
 }
 
 describe("DeploymentRuntimeProcessor health gate", () => {
   it("records unhealthy HTTP responses, stops the candidate, and fails without retry", async () => {
-    const { failRuntime, processor, promote, recordHealthCheck, stop } = createProcessor(
+    const { failRuntime, metrics, processor, promote, recordHealthCheck, stop } = createProcessor(
       async () => ({ durationMs: 12, statusCode: 503 }),
     );
 
@@ -149,7 +154,7 @@ describe("DeploymentRuntimeProcessor health gate", () => {
   });
 
   it("records a passed check before completing and promoting the release", async () => {
-    const { failRuntime, processor, promote, recordHealthCheck, stop } = createProcessor(
+    const { failRuntime, metrics, processor, promote, recordHealthCheck, stop } = createProcessor(
       async () => ({ durationMs: 4, statusCode: 204 }),
     );
 
@@ -161,6 +166,40 @@ describe("DeploymentRuntimeProcessor health gate", () => {
     expect(stop).not.toHaveBeenCalled();
     expect(failRuntime).not.toHaveBeenCalled();
     expect(promote).toHaveBeenCalledWith(expect.objectContaining({ deploymentId, organizationId }));
+    const output = metrics.renderPrometheus();
+    expect(output).toContain(
+      'launchrail_worker_runtime_start_duration_seconds_count{outcome="started"} 1',
+    );
+    expect(output).toContain(
+      'launchrail_worker_route_apply_duration_seconds_count{outcome="applied"} 1',
+    );
+  });
+
+  it("measures route apply failures without persisting adapter error details", async () => {
+    const { failRuntime, metrics, processor } = createProcessor(
+      async () => ({ durationMs: 4, statusCode: 204 }),
+      0,
+      async () => {
+        throw new Error("untrusted route adapter detail");
+      },
+    );
+
+    await expect(processor.process(job, new AbortController().signal)).resolves.toBe(
+      "dead_lettered",
+    );
+
+    expect(metrics.renderPrometheus()).toContain(
+      'launchrail_worker_route_apply_duration_seconds_count{outcome="failed"} 1',
+    );
+    expect(failRuntime).toHaveBeenCalledWith(
+      expect.objectContaining({
+        failure: {
+          category: "infrastructure_unavailable",
+          message: "Preview route could not be registered",
+        },
+      }),
+    );
+    expect(JSON.stringify(failRuntime.mock.calls)).not.toContain("untrusted route adapter detail");
   });
 
   it("waits for the configured startup grace period before probing the candidate", async () => {
@@ -178,7 +217,7 @@ describe("DeploymentRuntimeProcessor health gate", () => {
 
   it("cleans up the candidate when interrupted during startup grace without probing or promoting", async () => {
     const controller = new AbortController();
-    const { check, failRuntime, processor, promote, recordHealthCheck, start, stop } =
+    const { check, failRuntime, metrics, processor, promote, recordHealthCheck, start, stop } =
       createProcessor(async () => ({ durationMs: 1, statusCode: 204 }), 10_000);
     const processing = processor.process(job, controller.signal);
 
@@ -190,6 +229,9 @@ describe("DeploymentRuntimeProcessor health gate", () => {
     expect(recordHealthCheck).not.toHaveBeenCalled();
     expect(failRuntime).not.toHaveBeenCalled();
     expect(promote).not.toHaveBeenCalled();
+    expect(metrics.renderPrometheus()).toContain(
+      'launchrail_worker_runtime_stop_duration_seconds_count{outcome="removed"} 1',
+    );
     expect(stop).toHaveBeenCalledOnce();
     expect(stop.mock.calls[0]?.[0].signal.aborted).toBe(false);
   });

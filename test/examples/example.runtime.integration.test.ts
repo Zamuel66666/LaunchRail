@@ -79,6 +79,20 @@ it.each(["healthy", "node", "python", "unhealthy"] as const)(
           await new Promise((resolve) => setTimeout(resolve, 100));
         }
       }
+      if (response === undefined) {
+        const logs = await execute("docker", ["logs", "--tail", "30", runtime.containerId], {
+          maxBuffer: 65536,
+        });
+        const state = await execute("docker", [
+          "inspect",
+          "--format",
+          "{{json .State}}",
+          runtime.containerId,
+        ]);
+        throw new Error(
+          `Example ${example} did not become reachable: ${state.stdout.trim()}\n${logs.stdout}${logs.stderr}`,
+        );
+      }
       expect(response?.status).toBe(example === "unhealthy" ? 404 : 200);
       const body = await response?.text();
       if (example === "node" || example === "python")

@@ -96,6 +96,14 @@ export interface DeploymentHealthCheckSummary {
   readonly statusCode: number | null;
 }
 
+export interface DeploymentBuildLogSummary {
+  readonly attempt: number;
+  readonly content: string;
+  readonly createdAt: string;
+  readonly sequence: number;
+  readonly stream: "stderr" | "stdout" | "system";
+}
+
 export interface AuditEventSummary {
   readonly action: string;
   readonly actorUserId: string | null;
@@ -225,6 +233,27 @@ export async function listDeployments(
   return response.deployments;
 }
 
+export async function createDeployment(
+  organizationId: string,
+  projectId: string,
+  sourceRevision: string,
+): Promise<DeploymentHistorySummary> {
+  const response = await apiRequest<{
+    readonly deployment: {
+      readonly deploymentId: string;
+    };
+  }>(`/v1/organizations/${encodeURIComponent(organizationId)}/deployments`, {
+    body: JSON.stringify({ projectId, sourceRevision }),
+    method: "POST",
+  });
+  const deployments = await listDeployments(organizationId, projectId);
+  const deployment = deployments.find(
+    (item) => item.deploymentId === response.deployment.deploymentId,
+  );
+  if (deployment === undefined) throw new Error("The queued deployment is not visible yet");
+  return deployment;
+}
+
 export async function listDeploymentEvents(
   organizationId: string,
   deploymentId: string,
@@ -247,6 +276,18 @@ export async function listDeploymentHealthChecks(
     signal === undefined ? {} : { signal },
   );
   return response.checks;
+}
+
+export async function listDeploymentBuildLogs(
+  organizationId: string,
+  deploymentId: string,
+  signal?: AbortSignal,
+): Promise<readonly DeploymentBuildLogSummary[]> {
+  const response = await apiRequest<{ readonly logs: readonly DeploymentBuildLogSummary[] }>(
+    `/v1/organizations/${encodeURIComponent(organizationId)}/deployments/${encodeURIComponent(deploymentId)}/build-logs?limit=200`,
+    signal === undefined ? {} : { signal },
+  );
+  return response.logs;
 }
 
 export async function listAuditEvents(

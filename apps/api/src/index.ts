@@ -11,6 +11,7 @@ import {
   PostgresDeploymentCreationStore,
 } from "@launchrail/database";
 import { BullMqDeploymentQueuePublisher } from "@launchrail/queue";
+import { parseDeploymentJob } from "@launchrail/contracts";
 
 import { buildServer } from "./server.js";
 import { createGitHubWebhookDeploymentTrigger } from "./webhook-trigger.js";
@@ -31,19 +32,16 @@ async function main(): Promise<void> {
   const transitionStore = new PostgresDeploymentTransitionStore(databaseClient.db);
   const webhookStore = new PostgresWebhookDeliveryStore(databaseClient.db);
   const deploymentCreationStore = new PostgresDeploymentCreationStore(databaseClient.db);
-  const webhookPublisher =
-    config.GITHUB_WEBHOOK_SECRET === undefined
-      ? undefined
-      : new BullMqDeploymentQueuePublisher({
-          onInfrastructureEvent: (event) => {
-            process.stderr.write(`LaunchRail webhook queue ${event.component}: ${event.code}\n`);
-          },
-          prefix: config.WORKER_QUEUE_PREFIX,
-          queueName: config.WORKER_QUEUE_NAME,
-          redisUrl: config.REDIS_URL,
-        });
+  const deploymentPublisher = new BullMqDeploymentQueuePublisher({
+    onInfrastructureEvent: (event) => {
+      process.stderr.write(`LaunchRail queue ${event.component}: ${event.code}\n`);
+    },
+    prefix: config.WORKER_QUEUE_PREFIX,
+    queueName: config.WORKER_QUEUE_NAME,
+    redisUrl: config.REDIS_URL,
+  });
   const webhookTrigger =
-    webhookPublisher === undefined
+    config.GITHUB_WEBHOOK_SECRET === undefined
       ? undefined
       : createGitHubWebhookDeploymentTrigger({
           deploymentCreationStore,
@@ -53,7 +51,7 @@ async function main(): Promise<void> {
             process.stderr.write(`LaunchRail webhook dispatch deferred for ${deploymentId}\n`);
           },
           projectStore,
-          publisher: webhookPublisher,
+          publisher: deploymentPublisher,
         });
   const server = buildServer({
     cookieName: config.SESSION_COOKIE_NAME,
@@ -62,6 +60,27 @@ async function main(): Promise<void> {
     projectStore,
     deploymentStore,
     deploymentCreationStore,
+    deploymentWakeup: async ({ deploymentId, organizationId }) => {
+      try {
+        const ensured = await deploymentStore.ensurePendingClaim({
+          availableAt: new Date(),
+          deploymentId,
+          maxAttempts: config.WORKER_MAX_ATTEMPTS,
+          organizationId,
+        });
+        if (ensured.kind === "deployment_not_found" || ensured.kind === "deployment_ineligible")
+          return;
+        await deploymentPublisher.enqueue(
+          parseDeploymentJob({
+            contractVersion: 1,
+            kind: "deployment.claim",
+            workItemId: ensured.job.id,
+          }),
+        );
+      } catch {
+        // The database remains authoritative; worker reconciliation recreates the wake-up.
+      }
+    },
     transitionStore,
     secureCookies: config.NODE_ENV === "production",
     signInRateLimitMax: config.SIGN_IN_RATE_LIMIT_MAX,
@@ -77,7 +96,7 @@ async function main(): Promise<void> {
     ...(webhookTrigger === undefined ? {} : { webhookTrigger }),
   });
   server.addHook("onClose", async () => databaseClient.close());
-  server.addHook("onClose", async () => webhookPublisher?.close());
+  server.addHook("onClose", async () => deploymentPublisher.close());
 
   const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
     server.log.info({ signal }, "API shutdown requested");

@@ -1,5 +1,6 @@
 import {
   MembershipUpdateConflictError,
+  ProjectNotFoundError,
   type DeploymentCreationStore,
   type DeploymentJobStore,
   type DeploymentTransitionStore,
@@ -25,6 +26,10 @@ interface RegisterAuthRoutesOptions {
   readonly projectStore?: ProjectManagementStore;
   readonly deploymentStore?: DeploymentJobStore;
   readonly deploymentCreationStore?: DeploymentCreationStore;
+  readonly deploymentWakeup?: (deployment: {
+    readonly deploymentId: string;
+    readonly organizationId: string;
+  }) => Promise<void>;
   readonly transitionStore?: DeploymentTransitionStore;
   readonly webhookDeliveryStore?: WebhookDeliveryStore;
   readonly webhookTrigger?: WebhookDeploymentTrigger;
@@ -791,7 +796,122 @@ export function registerAuthRoutes(
     );
   }
 
+  if (options.deploymentStore?.listBuildLogs !== undefined) {
+    server.get<{
+      Params: { organizationId: string; deploymentId: string };
+      Querystring: { after?: string; limit?: string };
+    }>(
+      "/v1/organizations/:organizationId/deployments/:deploymentId/build-logs",
+      {
+        schema: {
+          params: {
+            additionalProperties: false,
+            properties: {
+              deploymentId: { pattern: uuidPattern, type: "string" },
+              organizationId: { pattern: uuidPattern, type: "string" },
+            },
+            required: ["organizationId", "deploymentId"],
+            type: "object",
+          },
+          querystring: {
+            additionalProperties: false,
+            properties: {
+              after: { pattern: "^(0|[1-9][0-9]{0,9})$", type: "string" },
+              limit: { pattern: "^[0-9]{1,3}$", type: "string" },
+            },
+            type: "object",
+          },
+        },
+      },
+      async (request, reply) => {
+        const authorization = await authorizeOrganization(
+          request,
+          reply,
+          request.params.organizationId,
+          "project:read",
+        );
+        if (authorization === null) return;
+        const limit = request.query.limit === undefined ? 200 : Number(request.query.limit);
+        const afterSequence =
+          request.query.after === undefined ? undefined : Number(request.query.after);
+        if (
+          !Number.isSafeInteger(limit) ||
+          limit < 1 ||
+          limit > 500 ||
+          (afterSequence !== undefined && !Number.isSafeInteger(afterSequence))
+        )
+          return reply.code(400).send(errorBody("invalid_request", "Invalid build log cursor"));
+        return {
+          logs: await options.deploymentStore?.listBuildLogs?.({
+            deploymentId: request.params.deploymentId,
+            limit,
+            organizationId: request.params.organizationId,
+            ...(afterSequence === undefined ? {} : { afterSequence }),
+          }),
+        };
+      },
+    );
+  }
+
   if (options.deploymentCreationStore !== undefined) {
+    server.post<{
+      Body: { projectId: string; sourceRevision: string };
+      Params: { organizationId: string };
+    }>(
+      "/v1/organizations/:organizationId/deployments",
+      {
+        schema: {
+          body: {
+            additionalProperties: false,
+            properties: {
+              projectId: { pattern: uuidPattern, type: "string" },
+              sourceRevision: { pattern: "^[0-9a-f]{40}([0-9a-f]{24})?$", type: "string" },
+            },
+            required: ["projectId", "sourceRevision"],
+            type: "object",
+          },
+          params: organizationParamsSchema,
+        },
+      },
+      async (request, reply) => {
+        const authorization = await authorizeOrganization(
+          request,
+          reply,
+          request.params.organizationId,
+          "deployment:create",
+        );
+        if (authorization === null) return;
+        if (options.projectStore === undefined || options.deploymentWakeup === undefined)
+          return reply
+            .code(503)
+            .send(errorBody("deployment_unavailable", "Manual deployments are unavailable"));
+
+        try {
+          await options.projectStore.getProject({
+            actorUserId: authorization.principal.userId,
+            organizationId: request.params.organizationId,
+            projectId: request.body.projectId,
+          });
+        } catch (error) {
+          if (error instanceof ProjectNotFoundError)
+            return reply.code(404).send(errorBody("project_not_found", "Project not found"));
+          throw error;
+        }
+        const deployment = await options.deploymentCreationStore?.createDeployment({
+          actorUserId: authorization.principal.userId,
+          organizationId: request.params.organizationId,
+          projectId: request.body.projectId,
+          sourceRevision: request.body.sourceRevision,
+        });
+        if (deployment === undefined)
+          return reply
+            .code(503)
+            .send(errorBody("deployment_unavailable", "Deployment creation is unavailable"));
+        await options.deploymentWakeup(deployment);
+        return reply.code(202).send({ deployment });
+      },
+    );
+
     server.post<{
       Params: { organizationId: string; deploymentId: string };
     }>(

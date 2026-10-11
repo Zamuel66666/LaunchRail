@@ -354,7 +354,9 @@ export class DockerDeploymentRuntimeManager implements DeploymentRuntimeManager 
     ).stdout;
   }
 
-  public async listManagedRuntimes(signal: AbortSignal): Promise<readonly ManagedDeploymentRuntime[]> {
+  public async listManagedRuntimes(
+    signal: AbortSignal,
+  ): Promise<readonly ManagedDeploymentRuntime[]> {
     await this.prepareDockerConfiguration();
     const output = await this.execute(
       ["ps", "--all", "--quiet", "--no-trunc", "--filter", "label=dev.launchrail.managed=true"],
@@ -393,7 +395,10 @@ export class DockerDeploymentRuntimeManager implements DeploymentRuntimeManager 
 
   public async cleanupOrphan(command: CleanupOrphanDeploymentRuntimeCommand): Promise<void> {
     const { containerId, identity, signal } = command;
-    if (!idPattern.test(containerId) || !Object.values(identity).every((value) => uuidPattern.test(value)))
+    if (
+      !idPattern.test(containerId) ||
+      !Object.values(identity).every((value) => uuidPattern.test(value))
+    )
       throw new RangeError("Orphan runtime identity is invalid");
     await this.prepareDockerConfiguration();
     const inspected = await this.inspect(containerId, signal);
@@ -406,9 +411,16 @@ export class DockerDeploymentRuntimeManager implements DeploymentRuntimeManager 
       actual["dev.launchrail.project-id"] !== identity.projectId ||
       actual["dev.launchrail.work-item-id"] !== identity.workItemId
     )
-      throw fail("runtime_metadata_invalid", "Orphan runtime ownership could not be verified", false);
+      throw fail(
+        "runtime_metadata_invalid",
+        "Orphan runtime ownership could not be verified",
+        false,
+      );
     try {
-      await this.execute(["stop", "--time", String(this.limits.stopGraceSeconds), containerId], signal);
+      await this.execute(
+        ["stop", "--time", String(this.limits.stopGraceSeconds), containerId],
+        signal,
+      );
     } catch {
       // An already-stopped managed container is still safe to remove after the ownership check.
     }

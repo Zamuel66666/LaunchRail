@@ -8,12 +8,14 @@ import { ProjectForm } from "./project-form";
 import {
   ApiError,
   archiveProject,
+  createDeployment,
   createProject,
   getSession,
   listProjects,
   listDeployments,
   listDeploymentEvents,
   listDeploymentHealthChecks,
+  listDeploymentBuildLogs,
   listAuditEvents,
   listWebhookDeliveries,
   retryDeployment,
@@ -24,6 +26,7 @@ import {
   type EnvironmentVariableSummary,
   type DeploymentEventSummary,
   type DeploymentHealthCheckSummary,
+  type DeploymentBuildLogSummary,
   type DeploymentHistorySummary,
   type AuditEventSummary,
   type WebhookDeliverySummary,
@@ -121,6 +124,8 @@ function LoadingState({ label }: Readonly<{ label: string }>) {
 
 function ProjectCard({
   canArchive,
+  canCreateDeployment,
+  canControlDeployments,
   canReadAudit,
   canEdit,
   canManageSecrets,
@@ -132,6 +137,8 @@ function ProjectCard({
   project,
 }: Readonly<{
   canArchive: boolean;
+  canCreateDeployment: boolean;
+  canControlDeployments: boolean;
   canReadAudit: boolean;
   canEdit: boolean;
   canManageSecrets: boolean;
@@ -145,6 +152,8 @@ function ProjectCard({
   const repositoryUrl = safeRepositoryUrl(project.repositoryUrl);
   const [deployments, setDeployments] = useState<readonly DeploymentHistorySummary[]>([]);
   const [retryingDeploymentId, setRetryingDeploymentId] = useState<string | null>(null);
+  const [sourceRevision, setSourceRevision] = useState("");
+  const [creatingDeployment, setCreatingDeployment] = useState(false);
   const [controllingDeploymentId, setControllingDeploymentId] = useState<string | null>(null);
   const [deploymentActionError, setDeploymentActionError] = useState("");
   const [deploymentEvents, setDeploymentEvents] = useState<
@@ -157,6 +166,11 @@ function ProjectCard({
   >({});
   const [healthChecksError, setHealthChecksError] = useState("");
   const [loadingHealthChecksId, setLoadingHealthChecksId] = useState<string | null>(null);
+  const [buildLogs, setBuildLogs] = useState<
+    Readonly<Record<string, readonly DeploymentBuildLogSummary[]>>
+  >({});
+  const [loadingBuildLogsId, setLoadingBuildLogsId] = useState<string | null>(null);
+  const [buildLogsError, setBuildLogsError] = useState("");
   const [auditEvents, setAuditEvents] = useState<
     Readonly<Record<string, readonly AuditEventSummary[]>>
   >({});
@@ -229,6 +243,18 @@ function ProjectCard({
       .finally(() => setLoadingHealthChecksId(null));
   }
 
+  function loadDeploymentBuildLogs(deploymentId: string) {
+    if (buildLogs[deploymentId] !== undefined || loadingBuildLogsId !== null) return;
+    setBuildLogsError("");
+    setLoadingBuildLogsId(deploymentId);
+    void listDeploymentBuildLogs(organizationId, deploymentId)
+      .then((logs) => setBuildLogs((current) => ({ ...current, [deploymentId]: logs })))
+      .catch((error: unknown) =>
+        setBuildLogsError(actionError(error, "Build logs could not be loaded.")),
+      )
+      .finally(() => setLoadingBuildLogsId(null));
+  }
+
   function loadDeploymentAuditEvents(deploymentId: string) {
     if (auditEvents[deploymentId] !== undefined || loadingAuditEventsId !== null) return;
     setAuditEventsError("");
@@ -294,6 +320,52 @@ function ProjectCard({
 
       <details className="project-details">
         <summary>Deployment timeline</summary>
+        {canCreateDeployment ? (
+          <form
+            className="deployment-create-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!/^[0-9a-f]{40}([0-9a-f]{24})?$/.test(sourceRevision)) {
+                setDeploymentActionError(
+                  "Enter a full lowercase Git commit SHA (40 or 64 characters).",
+                );
+                return;
+              }
+              setCreatingDeployment(true);
+              setDeploymentActionError("");
+              void createDeployment(organizationId, project.id, sourceRevision)
+                .then((deployment) => {
+                  setDeployments((current) => [deployment, ...current]);
+                  setSourceRevision("");
+                })
+                .catch((error: unknown) =>
+                  setDeploymentActionError(
+                    actionError(error, "The deployment could not be started."),
+                  ),
+                )
+                .finally(() => setCreatingDeployment(false));
+            }}
+          >
+            <label htmlFor={`deploy-revision-${project.id}`}>Deploy exact commit</label>
+            <input
+              autoCapitalize="none"
+              autoComplete="off"
+              id={`deploy-revision-${project.id}`}
+              maxLength={64}
+              minLength={40}
+              onChange={(event) => setSourceRevision(event.currentTarget.value)}
+              pattern="[0-9a-f]{40}([0-9a-f]{24})?"
+              placeholder="Full commit SHA"
+              required
+              spellCheck={false}
+              value={sourceRevision}
+            />
+            <button disabled={creatingDeployment} type="submit">
+              {creatingDeployment ? "Queuing…" : "Deploy revision"}
+            </button>
+            <p>Deploys only this verified commit from the configured public GitHub repository.</p>
+          </form>
+        ) : null}
         {deploymentActionError.length === 0 ? null : (
           <p className="deployment-action-error" role="alert">
             {deploymentActionError}
@@ -307,6 +379,11 @@ function ProjectCard({
         {healthChecksError.length === 0 ? null : (
           <p className="deployment-action-error" role="alert">
             {healthChecksError}
+          </p>
+        )}
+        {buildLogsError.length === 0 ? null : (
+          <p className="deployment-action-error" role="alert">
+            {buildLogsError}
           </p>
         )}
         {auditEventsError.length === 0 ? null : (
@@ -382,6 +459,27 @@ function ProjectCard({
                         </li>
                       ))}
                     </ol>
+                  )}
+                </details>
+                <details
+                  className="deployment-build-logs"
+                  onToggle={(event) => {
+                    if (event.currentTarget.open) loadDeploymentBuildLogs(deployment.deploymentId);
+                  }}
+                >
+                  <summary>Build logs</summary>
+                  {loadingBuildLogsId === deployment.deploymentId ? (
+                    <p role="status">Loading build output…</p>
+                  ) : buildLogs[deployment.deploymentId] === undefined ? (
+                    <p>Open to load the bounded, retained build output.</p>
+                  ) : buildLogs[deployment.deploymentId]?.length === 0 ? (
+                    <p>No build output has been recorded.</p>
+                  ) : (
+                    <pre className="build-log-output" aria-label="Build output" tabIndex={0}>
+                      {buildLogs[deployment.deploymentId]
+                        ?.map((log) => `[${log.sequence} ${log.stream}] ${log.content}`)
+                        .join("")}
+                    </pre>
                   )}
                 </details>
                 <details
@@ -635,6 +733,7 @@ export function ProjectWorkspace() {
   const canReadSecrets = permissions.includes("secret:read-metadata");
   const canReadAudit = permissions.includes("audit:read");
   const canControlDeployments = permissions.includes("deployment:control");
+  const canCreateDeployment = permissions.includes("deployment:create");
 
   function openEditor(project: ProjectSummary | null): void {
     setProjectError("");
@@ -1072,6 +1171,8 @@ export function ProjectWorkspace() {
                 {projects.map((project) => (
                   <ProjectCard
                     canArchive={canArchive}
+                    canCreateDeployment={canCreateDeployment}
+                    canControlDeployments={canControlDeployments}
                     canReadAudit={canReadAudit}
                     canEdit={canEdit}
                     canManageSecrets={canManageSecrets}

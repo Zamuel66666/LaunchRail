@@ -870,6 +870,34 @@ button:disabled {
   border-top: 1px solid #29465b;
 }
 
+.deployment-create-form {
+  display: grid;
+  gap: 0.55rem;
+  margin: 1rem 0;
+  max-width: 34rem;
+}
+
+.deployment-create-form input {
+  min-height: 2.75rem;
+}
+
+.deployment-create-form p {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.build-log-output {
+  background: #101923;
+  border-radius: 0.5rem;
+  color: #d6e3ef;
+  max-height: 24rem;
+  overflow: auto;
+  padding: 1rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .project-details > summary {
   padding: 1rem 0 0;
   color: #b7d7e5;

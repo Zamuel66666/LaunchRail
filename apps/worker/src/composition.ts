@@ -202,6 +202,7 @@ export function createDeploymentWorkerComponents({
     ...queueOptions,
     concurrency: config.WORKER_CONCURRENCY,
     handler: (job, signal) => processor.process(job, signal).then(() => undefined),
+    ...(metrics === undefined ? {} : { metrics }),
   });
   const reconciler = new DeploymentJobReconciler({
     batchSize: config.WORKER_RECONCILIATION_BATCH_SIZE,

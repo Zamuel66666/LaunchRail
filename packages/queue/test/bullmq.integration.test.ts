@@ -7,6 +7,7 @@ import {
   type DeploymentJob,
   type DeploymentPrepareSourceJob,
 } from "@launchrail/contracts";
+import { MetricsRegistry } from "@launchrail/observability";
 import { Queue } from "bullmq";
 import { Redis } from "ioredis";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -68,11 +69,13 @@ describeWithRedis("BullMQ deployment job queue", () => {
   const createConsumer = (
     handler: ConstructorParameters<typeof BullMqDeploymentQueueConsumer>[0]["handler"],
     onInfrastructureEvent?: (event: QueueInfrastructureEvent) => void,
+    metrics?: MetricsRegistry,
   ): BullMqDeploymentQueueConsumer => {
     const consumer = new BullMqDeploymentQueueConsumer({
       ...queueOptions(),
       handler,
       ...(onInfrastructureEvent === undefined ? {} : { onInfrastructureEvent }),
+      ...(metrics === undefined ? {} : { metrics }),
     });
     consumers.push(consumer);
     return consumer;
@@ -372,6 +375,34 @@ describeWithRedis("BullMQ deployment job queue", () => {
       "Deployment queue name and payload kind do not match",
     );
     expect(safeOutput).not.toContain(canary);
+  });
+
+  it("records queue wait, processing outcomes, and active handler count", async () => {
+    const metrics = new MetricsRegistry();
+    const publisher = createPublisher();
+    const consumer = createConsumer(async () => undefined, undefined, metrics);
+    consumer.start();
+    await Promise.all([publisher.waitUntilReady(), consumer.waitUntilReady()]);
+
+    const workItemId = randomUUID();
+    await publisher.enqueue({
+      contractVersion: 1,
+      kind: "deployment.claim",
+      workItemId,
+    } satisfies DeploymentClaimJob);
+    await waitFor(async () => (await publisher.getState(workItemId)) === "absent");
+
+    const output = metrics.renderPrometheus();
+    expect(output).toContain(
+      'launchrail_worker_jobs_processed_total{kind="deployment.claim",outcome="completed"} 1',
+    );
+    expect(output).toContain(
+      'launchrail_worker_job_queue_wait_seconds_count{kind="deployment.claim"} 1',
+    );
+    expect(output).toContain(
+      'launchrail_worker_job_processing_duration_seconds_count{kind="deployment.claim",outcome="completed"} 1',
+    );
+    expect(output).toContain("launchrail_worker_active_queue_handlers 0");
   });
 
   it("pauses, resumes, and closes without claiming later jobs", async () => {

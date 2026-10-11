@@ -6,6 +6,7 @@ import {
 import {
   createBullMqTelemetryBridge,
   withTraceHeaders,
+  type MetricsRegistry,
   type TraceHeaders,
 } from "@launchrail/observability";
 import { Queue, UnrecoverableError, Worker, type QueueOptions, type WorkerOptions } from "bullmq";
@@ -34,6 +35,7 @@ export interface DeploymentQueuePublisherOptions extends QueueLocationOptions {
 export interface DeploymentQueueConsumerOptions extends QueueLocationOptions {
   readonly concurrency?: number;
   readonly handler: DeploymentJobHandler;
+  readonly metrics?: MetricsRegistry;
   readonly onInfrastructureEvent?: (event: QueueInfrastructureEvent) => void;
 }
 
@@ -289,6 +291,7 @@ export class BullMqDeploymentQueueConsumer {
   private readonly connection: Redis;
   private readonly readinessConnection: Redis;
   private readonly notify: (code: QueueInfrastructureEvent["code"]) => void;
+  private readonly metrics: MetricsRegistry | undefined;
   private readonly worker: Worker<unknown, void, string>;
   private closePromise: Promise<void> | undefined;
   private runPromise: Promise<void> | undefined;
@@ -297,19 +300,23 @@ export class BullMqDeploymentQueueConsumer {
     const location = resolveLocation(options);
     const notify = safeInfrastructureNotifier("consumer", options.onInfrastructureEvent);
     this.notify = notify;
+    this.metrics = options.metrics;
     const concurrency = requirePositiveSafeInteger("concurrency", options.concurrency ?? 1);
     this.connection = createWorkerConnection(location.redisUrl, notify);
     this.readinessConnection = createReadinessConnection(location.redisUrl, notify);
+    this.metrics?.setGauge("launchrail_worker_active_queue_handlers", 0);
     const telemetry = createBullMqTelemetryBridge() as unknown as WorkerOptions["telemetry"];
     this.worker = new Worker<unknown, void, string>(
       location.queueName,
       async (job, _token, signal) => {
-        const run = this.processJob(job.name, job.data, signal, options.handler);
+        const run = this.processJob(job.name, job.data, job.timestamp, signal, options.handler);
         this.activeRuns.add(run);
+        this.metrics?.setGauge("launchrail_worker_active_queue_handlers", this.activeRuns.size);
         try {
           await run;
         } finally {
           this.activeRuns.delete(run);
+          this.metrics?.setGauge("launchrail_worker_active_queue_handlers", this.activeRuns.size);
         }
       },
       {
@@ -335,35 +342,53 @@ export class BullMqDeploymentQueueConsumer {
   private async processJob(
     name: string,
     input: unknown,
+    queuedAt: number,
     signal: AbortSignal | undefined,
     handler: DeploymentJobHandler,
   ): Promise<void> {
-    if (
-      name !== "deployment.build" &&
-      name !== "deployment.claim" &&
-      name !== "deployment.prepare_source"
-    ) {
-      throw new UnrecoverableError("Unsupported deployment queue job");
-    }
-
-    let payload: DeploymentJob;
-    try {
-      payload = parseDeploymentJob(input);
-    } catch {
-      throw new UnrecoverableError("Invalid deployment job payload");
-    }
-    if (payload.kind !== name) {
-      throw new UnrecoverableError("Deployment queue name and payload kind do not match");
-    }
-
+    const supportedKind =
+      name === "deployment.build" ||
+      name === "deployment.claim" ||
+      name === "deployment.prepare_source";
+    const kind = supportedKind ? name : "invalid";
+    const queuedAtMs = Number.isSafeInteger(queuedAt) ? queuedAt : Date.now();
+    this.metrics?.observe(
+      "launchrail_worker_job_queue_wait_seconds",
+      Math.max(0, Date.now() - queuedAtMs) / 1_000,
+      { kind },
+    );
+    const startedAt = performance.now();
+    let outcome: "completed" | "failed" | "interrupted" | "invalid" = "completed";
     const effectiveSignal = signal ?? new AbortController().signal;
     try {
+      if (!supportedKind) throw new UnrecoverableError("Unsupported deployment queue job");
+      let payload: DeploymentJob;
+      try {
+        payload = parseDeploymentJob(input);
+      } catch {
+        throw new UnrecoverableError("Invalid deployment job payload");
+      }
+      if (payload.kind !== name) {
+        throw new UnrecoverableError("Deployment queue name and payload kind do not match");
+      }
       await handler(payload, effectiveSignal);
-    } catch {
+    } catch (error) {
+      if (error instanceof UnrecoverableError) {
+        outcome = "invalid";
+        throw error;
+      }
+      outcome = effectiveSignal.aborted ? "interrupted" : "failed";
       throw new Error(
         effectiveSignal.aborted
           ? "Deployment job processing aborted"
           : "Deployment job handler failed",
+      );
+    } finally {
+      this.metrics?.increment("launchrail_worker_jobs_processed_total", { kind, outcome });
+      this.metrics?.observe(
+        "launchrail_worker_job_processing_duration_seconds",
+        Math.max(0, performance.now() - startedAt) / 1_000,
+        { kind, outcome },
       );
     }
   }

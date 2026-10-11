@@ -39,12 +39,12 @@ Application build/runtime output is a separate bounded stream, not mixed into co
 
 Prometheus-compatible metrics will use low-cardinality labels such as service, route template, method, status class, job type, deployment stage, outcome, and failure category.
 
-The API exposes request counters/histograms and webhook processing counters/histograms at `/metrics` with bounded route-template, method, status-class, event-class, and outcome labels. API and worker readiness probes also expose bounded ready/not-ready counters; the API records readiness-check duration. The worker `/metrics` exposes process uptime/RSS, active-job gauge, reconciliation/dispatch counters, health-check counters/histograms, runtime handoff/failure counters, orphan-runtime, source/build-stage, completed-checkout, orphan-image, interrupted-route-file, route-restoration, and resource-recovery failure counters. Labels intentionally omit repository, organization, deployment, request, and delivery identifiers.
+The API exposes request counters/histograms and webhook processing counters/histograms at `/metrics` with bounded route-template, method, status-class, event-class, and outcome labels. API and worker readiness probes also expose bounded ready/not-ready counters; the API records readiness-check duration. The worker `/metrics` exposes process uptime/RSS, active-job and active-queue-handler gauges, queue-wait and job-processing histograms, bounded job outcome counters, reconciliation/dispatch counters, health-check counters/histograms, runtime handoff/failure counters, orphan-runtime, source/build-stage, completed-checkout, orphan-image, interrupted-route-file, route-restoration, and resource-recovery failure counters. Queue metrics label only supported job kind and fixed outcome; labels intentionally omit repository, organization, deployment, request, and delivery identifiers.
 
 Measurements still to add:
 
 - Active SSE streams, reconnects, dropped/limited chunks, and delivery lag.
-- Queue depth by supported state, job wait/run duration, retries, timeouts, and dead-letter count.
+- Queue depth by supported state, retries, timeouts, and dead-letter count.
 - Deployment stage duration, end-to-end duration, success/failure/cancellation count.
 - Build cache outcome and duration without repository labels.
 - Runtime start/stop/cleanup duration and current orphan inventory gauge.
@@ -99,7 +99,7 @@ Observability becomes “Available” only when a recorded demonstration can tra
 
 # Local metrics and dashboards
 
-The API and worker expose Prometheus text format at `/metrics`. The API includes route-template request counts and latency plus bounded GitHub delivery outcomes and processing duration. The worker reports process uptime/RSS, active jobs, job reconciliation/dispatch outcomes, runtime handoffs, health-check outcomes/duration, terminal/retryable runtime failures, and resource cleanup results. Metric labels intentionally avoid organization, project, deployment, request, and delivery identifiers.
+The API and worker expose Prometheus text format at `/metrics`. The API includes route-template request counts and latency plus bounded GitHub delivery outcomes and processing duration. The worker reports process uptime/RSS, active jobs and queue handlers, queue wait and processing durations/outcomes by supported job kind, job reconciliation/dispatch outcomes, runtime handoffs, health-check outcomes/duration, terminal/retryable runtime failures, and resource cleanup results. Metric labels intentionally avoid organization, project, deployment, request, and delivery identifiers.
 
 The optional local dashboard stack is isolated from the default development services. It uses Linux host networking to reach API and worker metrics, so this overlay is currently supported on Linux hosts:
 

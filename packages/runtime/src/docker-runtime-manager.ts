@@ -149,6 +149,16 @@ export class DockerDeploymentRuntimeManager implements DeploymentRuntimeManager 
     this.timeoutMs = options.timeoutMs;
   }
 
+  public async checkReady(): Promise<boolean> {
+    try {
+      await this.prepareDockerConfiguration();
+      await this.execute(["info"], AbortSignal.timeout(Math.min(this.timeoutMs, 5_000)));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   private async prepareDockerConfiguration(): Promise<void> {
     await mkdir(this.dockerConfigDirectory, { mode: 0o700, recursive: true });
     const stats = await lstat(this.dockerConfigDirectory);

@@ -58,6 +58,7 @@ describe("DeploymentWorkerRuntime", () => {
     const statuses: string[] = [];
     const calls: string[] = [];
     const metrics = new MetricsRegistry();
+    const infrastructureReady = vi.fn(async () => true);
     const runtime = new DeploymentWorkerRuntime({
       consumer: {
         cancelActive: vi.fn(() => calls.push("cancel")),
@@ -68,6 +69,7 @@ describe("DeploymentWorkerRuntime", () => {
         waitUntilReady: vi.fn(async () => void calls.push("consumer.ready")),
       },
       heartbeatIntervalMs: 60_000,
+      infrastructureReady,
       logger,
       metrics,
       processor: {
@@ -99,6 +101,9 @@ describe("DeploymentWorkerRuntime", () => {
     });
 
     await runtime.start();
+    await expect(runtime.checkReady()).resolves.toBe(true);
+    await expect(runtime.checkReady()).resolves.toBe(true);
+    expect(infrastructureReady).toHaveBeenCalledOnce();
     await runtime.stop();
 
     expect(statuses).toEqual(["starting", "ready", "draining", "stopped"]);

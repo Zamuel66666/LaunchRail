@@ -66,6 +66,7 @@ export interface RemoveBuiltImageCommand {
 }
 
 export interface ImageBuilder {
+  checkReady?(): Promise<boolean>;
   cleanupOrphanedImages?(command: {
     readonly knownImageIds: readonly string[];
     readonly olderThan: Date;

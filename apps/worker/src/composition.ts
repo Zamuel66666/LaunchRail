@@ -143,6 +143,7 @@ export function createDeploymentWorkerComponents({
     imageBuilder ??
     new BuildKitImageBuilder({
       buildRootDirectory: config.WORKER_BUILD_ROOT,
+      builderName: config.WORKER_BUILDX_BUILDER_NAME,
       dockerConfigDirectory: join(config.WORKER_BUILD_ROOT, "docker-config"),
       platform: config.WORKER_BUILD_PLATFORM,
       timeoutMs: config.WORKER_BUILD_TIMEOUT_MS,
@@ -223,6 +224,13 @@ export function createDeploymentWorkerComponents({
   const runtime = new DeploymentWorkerRuntime({
     consumer,
     heartbeatIntervalMs: config.WORKER_HEARTBEAT_INTERVAL_MS,
+    infrastructureReady: async () => {
+      const [builderReady, runtimeReady] = await Promise.all([
+        deploymentImageBuilder.checkReady?.() ?? Promise.resolve(true),
+        deploymentRuntimeManager.checkReady?.() ?? Promise.resolve(true),
+      ]);
+      return builderReady && runtimeReady;
+    },
     logger,
     ...(metrics === undefined ? {} : { metrics }),
     processor,

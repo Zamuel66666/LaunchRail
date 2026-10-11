@@ -29,6 +29,7 @@ export interface DeploymentProcessorLifecycle {
 export interface DeploymentWorkerRuntimeOptions {
   readonly consumer: DeploymentQueueConsumerLifecycle;
   readonly heartbeatIntervalMs: number;
+  readonly infrastructureReady?: () => Promise<boolean>;
   readonly logger: WorkerEventLogger;
   readonly metrics?: MetricsRegistry;
   readonly processor: DeploymentProcessorLifecycle;
@@ -77,6 +78,10 @@ export class DeploymentWorkerRuntime {
   private heartbeatInterval: NodeJS.Timeout | undefined;
   private heartbeatWrites = Promise.resolve();
   private readonly heartbeatIntervalMs: number;
+  private infrastructureReadiness: Promise<boolean> | undefined;
+  private infrastructureReadinessCheckedAt = 0;
+  private readonly infrastructureReady: (() => Promise<boolean>) | undefined;
+  private lastInfrastructureReady = false;
   private readonly logger: WorkerEventLogger;
   private readonly metrics: MetricsRegistry | undefined;
   private readonly processor: DeploymentProcessorLifecycle;
@@ -96,6 +101,7 @@ export class DeploymentWorkerRuntime {
   public constructor({
     consumer,
     heartbeatIntervalMs,
+    infrastructureReady,
     logger,
     metrics,
     processor,
@@ -109,6 +115,7 @@ export class DeploymentWorkerRuntime {
   }: DeploymentWorkerRuntimeOptions) {
     this.consumer = consumer;
     this.heartbeatIntervalMs = heartbeatIntervalMs;
+    this.infrastructureReady = infrastructureReady;
     this.logger = logger;
     this.metrics = metrics;
     this.processor = processor;
@@ -127,11 +134,37 @@ export class DeploymentWorkerRuntime {
 
   public async checkReady(): Promise<boolean> {
     if (this.state !== "ready") return false;
-    const [publisherReady, consumerReady] = await Promise.all([
+    const [publisherReady, consumerReady, infrastructureReady] = await Promise.all([
       this.publisher.checkReady?.() ?? Promise.resolve(true),
       this.consumer.checkReady?.() ?? Promise.resolve(true),
+      this.checkInfrastructureReady(),
     ]);
-    return publisherReady && consumerReady;
+    return publisherReady && consumerReady && infrastructureReady;
+  }
+
+  private async checkInfrastructureReady(): Promise<boolean> {
+    if (this.infrastructureReady === undefined) return true;
+    if (this.infrastructureReadiness !== undefined) return this.infrastructureReadiness;
+    if (Date.now() - this.infrastructureReadinessCheckedAt < this.heartbeatIntervalMs)
+      return this.lastInfrastructureReady;
+
+    const check = Promise.resolve()
+      .then(() => this.infrastructureReady?.() ?? true)
+      .then((ready) => {
+        this.lastInfrastructureReady = ready;
+        this.infrastructureReadinessCheckedAt = Date.now();
+        return ready;
+      })
+      .catch(() => {
+        this.lastInfrastructureReady = false;
+        this.infrastructureReadinessCheckedAt = Date.now();
+        return false;
+      })
+      .finally(() => {
+        if (this.infrastructureReadiness === check) this.infrastructureReadiness = undefined;
+      });
+    this.infrastructureReadiness = check;
+    return check;
   }
 
   private async persistHeartbeat(status: WorkerHeartbeatStatus, required: boolean): Promise<void> {
@@ -186,6 +219,7 @@ export class DeploymentWorkerRuntime {
         },
       );
       void this.consumer.refreshQueueMetrics?.();
+      void this.checkInfrastructureReady();
     }, this.heartbeatIntervalMs);
     this.heartbeatInterval.unref();
 

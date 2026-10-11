@@ -20,6 +20,7 @@ const milestoneItems = [
   "Stale interrupted preview-route writes removed after a safe age threshold",
   "W3C trace propagation from API requests through BullMQ into worker spans",
   "Separate API database and worker startup readiness from process liveness",
+  "Worker readiness checks Docker access and bootstraps only the configured Buildx builder",
   "Guided exact-revision demo walkthrough with explicit limitations",
   "Guarded end-to-end deployment benchmark script and a public-release checklist",
   "Reproducible API liveness benchmark output",

@@ -290,6 +290,18 @@ export class BuildKitImageBuilder implements ImageBuilder {
     this.timeoutMs = options.timeoutMs;
   }
 
+  public async checkReady(): Promise<boolean> {
+    const signal = AbortSignal.timeout(Math.min(this.timeoutMs, 5_000));
+    try {
+      await this.prepareDockerConfiguration();
+      const root = await preparePrivateBuildRoot(this.buildRootDirectory);
+      await this.bootstrapBuilder(root, join(root, "home"), signal);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   private environment(home: string): Readonly<Record<string, string>> {
     return {
       BUILDX_METADATA_PROVENANCE: "disabled",

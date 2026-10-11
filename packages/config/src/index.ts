@@ -129,6 +129,7 @@ const workerSchema = sharedServiceSchema.extend({
   WORKER_BUILD_ROOT: workerBuildRootSchema.default(defaultWorkerBuildRoot),
   WORKER_BUILD_SHARED_MEMORY_MEGABYTES: positiveIntegerSchema.max(4_096).default(64),
   WORKER_BUILD_TIMEOUT_MS: positiveIntegerSchema.max(3_600_000).default(240_000),
+  WORKER_BUILDX_BUILDER_NAME: workerIdentifierSchema.default("launchrail-builder"),
   WORKER_CONCURRENCY: positiveIntegerSchema.max(32).default(2),
   WORKER_HEALTH_HOST: z.string().min(1).default("127.0.0.1"),
   WORKER_HEALTH_PORT: portSchema.default(4001),

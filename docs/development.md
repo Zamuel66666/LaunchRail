@@ -54,7 +54,7 @@ Each health response uses the shared contract:
 }
 ```
 
-The timestamp varies. `/health` endpoints prove process liveness only. `/ready` checks API PostgreSQL reachability and, for the worker, PostgreSQL plus both Redis queue connections after runtime startup and reconciliation. These bounded probes do not report queue depth or BuildKit/Docker/proxy health; the health smoke test intentionally does not initialize dependencies.
+The timestamp varies. `/health` endpoints prove process liveness only. `/ready` checks API PostgreSQL reachability and, for the worker, PostgreSQL, both Redis queue connections, Docker daemon reachability, and bootstrap readiness for the explicitly configured Buildx builder. Worker infrastructure checks are cached for at most one heartbeat interval to avoid starting a builder on every probe. They do not report queue depth or proxy health; the health smoke test intentionally does not initialize dependencies.
 
 ## Stopping and cleanup
 
@@ -87,6 +87,7 @@ The volume-deleting command is not wrapped in the normal shutdown script so data
 | `WORKER_INTERNAL_TOKEN`                    | Shared API/worker log credential   | Unset (runtime logs disabled) |
 | `WORKER_MODE`                              | Full worker or health-only         | `run`                         |
 | `WORKER_QUEUE_NAME`, `WORKER_QUEUE_PREFIX` | Bounded BullMQ identifiers         | See `.env.example`            |
+| `WORKER_BUILDX_BUILDER_NAME`               | Explicit local Buildx builder      | `launchrail-builder`          |
 | `WORKER_CONCURRENCY`                       | Concurrent job handlers            | `2`                           |
 | `WORKER_MAX_ATTEMPTS`                      | Durable attempt ceiling            | `5`                           |
 | `WORKER_JOB_TIMEOUT_MS`                    | Per-job execution bound            | `300000`                      |

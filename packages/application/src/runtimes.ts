@@ -62,6 +62,7 @@ export interface CleanupOrphanDeploymentRuntimeCommand extends ManagedDeployment
 }
 
 export interface DeploymentRuntimeManager {
+  checkReady?(): Promise<boolean>;
   cleanupOrphan?(command: CleanupOrphanDeploymentRuntimeCommand): Promise<void>;
   listManagedRuntimes?(signal: AbortSignal): Promise<readonly ManagedDeploymentRuntime[]>;
   readLogs(command: ReadDeploymentRuntimeLogsCommand): Promise<string>;

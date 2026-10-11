@@ -12,11 +12,16 @@ build directory and verifies its canonical context digest and Dockerfile digest.
 The adapter uses argument-based process execution, a dedicated Docker client
 configuration, bounded output, a deadline, and process-group cancellation.
 Build commands request resource limits and disable networking for build steps.
-Before each build it runs `docker buildx inspect --bootstrap` against the explicitly
-configured builder. This lets Buildx bootstrap a stopped configured node when the
+Before each build it runs `docker buildx inspect --bootstrap` against the builder named
+by `WORKER_BUILDX_BUILDER_NAME` (default `launchrail-builder`). This lets Buildx bootstrap a stopped configured node when the
 Docker daemon is reachable; LaunchRail does not create a builder, choose a different
 builder, or loosen builder policy during recovery. A missing or invalid builder
 still produces the normal retryable infrastructure failure.
+
+Worker `/ready` also verifies Docker daemon access and bootstraps this same configured
+builder. The readiness result is cached for up to one worker heartbeat interval so a
+readiness probe does not invoke Buildx repeatedly. A stopped/unavailable Docker daemon
+is reported as not ready; LaunchRail does not restart the host's Docker service.
 
 Successful builds retain an exact image ID, manifest digest, platform, size,
 source identity, and context identity. A stable image reference permits a retry

@@ -202,4 +202,26 @@ describe("DockerDeploymentRuntimeManager", () => {
       await rm(root, { force: true, recursive: true });
     }
   });
+
+  it("checks daemon availability using the private Docker client configuration", async () => {
+    const root = await mkdtemp(join(tmpdir(), "launchrail-runtime-test-"));
+    const requests: string[][] = [];
+    try {
+      const manager = new DockerDeploymentRuntimeManager({
+        dockerConfigDirectory: root,
+        executor: {
+          execute: async (request) => {
+            requests.push([...request.arguments]);
+            return { exitCode: 0, stderr: "", stdout: "daemon ready" };
+          },
+        },
+        timeoutMs: 1_000,
+      });
+
+      await expect(manager.checkReady()).resolves.toBe(true);
+      expect(requests).toEqual([["info"]]);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
 });

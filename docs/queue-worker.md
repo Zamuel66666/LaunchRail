@@ -65,7 +65,7 @@ The bounded reconciliation loop:
 
 This repairs enqueue failures, deleted/missing Redis jobs, and worker interruption across claim and source preparation. Duplicate wake-ups either find a busy/complete/dead-lettered row or replay existing durable results. A validated final checkout carries a trusted manifest marker and is adopted only after complete revalidation, covering a crash after atomic rename but before the database commit. No restart silently marks work complete.
 
-Phase 14 remains responsible for the broader process/service interruption matrix and hard-crash orphan cleanup across source, build, runtime, proxy, cancellation, and later resources.
+Phase 14 reconciliation now inventories LaunchRail-labeled runtime containers after route reconciliation. It protects container IDs already recorded in PostgreSQL and any container whose runtime work item has an unexpired lease, then re-verifies all ownership labels before removing an unrecorded runtime or one belonging to a terminal deployment. Persisted cleanup state and low-cardinality counters make repeated failures retryable and observable. This only covers Docker runtime containers; source/build staging, BuildKit/image resources, proxy interruption, Redis/database outages, and cancellation/control races remain unverified recovery boundaries.
 
 ## Worker heartbeat and shutdown
 
@@ -131,11 +131,11 @@ Phase 6 acceptance combines strict contract/source/worker unit tests with `pnpm 
 
 ## Explicit boundaries
 
-- No deployment-start HTTP endpoint or UI.
+- The manual deployment endpoint and exact-SHA timeline form are documented in the project workspace; runtime log viewing is still unavailable.
 - Public GitHub only: no private credentials, Git LFS, submodules, arbitrary Git hosts, or external-network acceptance smoke.
 - Prepared checkouts remain on the trusted worker host for Phase 7; broad hard-crash staging/orphan cleanup remains Phase 14 work.
-- No image build/log stream, application runtime, route, health-gated activation, deployment control, webhook, or rollback execution.
+- Image building, bounded retained build logs, application runtime, route, health-gated activation, deployment control, webhooks, and rollback are implemented in later milestones; their current verification state is tracked in the roadmap.
 - No project configuration or secret value in Redis, and no runtime secret decryption/injection.
-- No queue-readiness HTTP endpoint, metrics, traces, dashboards, or full operator UI; Phase 13 owns full telemetry.
+- No queue-readiness HTTP endpoint or distributed trace export; metrics dashboards and the current operator workspace are implemented, with validation deferred as recorded in the roadmap.
 - No broad process/service interruption or external-resource convergence claim; Phase 14 owns that evidence.
 - No `v0.2.0` tag: that release target also requires image builds and live progress.

@@ -12,6 +12,11 @@ const milestoneItems = [
   "Restricted Docker runtimes with loopback-only ports, least privilege, resource bounds, logs, and idempotent adoption",
   "Bounded HTTP health checks with durable attempt history and atomic promotion",
   "Organization-scoped deployment events with idempotent promote, cancel, stop, and rollback controls",
+  "Signed GitHub delivery outcomes, safe retry records, and webhook-trigger idempotency",
+  "Bounded API, worker, queue, and health metrics with an optional local operations dashboard",
+  "Manual deployment by exact Git commit and organization-scoped retained build-log viewing",
+  "Lease-aware cleanup of orphaned LaunchRail Docker runtimes during worker reconciliation",
+  "Reproducible API liveness benchmark output and a public-release readiness checklist",
 ];
 
 export default function HomePage() {
@@ -26,8 +31,8 @@ export default function HomePage() {
         </p>
         <div className="status" role="status">
           <span className="status-dot" aria-hidden="true" />
-          Health-checked deployments, durable history, and release controls verified on clean
-          services
+          Core deployment stages through operator recovery, exact-SHA starts, build output, and
+          release preparation are implemented; independent verification remains
         </div>
         <div className="hero-actions">
           <Link className="primary-link" href="/projects">
@@ -42,7 +47,7 @@ export default function HomePage() {
       <section className="panel" aria-labelledby="milestone-title">
         <p className="section-label">Current milestone</p>
         <h2 id="milestone-title">
-          Health-checked releases and safe deployment controls are verified
+          Recovery, manual deployment, build logs, and release preparation are implemented
         </h2>
         <ul>
           {milestoneItems.map((item) => (
@@ -53,11 +58,13 @@ export default function HomePage() {
 
       <section className="next" aria-labelledby="next-title">
         <p className="section-label">Next milestone</p>
-        <h2 id="next-title">Prove release recovery and operator controls end to end</h2>
+        <h2 id="next-title">Close failure recovery, traceability, and operator-control gaps</h2>
         <p>
-          The workspace now shows health attempts and deployment activity with confirmed release
-          controls. Next, interruption and concurrency checks must prove the release route and
-          durable history converge safely after recovery.
+          The workspace exposes health, lifecycle activity, operator audit, webhook outcomes,
+          exact-SHA deployment starts, and retained build output. Remaining implementation work
+          centers on recovering every external resource type, distributed tracing, runtime logs,
+          broader benchmarks, and accessible end-to-end onboarding; recent additions still need
+          independent validation.
         </p>
       </section>
     </main>

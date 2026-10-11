@@ -21,7 +21,7 @@ The Phase 6 BullMQ payload contains only its contract version, one of the two su
 
 ## Structured logs
 
-API and worker logs are JSON in production-like modes and readable locally. Phase 5/6 worker events use stable names and opaque work-item/worker identifiers; completion, retry, and dead-letter records include the durable attempt where applicable. Source success includes only adoption, file count, and total bytes—not repository content, raw Git output, arguments, paths, or provider responses. Safe retry codes/messages live in PostgreSQL, while logs use fixed operator-safe messages and never interpolate thrown exception details. Future phases add successful enqueue/claim events and full cross-component correlation.
+API and worker logs are JSON in production-like modes and readable locally. Phase 5/6 worker events use stable names and opaque work-item/worker identifiers; completion, retry, and dead-letter records include the durable attempt where applicable. Source success includes only adoption, file count, and total bytes—not repository content, raw Git output, arguments, paths, or provider responses. Safe retry codes/messages live in PostgreSQL, while logs use fixed operator-safe messages and never interpolate thrown exception details. Request IDs, work-item IDs, webhook delivery records, ordered deployment events, and cleanup events provide partial cross-component pivots; full trace propagation/export remains unimplemented.
 
 The target event families include:
 
@@ -81,7 +81,7 @@ Local alert rules are not yet configured. They should focus on actionable condit
 
 ## Redaction and access
 
-One shared redaction package will sanitize control-plane logs, deployment events, adapter errors, and telemetry attributes before export. Tests inject canary secrets and search every output. User-visible application logs are organization-authorized and retention-limited. Telemetry endpoints and Grafana are local/operator surfaces, not unauthenticated public routes.
+The shared redaction package sanitizes control-plane logs, deployment events, adapter errors, and telemetry attributes before export. Existing canary-secret tests inspect multiple outputs; recent log/API/dashboard additions still require independent review. User-visible build output is organization-authorized and retained within configured database bounds. Telemetry endpoints and Grafana are local/operator surfaces, not unauthenticated public routes.
 
 ## Delivery stages
 

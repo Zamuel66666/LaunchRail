@@ -2,7 +2,7 @@
 
 ## Current status
 
-No benchmarks have been run and LaunchRail publishes no performance results. Phase 16 will add versioned scripts and measured reports; earlier phases may add a benchmark only when its target behavior exists.
+No benchmarks have been run and LaunchRail publishes no performance results. A versioned API liveness benchmark is now available; the broader deployment, queue, build, recovery, webhook, and resource scenarios remain planned. Do not treat the script or its output as production-capacity evidence.
 
 This document prevents unsupported claims by defining how results must be collected and reported.
 
@@ -45,6 +45,16 @@ Every report includes:
 | Resource use           | CPU, memory, disk, network over scenario             | no limit violation or leaked orphan resource         |
 
 ## Run protocol
+
+### API liveness baseline
+
+Start the API locally, then run:
+
+```bash
+pnpm benchmark:api --requests=1000 --concurrency=10 --warmup=100
+```
+
+The default target is `http://127.0.0.1:4000/health`. `LAUNCHRAIL_BENCHMARK_URL` may select another loopback `/health` URL only. The command emits one JSON report with request count, concurrency, throughput, median/p95 latency, response codes, Node/platform metadata, and run time. It deliberately does not save a result file; retain the stdout artifact alongside the exact commit, OS/kernel, CPU/memory/storage, API configuration, and host load if publishing a result. The health endpoint measures process liveness only.
 
 1. Start from the documented clean environment and verify health.
 2. Record versions/configuration and confirm no unrelated workloads.

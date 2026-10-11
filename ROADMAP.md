@@ -23,11 +23,14 @@ The roadmap reports verified repository state, not aspirations as completed feat
 - **Phase 10 — Health checks and activation:** health outcomes, prior-route preservation, and interrupted-grace cleanup are implemented; independent verification is deferred by request.
 - **Phase 11 — Deployment controls:** API controls, retry lineage, timeline history, confirmations, actionable browser feedback, and deployment-scoped operator audit history are implemented; independent race/failure-injection verification is deferred.
 - **Phase 12 — GitHub webhooks:** verified signed pushes persist normalized retry data, idempotently create deployments, publish wake-ups, expose processing outcomes, and support scoped operator retry; independent verification is deferred.
-- **Phase 13 — Observability:** request/process metrics and correlation IDs are available; deployment/queue/health metrics, traces, and dashboards remain.
+- **Phase 13 — Observability:** route-level API metrics, worker lifecycle/health metrics, request timing, and a provisioned local Prometheus/Grafana dashboard are implemented; independent verification and distributed tracing remain.
+- **Phase 14 — Failure recovery:** reconciliation now inventories managed Docker containers, protects containers with durable runtime leases, cleans unrecorded or terminal resources, and retains cleanup failure state; broader interruption coverage and independent verification remain.
+- **Phase 15 — User experience and accessibility:** operators can start a deployment for an exact commit SHA and inspect bounded retained build output in the project timeline; runtime log viewing, demonstration flow, and independent accessibility/user-flow verification remain.
+- **Phase 16 — Benchmarks and public release:** a bounded loopback API liveness benchmark and public release checklist are available; deployment benchmarks, measured results, and clean-release evidence remain.
 
 ### Planned later
 
-- Phases 14–16 below.
+- Remaining exit-gate work listed in Phases 10–16 below.
 
 ### Not currently planned
 
@@ -235,35 +238,35 @@ Exit gate: independently verify invalid, duplicate, unsupported, oversized, retr
 
 ### Phase 13 — Observability
 
-**Status:** In progress
+**Status:** In progress — implementation complete; independent verification deferred by request
 
-Structured logs and worker health are available, and the API plus worker now expose bounded Prometheus-compatible process/request metrics, worker reconciliation counters, and API request correlation IDs. Deployment/health metrics, distributed traces, and Grafana evidence remain to be implemented.
+Structured logs and worker health are available. API/worker metrics now include bounded request and webhook counters/histograms, active jobs, reconciliation, health-check outcomes/latency, and runtime failures. A loopback-only optional Compose overlay provisions Prometheus and Grafana with a read-only data source and operations dashboard. Request IDs, work-item IDs, lifecycle events, and webhook IDs provide log/database pivots; W3C span export and remote aggregation remain unimplemented.
 
-Exit gate: an operator can explain a sample deployment and failure across logs, metrics, traces, events, and worker state without exposing canary secrets.
+Exit gate: independently verify a full deployment/failure correlation across logs, metrics, events, dashboard queries, and worker state without exposing secrets; complete distributed trace export if it remains in the selected release scope.
 
 ### Phase 14 — Failure recovery
 
-**Status:** Planned
+**Status:** In progress — managed runtime orphan recovery implemented; broader verification deferred by request
 
-Exercise API/worker/Redis/database/proxy interruption, duplicate/stale jobs, orphan resources, cleanup failures, and cancellation races; implement reconciliation gaps found.
+Worker reconciliation inventories only containers bearing LaunchRail's managed label, verifies every ownership label before removal, and preserves containers whose runtime job still has a live PostgreSQL lease. Unrecorded containers and containers attached to terminal deployments are cleaned; database cleanup state, metrics, and structured failure logs make repeated cleanup failures visible. Checkouts, BuildKit containers/images, proxy-file interruption, database/Redis outages, and control races still need their own recovery inventory and acceptance coverage.
 
-Exit gate: repeatable failure-injection tests show convergence or an explicit actionable terminal failure.
+Exit gate: repeatable failure-injection tests show convergence or an explicit actionable terminal failure for each managed resource type and interruption boundary.
 
 ### Phase 15 — User experience and accessibility
 
-**Status:** Planned
+**Status:** In progress — exact-revision manual deployment and bounded build-log viewing implemented; independent verification deferred by request
 
-Improve onboarding, empty/loading/error states, keyboard and responsive behavior, log viewing, demonstration data, and safe screenshots.
+Deployment controllers can create a deployment from a full exact commit SHA, with project/organization authorization and a durable database job before best-effort queue publication. The project timeline exposes retained, sequence-ordered build logs under organization read access. Runtime log viewing, richer onboarding/demo data, screenshot refresh, and broad keyboard/responsive/accessibility review remain.
 
-Exit gate: Playwright accessibility/user-flow checks pass and the README demonstrates a real working milestone.
+Exit gate: Playwright accessibility/user-flow checks pass, logs and deployment controls are correctly scoped, and the README demonstrates a real working milestone.
 
 ### Phase 16 — Benchmarks and public release
 
-**Status:** Planned
+**Status:** In progress — API liveness benchmark and release checklist implemented; independent evidence deferred
 
-Add repeatable API, stream, queue, transition, rollback, cache, recovery, webhook, and resource benchmarks; finalize walkthroughs and release evidence.
+The versioned `pnpm benchmark:api` scenario reports loopback health latency, throughput, status counts, and environment metadata as JSON. The public release checklist defines clean-clone, integration, recovery, benchmark, security, review, and publishing gates. Other deployment-specific performance scenarios and all measured results remain intentionally absent until run on a controlled host.
 
-Exit gate: clean setup is independently reproducible, results include methodology and environment, known limitations are current, and release notes describe user outcomes.
+Exit gate: clean setup is independently reproducible, controlled results include methodology and environment, known limitations are current, and release notes describe user outcomes.
 
 ## Change discipline
 

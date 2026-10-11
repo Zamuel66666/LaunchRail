@@ -2,7 +2,7 @@
 
 **A self-hosted platform that turns a GitHub repository into a health-checked application deployment with live logs, preview URLs, release history, and safe rollback.**
 
-> **Phases 0–9 are Available.** Phases 10–12 now include recorded health outcomes, interrupted-candidate cleanup, scoped operator audit history, and retryable GitHub delivery processing; independent verification is deferred at the user's request. Full telemetry, failure recovery, UX, and release work remain.
+> **Phases 0–9 are Available.** Phases 10–13 now include health outcomes and cleanup, operator audit history, retryable GitHub delivery processing, and a local metrics dashboard; independent verification is deferred at the user's request. Hard-crash recovery, full tracing, UX, and release work remain.
 
 ## What LaunchRail does
 
@@ -88,10 +88,15 @@ LaunchRail will use a modular monolith for the web/API boundary and a separate w
 - Runtime health failures are categorized and recorded before terminal failure, preserve the previous active release and preview route, and interrupted startup grace cleans the candidate runtime without probing or promoting it.
 - Owner/admin users can expand deployment-scoped audit entries alongside lifecycle events.
 - Signed webhook outcomes are persisted, reviewable by audit readers, and failed verified deliveries can be retried without duplicating a deployment for the same delivery/project pair.
+- The API and worker expose route, webhook, queue, runtime, and health metrics; an optional loopback-only Prometheus/Grafana overlay provisions the LaunchRail Operations dashboard.
+- Deployment controllers can start a project deployment from a full exact Git commit SHA; durable work is persisted before the best-effort queue wake-up.
+- Organization readers can open bounded, retained build output from each deployment in the project timeline.
+- Worker reconciliation inventories LaunchRail-labeled containers, protects live leased runtimes, and cleans unrecorded or terminal runtime containers with persisted cleanup outcomes.
+- `pnpm benchmark:api` emits a reproducible loopback API liveness JSON report; `docs/release-checklist.md` records the public release gates.
 
 ### Planned next
 
-- Prove deployment and webhook control races through failure-injection acceptance; then add deployment/queue/health telemetry, dashboard evidence, recovery workflows, and release readiness.
+- Complete and independently verify all recovery boundaries, operator-control races, distributed trace export, runtime log viewing, accessible onboarding, broader controlled benchmarks, and release evidence.
 
 ### Not currently planned
 
@@ -137,7 +142,7 @@ See the [development guide](docs/development.md) for verification, configuration
 - [Security policy](SECURITY.md) and [threat model](docs/threat-model.md)
 - [Roadmap](ROADMAP.md) and [changelog](CHANGELOG.md)
 - [Contributing](CONTRIBUTING.md) and [development workflow](docs/development.md)
-- [Testing strategy](docs/testing.md), [observability design](docs/observability.md), and [benchmark methodology](docs/benchmarks.md)
+- [Testing strategy](docs/testing.md), [observability and dashboard setup](docs/observability.md), and [benchmark methodology](docs/benchmarks.md)
 - [Persistence model and transaction rules](docs/persistence.md)
 - [Authentication and authorization](docs/authentication.md)
 - [Project management and secret rotation](docs/project-management.md)
@@ -145,11 +150,14 @@ See the [development guide](docs/development.md) for verification, configuration
 - [GitHub webhook delivery operations](docs/webhooks.md)
 - [Repository preparation and source security](docs/repository-preparation.md)
 - [Image builds and BuildKit boundaries](docs/image-builds.md)
+- [Observability and local dashboard setup](docs/observability.md)
+- [Benchmark methodology and API baseline](docs/benchmarks.md)
+- [Public release checklist](docs/release-checklist.md)
 - [Architecture decisions](docs/adr/)
 
 ## Current limitations
 
-LaunchRail is not production-ready. Authentication remains local-password only without password reset, invitations, MFA, SSO, or session administration. Source preparation supports unauthenticated public GitHub repositories only; private repositories, Git LFS, submodules, and external-network acceptance smoke tests are unsupported. Checkouts and images/runtimes remain on a trusted worker host; broad hard-crash orphan cleanup and route convergence under interruption still need Phase 14 acceptance. Saved secrets are not placed in Redis or injected into workloads, and automated key re-encryption is not implemented. Browser log streaming, webhook delivery-result presentation, registry publication/signing/scanning, traces, dashboards, and full telemetry remain unfinished. The BuildKit daemon and Docker host are trusted infrastructure, so current limits do not make a single-host worker a hostile multi-tenant sandbox. Application health endpoints and `pnpm smoke:health` prove process liveness only, not queue/database readiness. Manual authenticated deployment creation is not available yet; signed webhooks are the supported creation path.
+LaunchRail is not production-ready. Authentication remains local-password only without password reset, invitations, MFA, SSO, or session administration. Source preparation supports unauthenticated public GitHub repositories only; private repositories, Git LFS, submodules, and external-network acceptance smoke tests are unsupported. Runtime-container orphan cleanup is implemented, but checkout/build/image/proxy recovery and interruption acceptance remain incomplete. Saved secrets are not placed in Redis or injected into workloads, and automated key re-encryption is not implemented. Browser build logs are available as bounded retained output; runtime log streaming, registry publication/signing/scanning, distributed trace export, and remote telemetry remain unfinished. The BuildKit daemon and Docker host are trusted infrastructure, so current limits do not make a single-host worker a hostile multi-tenant sandbox. Application health endpoints and `pnpm smoke:health` prove process liveness only, not queue/database readiness. Manual deployment creation requires an exact full commit SHA from a public GitHub repository. Recent Phases 10–16 implementation changes are awaiting independent verification; no benchmark result has been published and no release is ready.
 
 ## License
 

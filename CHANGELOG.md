@@ -33,6 +33,8 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 - Added durable GitHub delivery processing outcomes, normalized retry payloads, and operator retry controls.
 - Made retried webhook events reuse their original per-project deployment instead of creating duplicate deployment history.
 - Added authenticated, organization-scoped webhook delivery history and retry presentation in the project workspace.
+- Added bounded Prometheus histograms and gauges for API latency, webhook outcomes, worker load, health checks, and runtime handoffs.
+- Added an optional loopback-only Prometheus/Grafana Compose overlay with provisioned dashboard and data source.
 - Preserved exact raw webhook request bytes during API parsing for signature verification.
 - Verified pushes now create deployment snapshots for matching configured projects and branches.
 - Unsupported GitHub event types are rejected deterministically after signature verification.
@@ -41,6 +43,11 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 - Added worker process uptime and resident-memory metrics to the health server.
 - Added worker reconciliation, dispatch, recovery, and dead-letter counters to the Prometheus metrics endpoint.
 - Blank optional GitHub webhook values in local configuration now correctly disable webhook ingestion.
+- Added worker inventory and ownership-verified cleanup for orphaned or terminal LaunchRail runtime containers, preserving containers protected by unexpired runtime leases.
+- Persisted runtime cleanup completion/failure state and exposed bounded orphan-cleanup metrics and warning logs for later reconciliation.
+- Added authenticated exact-commit deployment creation for deployment controllers with database-authoritative claim creation and queue reconciliation fallback.
+- Added organization-scoped, sequence-ordered API access to retained build output and lazy build-log viewing in the project deployment timeline.
+- Added the dependency-free loopback API liveness benchmark command and a public release readiness checklist.
 
 - Plain-language product scope, target users, core workflow, success criteria, and explicit non-goals.
 - Initial architecture for the web application, API, worker, persistence, queue, build/runtime, routing, and observability boundaries.

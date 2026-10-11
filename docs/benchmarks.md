@@ -57,6 +57,8 @@ pnpm benchmark:api --requests=1000 --concurrency=10 --warmup=100
 
 The default target is `http://127.0.0.1:4000/health`. `LAUNCHRAIL_BENCHMARK_URL` may select another IPv4/IPv6 loopback `/health` URL only. The command emits one JSON report with request count, concurrency, throughput, median/p95 latency, response codes, Node/platform metadata, current Git commit and working-tree cleanliness when available, operating system, CPU model/count, memory, and run time. `LAUNCHRAIL_BENCHMARK_COMMIT` may explicitly provide the full lowercase SHA when the script runs outside the checkout. It deliberately does not save a result file; retain the stdout artifact alongside kernel, storage, API configuration, service versions, and host load if publishing a result. The health endpoint measures process liveness only.
 
+Latency includes consuming the complete response body, not merely receiving headers. Correctness requires the API health JSON fields (`service`, `status`, `version`, and `timestamp`), not just HTTP 200. Invalid bodies and transport failures are counted separately from non-2xx responses; transport failures use status 0. Warm-up correctness failures are also recorded. Any invalid or failed warm-up or measured response makes the command exit unsuccessfully while preserving the report.
+
 ### End-to-end deployment baseline
 
 This scenario creates a real deployment and may activate it, replacing the project's current

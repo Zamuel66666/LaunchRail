@@ -38,13 +38,22 @@ if (
 
 async function request() {
   const started = performance.now();
-  const response = await fetch(target, {
-    headers: { accept: "application/json" },
-    signal: AbortSignal.timeout(10_000),
-  });
-  const latencyMs = performance.now() - started;
-  await response.arrayBuffer();
-  return { latencyMs, status: response.status };
+  try {
+    const response = await fetch(target, {
+      headers: { accept: "application/json" },
+      signal: AbortSignal.timeout(10_000),
+    });
+    const body = await response.json().catch(() => null);
+    const valid =
+      response.ok &&
+      body?.service === "api" &&
+      body?.status === "ok" &&
+      typeof body?.version === "string" &&
+      typeof body?.timestamp === "string";
+    return { latencyMs: performance.now() - started, status: response.status, valid };
+  } catch {
+    return { latencyMs: performance.now() - started, status: 0, valid: false };
+  }
 }
 
 async function run(count, workers) {
@@ -61,7 +70,7 @@ async function run(count, workers) {
   return results;
 }
 
-await run(warmup, concurrency);
+const warmupResults = await run(warmup, concurrency);
 const startedAt = new Date().toISOString();
 const started = performance.now();
 const results = await run(requests, concurrency);
@@ -69,7 +78,8 @@ const elapsedSeconds = (performance.now() - started) / 1_000;
 const sorted = results.map((result) => result.latencyMs).sort((left, right) => left - right);
 const percentile = (fraction) =>
   sorted[Math.min(sorted.length - 1, Math.ceil(fraction * sorted.length) - 1)];
-const errors = results.filter((result) => result.status < 200 || result.status >= 300).length;
+const errors = results.filter((result) => !result.valid).length;
+const warmupErrors = warmupResults.filter((result) => !result.valid).length;
 
 process.stdout.write(
   `${JSON.stringify(
@@ -93,7 +103,10 @@ process.stdout.write(
         p95: Number(percentile(0.95).toFixed(3)),
         max: Number(sorted.at(-1).toFixed(3)),
       },
-      non2xxResponses: errors,
+      non2xxResponses: results.filter((result) => result.status < 200 || result.status >= 300)
+        .length,
+      invalidOrFailedResponses: errors,
+      warmupInvalidOrFailedResponses: warmupErrors,
       statusCounts: Object.fromEntries(
         [...new Set(results.map((result) => result.status))]
           .sort()
@@ -109,4 +122,4 @@ process.stdout.write(
   )}\n`,
 );
 
-if (errors > 0) process.exitCode = 1;
+if (errors > 0 || warmupErrors > 0) process.exitCode = 1;

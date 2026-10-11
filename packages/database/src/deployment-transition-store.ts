@@ -10,6 +10,7 @@ import {
   requiresFailureDetails,
   type DeploymentState,
 } from "@launchrail/domain";
+import type { MetricsRegistry } from "@launchrail/observability";
 import { and, desc, eq, sql } from "drizzle-orm";
 
 import type { LaunchRailDatabase } from "./client.js";
@@ -26,6 +27,16 @@ import { DeploymentNotFoundError, DeploymentPersistenceConflictError } from "./e
 
 type PersistedTransitionResult = Omit<DeploymentTransitionResult, "idempotentReplay">;
 type LaunchRailTransaction = Parameters<Parameters<LaunchRailDatabase["transaction"]>[0]>[0];
+type FinalDeploymentOutcome =
+  "active" | "build_failed" | "cancelled" | "deployment_failed" | "rolled_back" | "stopped";
+const finalDeploymentStates = new Set<DeploymentState>([
+  "active",
+  "build_failed",
+  "cancelled",
+  "deployment_failed",
+  "rolled_back",
+  "stopped",
+]);
 
 async function readDatabaseClock(transaction: LaunchRailTransaction): Promise<Date> {
   const result = await transaction.execute<{ now_milliseconds: number }>(
@@ -258,14 +269,55 @@ export async function transitionDeploymentInTransaction(
 }
 
 export class PostgresDeploymentTransitionStore implements DeploymentTransitionStore {
-  public constructor(private readonly db: LaunchRailDatabase) {}
+  public constructor(
+    private readonly db: LaunchRailDatabase,
+    private readonly metrics?: MetricsRegistry,
+  ) {}
+
+  private async recordFinalOutcome(
+    deploymentId: string,
+    organizationId: string,
+    outcome: FinalDeploymentOutcome,
+  ): Promise<void> {
+    if (this.metrics === undefined) return;
+    this.metrics.increment("launchrail_deployment_final_outcomes_total", { outcome });
+    try {
+      const [deployment] = await this.db
+        .select({
+          createdAt: deployments.createdAt,
+          finishedAt: deployments.finishedAt,
+          healthCheckedAt: deployments.healthCheckedAt,
+          updatedAt: deployments.updatedAt,
+        })
+        .from(deployments)
+        .where(
+          and(eq(deployments.id, deploymentId), eq(deployments.organizationId, organizationId)),
+        );
+      if (deployment === undefined) return;
+      const completedAt =
+        outcome === "active"
+          ? (deployment.healthCheckedAt ?? deployment.updatedAt)
+          : (deployment.finishedAt ?? deployment.updatedAt);
+      this.metrics.observe(
+        "launchrail_deployment_lifecycle_duration_seconds",
+        Math.max(0, completedAt.getTime() - deployment.createdAt.getTime()) / 1_000,
+        { outcome },
+        [1, 5, 15, 30, 60, 120, 300, 600, 1_200, 3_600],
+      );
+    } catch {
+      this.metrics.increment("launchrail_deployment_metric_recording_failures_total");
+    }
+  }
 
   public async transition(
     command: TransitionDeploymentCommand,
   ): Promise<DeploymentTransitionResult> {
-    return this.db.transaction((transaction) =>
+    const result = await this.db.transaction((transaction) =>
       transitionDeploymentInTransaction(transaction, command),
     );
+    if (!result.idempotentReplay && finalDeploymentStates.has(command.to))
+      await this.recordFinalOutcome(command.deploymentId, command.organizationId, command.to);
+    return result;
   }
 
   public async listEvents(query: {
@@ -328,7 +380,7 @@ export class PostgresDeploymentTransitionStore implements DeploymentTransitionSt
       throw new DeploymentPersistenceConflictError("Idempotency key cannot be blank");
     }
 
-    return this.db.transaction(async (transaction) => {
+    const result = await this.db.transaction(async (transaction) => {
       const [candidate] = await transaction
         .select()
         .from(deployments)
@@ -501,12 +553,15 @@ export class PostgresDeploymentTransitionStore implements DeploymentTransitionSt
 
       return freshResult(result);
     });
+    if (!result.idempotentReplay)
+      await this.recordFinalOutcome(command.deploymentId, command.organizationId, "active");
+    return result;
   }
 
   public async rollback(command: RollbackDeploymentCommand): Promise<DeploymentTransitionResult> {
     if (command.idempotencyKey.trim().length === 0)
       throw new DeploymentPersistenceConflictError("Idempotency key cannot be blank");
-    return this.db.transaction(async (transaction) => {
+    const result = await this.db.transaction(async (transaction) => {
       const [current] = await transaction
         .select()
         .from(deployments)
@@ -634,5 +689,8 @@ export class PostgresDeploymentTransitionStore implements DeploymentTransitionSt
       });
       return freshResult(result);
     });
+    if (!result.idempotentReplay)
+      await this.recordFinalOutcome(command.deploymentId, command.organizationId, "rolled_back");
+    return result;
   }
 }

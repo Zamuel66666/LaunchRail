@@ -25,6 +25,7 @@ interface BuildServerOptions {
   readonly cookieName?: string;
   readonly identityStore?: IdentityStore;
   readonly logger?: FastifyServerOptions["logger"];
+  readonly metrics?: MetricsRegistry;
   readonly now?: () => Date;
   readonly projectStore?: ProjectManagementStore;
   readonly deploymentStore?: DeploymentJobStore;
@@ -55,6 +56,7 @@ export function buildServer({
   cookieName = "launchrail_session",
   identityStore,
   logger = false,
+  metrics: suppliedMetrics,
   now,
   projectStore,
   deploymentStore,
@@ -79,7 +81,7 @@ export function buildServer({
     bodyLimit: 131_072,
     logger,
   });
-  const metrics = new MetricsRegistry();
+  const metrics = suppliedMetrics ?? new MetricsRegistry();
   server.addHook("preParsing", async (request, _reply, payload) => {
     if (request.url !== "/v1/webhooks/github") return payload;
     const chunks: Buffer[] = [];

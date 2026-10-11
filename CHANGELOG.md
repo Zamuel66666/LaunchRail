@@ -76,6 +76,7 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 - The guided demo now includes a first-run checklist and explicit product limits, and the web app provides a keyboard skip link to main content.
 - The guarded deployment benchmark now reports event-derived stage intervals and median/p95 summaries across explicitly opted-in sequential runs, with each run's mutating side effects visible.
 - API and worker PostgreSQL adapter calls now emit bounded method-level spans without SQL statements or bind parameters.
+- API and worker metrics now include deployment final-outcome totals and lifecycle duration histograms, with hourly dashboard panels.
 
 - Plain-language product scope, target users, core workflow, success criteria, and explicit non-goals.
 - Initial architecture for the web application, API, worker, persistence, queue, build/runtime, routing, and observability boundaries.

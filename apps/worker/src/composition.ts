@@ -75,7 +75,7 @@ export function createDeploymentWorkerComponents({
 }: CreateDeploymentWorkerComponentsOptions): DeploymentWorkerComponents {
   const store = traceDatabaseStore(new PostgresDeploymentJobStore(database), "deployment_jobs");
   const transitionStore = traceDatabaseStore(
-    new PostgresDeploymentTransitionStore(database),
+    new PostgresDeploymentTransitionStore(database, metrics),
     "deployment_transitions",
   );
   const deploymentRuntimeManager =

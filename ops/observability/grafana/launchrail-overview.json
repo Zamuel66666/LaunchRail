@@ -480,6 +480,36 @@
       ],
       "title": "Route configuration repairs and health grace exhaustion",
       "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "launchrail-prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 144 },
+      "id": 31,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, outcome) (rate(launchrail_deployment_lifecycle_duration_seconds_bucket[1h])))",
+          "legendFormat": "{{outcome}} p95",
+          "refId": "A"
+        }
+      ],
+      "title": "Deployment lifecycle duration (p95, hourly)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "launchrail-prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 144 },
+      "id": 32,
+      "targets": [
+        {
+          "expr": "sum by (outcome) (increase(launchrail_deployment_final_outcomes_total[1h]))",
+          "legendFormat": "{{outcome}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Deployment final outcomes (hourly)",
+      "type": "timeseries"
     }
   ],
   "refresh": "30s",

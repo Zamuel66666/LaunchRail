@@ -1,7 +1,7 @@
 import { tracingRuntime } from "./tracing-bootstrap.js";
 
 import { ConfigurationError, loadApiConfig } from "@launchrail/config";
-import { serviceLoggerOptions } from "@launchrail/observability";
+import { MetricsRegistry, serviceLoggerOptions } from "@launchrail/observability";
 import {
   AesGcmSecretCipher,
   createDatabaseClient,
@@ -44,6 +44,7 @@ async function readBoundedResponse(response: Response, maximumBytes: number): Pr
 async function main(): Promise<void> {
   const config = loadApiConfig();
   const databaseClient = createDatabaseClient(config.DATABASE_URL);
+  const metrics = new MetricsRegistry();
   const identityStore = traceDatabaseStore(
     new PostgresIdentityStore(databaseClient.db, {
       absoluteTtlMs: config.SESSION_ABSOLUTE_TTL_HOURS * 60 * 60 * 1000,
@@ -64,7 +65,7 @@ async function main(): Promise<void> {
     "deployment_jobs",
   );
   const transitionStore = traceDatabaseStore(
-    new PostgresDeploymentTransitionStore(databaseClient.db),
+    new PostgresDeploymentTransitionStore(databaseClient.db, metrics),
     "deployment_transitions",
   );
   const webhookStore = traceDatabaseStore(
@@ -101,6 +102,7 @@ async function main(): Promise<void> {
     cookieName: config.SESSION_COOKIE_NAME,
     identityStore,
     logger: serviceLoggerOptions("api", config.LOG_LEVEL),
+    metrics,
     projectStore,
     deploymentStore,
     ...(workerInternalToken === undefined

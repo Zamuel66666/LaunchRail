@@ -19,6 +19,7 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 - Added per-deployment health attempt history to the project workspace.
 - Added durable failure recording for health timeouts, invalid responses, and unhealthy HTTP statuses before candidate promotion.
 - Added startup grace and unhealthy candidate behavior to deployment lifecycle documentation.
+- Added health-failure acceptance proving the previous active preview route remains in place and interrupted startup grace removes the unpromoted candidate without running a health probe.
 - Added confirmed cancel, stop, and rollback actions plus client-safe conflict feedback to the project deployment timeline.
 - Added on-demand recorded deployment activity to the project timeline.
 - Added worker-driven promotion after a successful bounded health check, preserving the atomic promotion path and idempotent command record.

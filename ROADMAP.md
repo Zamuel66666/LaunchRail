@@ -20,7 +20,7 @@ The roadmap reports verified repository state, not aspirations as completed feat
 
 ### In progress
 
-- **Phase 10 — Health checks and activation:** bounded checks, durable attempts, grace periods, worker-driven healthy promotion, and a workspace view of health attempts are implemented; end-to-end route preservation and interruption acceptance remain.
+- **Phase 10 — Health checks and activation:** health outcomes, prior-route preservation, and interrupted-grace cleanup are implemented; independent verification is deferred by request.
 - **Phase 11 — Deployment controls:** API controls, retry lineage, timeline history, confirmations, and actionable browser feedback are implemented; broader audit presentation and concurrency/failure-injection coverage remain.
 - **Phase 12 — GitHub webhooks:** signed push ingestion creates matching queued deployment snapshots; direct queue publication and richer delivery processing remain.
 - **Phase 13 — Observability:** request/process metrics and correlation IDs are available; deployment/queue/health metrics, traces, and dashboards remain.
@@ -52,7 +52,7 @@ Versions and contents may change as implementation evidence becomes available. P
 
 ### Phase 0 — Product definition
 
-**Status:** Available
+**Status:** In progress — implementation complete; independent verification deferred by request
 
 Delivered:
 
@@ -206,13 +206,16 @@ Exit gate: local preview routing works after proxy/worker restart and cannot cro
 
 ### Phase 10 — Health checks and activation
 
-**Status:** In progress
+**Status:** In progress — implementation complete; independent verification deferred by request
 
-The runtime boundary includes a bounded loopback-only HTTP checker with strict path, port, timeout, and response validation. Durable health attempts record both HTTP responses and failed probes, with distinct timeout, invalid-response, and unhealthy categories. Configurable grace periods and worker-driven promotion are available, and the workspace displays recorded health attempts alongside each deployment. End-to-end route-preservation and interruption acceptance remain.
+Delivered:
 
-Add configurable HTTP checks, grace periods, atomic healthy promotion, previous-release preservation, and detailed health presentation.
+- Bounded loopback-only HTTP checks with strict path, port, timeout, and response validation; durable attempts distinguish timeout, invalid response, unhealthy status, and passing status.
+- Configurable startup grace, worker-driven promotion only after a passing check, and terminal candidate cleanup/failure when checks do not pass.
+- Transactional failure coverage proving an unhealthy candidate leaves the prior active release and preview route untouched; interruption during startup grace cleans up the candidate without probing or promoting it.
+- On-demand deployment-health history in the workspace with response status, duration, timestamp, and loading/empty/error states.
 
-Exit gate: delayed and unhealthy examples prove that only healthy candidates become active and failed candidates leave the previous route intact.
+Implementation evidence: unit and PostgreSQL acceptance cases cover delayed checks, health classification, failed-candidate route preservation, and interrupted-grace cleanup. Run these suites and the constrained runtime acceptance before marking the phase Available.
 
 ### Phase 11 — Deployment controls
 

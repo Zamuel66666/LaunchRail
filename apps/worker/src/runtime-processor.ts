@@ -185,6 +185,21 @@ export class DeploymentRuntimeProcessor {
         if (signal.aborted) return "interrupted";
         return await this.persistFailure(lease, safeFailure(error), signal);
       }
+      const stopStartedRuntime = async (): Promise<void> => {
+        const cleanupSignal = signal.aborted ? new AbortController().signal : signal;
+        await this.options.runtimeManager
+          .stop({
+            containerId: started.containerId,
+            identity: {
+              deploymentId: loaded.runtime.deploymentId,
+              organizationId: loaded.runtime.organizationId,
+              projectId: loaded.runtime.projectId,
+              workItemId: loaded.runtime.workItemId,
+            },
+            signal: cleanupSignal,
+          })
+          .catch(() => undefined);
+      };
       try {
         if (this.options.healthCheck === undefined)
           return await this.completeRuntime(lease, loaded, started);
@@ -227,18 +242,7 @@ export class DeploymentRuntimeProcessor {
           statusCode: health.statusCode,
         });
         if (health.statusCode < 200) {
-          await this.options.runtimeManager
-            .stop({
-              containerId: started.containerId,
-              identity: {
-                deploymentId: loaded.runtime.deploymentId,
-                organizationId: loaded.runtime.organizationId,
-                projectId: loaded.runtime.projectId,
-                workItemId: loaded.runtime.workItemId,
-              },
-              signal,
-            })
-            .catch(() => undefined);
+          await stopStartedRuntime();
           if (signal.aborted) return "interrupted";
           return await this.persistFailure(
             lease,
@@ -251,18 +255,7 @@ export class DeploymentRuntimeProcessor {
           );
         }
         if (health.statusCode >= 400) {
-          await this.options.runtimeManager
-            .stop({
-              containerId: started.containerId,
-              identity: {
-                deploymentId: loaded.runtime.deploymentId,
-                organizationId: loaded.runtime.organizationId,
-                projectId: loaded.runtime.projectId,
-                workItemId: loaded.runtime.workItemId,
-              },
-              signal,
-            })
-            .catch(() => undefined);
+          await stopStartedRuntime();
           if (signal.aborted) return "interrupted";
           return await this.persistFailure(
             lease,
@@ -275,18 +268,7 @@ export class DeploymentRuntimeProcessor {
           );
         }
       } catch (error) {
-        await this.options.runtimeManager
-          .stop({
-            containerId: started.containerId,
-            identity: {
-              deploymentId: loaded.runtime.deploymentId,
-              organizationId: loaded.runtime.organizationId,
-              projectId: loaded.runtime.projectId,
-              workItemId: loaded.runtime.workItemId,
-            },
-            signal,
-          })
-          .catch(() => undefined);
+        await stopStartedRuntime();
         if (signal.aborted) return "interrupted";
         return await this.persistFailure(lease, safeFailure(error), signal);
       }
@@ -300,18 +282,7 @@ export class DeploymentRuntimeProcessor {
             { hostPort: started.hostPort },
           );
         } catch (error) {
-          await this.options.runtimeManager
-            .stop({
-              containerId: started.containerId,
-              identity: {
-                deploymentId: loaded.runtime.deploymentId,
-                organizationId: loaded.runtime.organizationId,
-                projectId: loaded.runtime.projectId,
-                workItemId: loaded.runtime.workItemId,
-              },
-              signal,
-            })
-            .catch(() => undefined);
+          await stopStartedRuntime();
           return await this.persistFailure(
             lease,
             {

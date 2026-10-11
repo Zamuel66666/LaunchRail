@@ -1465,7 +1465,23 @@ describeWithDatabase("PostgresDeploymentJobStore", () => {
   });
 
   it("dead-letters a runtime health failure with its specific category", async () => {
-    const deployment = await seedDeployment();
+    const active = await seedDeployment({ state: "active" });
+    await client.db.insert(schema.activeReleases).values({
+      deploymentId: active.deploymentId,
+      organizationId: active.organizationId,
+      projectId: active.projectId,
+    });
+    const activeRoute = {
+      deploymentId: active.deploymentId,
+      hostname: `d-${active.deploymentId}.localhost`,
+      hostPort: 43_121,
+      organizationId: active.organizationId,
+    } as const;
+    await client.db.insert(schema.previewRoutes).values(activeRoute);
+    const deployment = await seedDeployment({
+      organizationId: active.organizationId,
+      projectId: active.projectId,
+    });
     const { buildJob, source } = await enterBuilding(deployment);
     const buildClaim = await claim(buildJob.id, { expectedKind: "deployment.build" });
     if (buildClaim.kind !== "claimed") throw new Error("Expected build work lease");
@@ -1514,6 +1530,18 @@ describeWithDatabase("PostgresDeploymentJobStore", () => {
         .from(schema.deployments)
         .where(eq(schema.deployments.id, deployment.deploymentId)),
     ).resolves.toEqual([{ failureCategory: "health_timeout", state: "deployment_failed" }]);
+    await expect(
+      client.db
+        .select({ deploymentId: schema.activeReleases.deploymentId })
+        .from(schema.activeReleases)
+        .where(eq(schema.activeReleases.projectId, active.projectId)),
+    ).resolves.toEqual([{ deploymentId: active.deploymentId }]);
+    await expect(
+      client.db
+        .select()
+        .from(schema.previewRoutes)
+        .where(eq(schema.previewRoutes.deploymentId, active.deploymentId)),
+    ).resolves.toEqual([expect.objectContaining(activeRoute)]);
     await expect(
       client.db
         .select({

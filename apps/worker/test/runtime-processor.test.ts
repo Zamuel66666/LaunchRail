@@ -45,29 +45,31 @@ function createProcessor(
   healthCheck: () => Promise<{ durationMs: number; statusCode: number }>,
   healthGraceMs = 0,
 ) {
+  const check = vi.fn(healthCheck);
   const recordHealthCheck = vi.fn(async () => undefined);
   const failRuntime = vi.fn(async () => ({
     attemptCount: 1,
     kind: "dead_lettered" as const,
     transition: {} as never,
   }));
-  const stop = vi.fn(async () => undefined);
+  const stop = vi.fn(async (_command: { readonly signal: AbortSignal }) => undefined);
   const promote = vi.fn(async () => ({}) as never);
+  const start = vi.fn(async () => ({
+    containerId: "a".repeat(64),
+    hostPort: 40_000,
+    resourceMetadata: {},
+  }));
   const processor = new DeploymentRuntimeProcessor({
     backoffBaseMs: 100,
     backoffCapMs: 1_000,
     heartbeatIntervalMs: 60_000,
-    healthCheck: healthCheck as never,
+    healthCheck: check as never,
     healthGraceMs,
     jobTimeoutMs: 10_000,
     leaseDurationMs: 60_000,
     logger: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
     runtimeManager: {
-      start: vi.fn(async () => ({
-        containerId: "a".repeat(64),
-        hostPort: 40_000,
-        resourceMetadata: {},
-      })),
+      start,
       stop,
     } as never,
     store: {
@@ -87,7 +89,7 @@ function createProcessor(
     },
     workerId: "worker-test",
   });
-  return { failRuntime, processor, promote, recordHealthCheck, stop };
+  return { check, failRuntime, processor, promote, recordHealthCheck, start, stop };
 }
 
 describe("DeploymentRuntimeProcessor health gate", () => {
@@ -172,5 +174,23 @@ describe("DeploymentRuntimeProcessor health gate", () => {
     await expect(processor.process(job, new AbortController().signal)).resolves.toBe("completed");
 
     expect(checkedAt - startedAt).toBeGreaterThanOrEqual(25);
+  });
+
+  it("cleans up the candidate when interrupted during startup grace without probing or promoting", async () => {
+    const controller = new AbortController();
+    const { check, failRuntime, processor, promote, recordHealthCheck, start, stop } =
+      createProcessor(async () => ({ durationMs: 1, statusCode: 204 }), 10_000);
+    const processing = processor.process(job, controller.signal);
+
+    await vi.waitFor(() => expect(start).toHaveBeenCalledOnce());
+    controller.abort(new Error("Worker is shutting down"));
+
+    await expect(processing).resolves.toBe("interrupted");
+    expect(check).not.toHaveBeenCalled();
+    expect(recordHealthCheck).not.toHaveBeenCalled();
+    expect(failRuntime).not.toHaveBeenCalled();
+    expect(promote).not.toHaveBeenCalled();
+    expect(stop).toHaveBeenCalledOnce();
+    expect(stop.mock.calls[0]?.[0].signal.aborted).toBe(false);
   });
 });

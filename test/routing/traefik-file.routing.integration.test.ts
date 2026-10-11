@@ -41,7 +41,7 @@ describe("Traefik file-provider routing", () => {
 
   beforeAll(async () => {
     await mkdir(configurationDirectory, { recursive: true, mode: 0o700 });
-    await new Promise<void>((resolveListen) => server.listen(0, "0.0.0.0", resolveListen));
+    await new Promise<void>((resolveListen) => server.listen(0, "127.0.0.1", resolveListen));
     const address = server.address();
     if (address === null || typeof address === "string")
       throw new Error("Fixture server did not receive a TCP port");

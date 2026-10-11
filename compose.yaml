@@ -63,20 +63,25 @@ services:
     command:
       - --providers.file.directory=/etc/traefik/dynamic
       - --providers.file.watch=true
-      - --entrypoints.web.address=:80
+      - --entrypoints.web.address=127.0.0.1:${TRAEFIK_PORT:-8080}
+      - --entrypoints.traefik.address=127.0.0.1:${TRAEFIK_HEALTH_PORT:-18082}
       - --ping=true
       - --accesslog=false
       - --api=false
-    extra_hosts:
-      - host.docker.internal:host-gateway
+    network_mode: host
     healthcheck:
-      test: [CMD, traefik, healthcheck, --ping]
+      test:
+        [
+          CMD,
+          traefik,
+          healthcheck,
+          --ping,
+          "--entrypoints.traefik.address=127.0.0.1:${TRAEFIK_HEALTH_PORT:-18082}",
+        ]
       interval: 2s
       timeout: 3s
       retries: 15
       start_period: 3s
-    ports:
-      - 127.0.0.1:${TRAEFIK_PORT:-8080}:80
     restart: unless-stopped
     volumes:
       - ${TRAEFIK_DYNAMIC_CONFIG_DIR:-./.launchrail/traefik}:/etc/traefik/dynamic

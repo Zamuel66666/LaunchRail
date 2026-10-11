@@ -104,7 +104,7 @@ jobs:
         run: test "$(docker compose exec -T redis redis-cli ping)" = PONG
 
       - name: Verify Traefik
-        run: docker compose exec -T traefik traefik healthcheck --ping
+        run: docker compose exec -T traefik traefik healthcheck --ping --entrypoints.traefik.address=127.0.0.1:18082
 
       - name: Apply clean PostgreSQL migrations
         run: pnpm db:migrate

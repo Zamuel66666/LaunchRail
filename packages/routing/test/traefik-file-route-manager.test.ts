@@ -16,7 +16,7 @@ describe("TraefikFileRouteManager", () => {
       const manager = new TraefikFileRouteManager({ configurationDirectory: directory });
       await manager.apply(route, { hostPort: 43_123 });
       const file = join(directory, `launchrail-${deploymentId}.yaml`);
-      await expect(readFile(file, "utf8")).resolves.toContain("http://host.docker.internal:43123");
+      await expect(readFile(file, "utf8")).resolves.toContain("http://127.0.0.1:43123");
       expect((await stat(file)).mode & 0o077).toBe(0);
       await manager.remove(route);
       await expect(stat(file)).rejects.toMatchObject({ code: "ENOENT" });

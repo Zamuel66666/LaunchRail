@@ -81,7 +81,7 @@ export class TraefikFileRouteManager implements RouteManager {
       throw new RangeError("Traefik configuration directory must be an absolute non-root path");
     }
     this.configurationDirectory = options.configurationDirectory;
-    this.upstreamHost = options.upstreamHost ?? "host.docker.internal";
+    this.upstreamHost = options.upstreamHost ?? "127.0.0.1";
     if (!/^[a-z0-9.-]{1,253}$/u.test(this.upstreamHost)) {
       throw new RangeError("Traefik upstream host must be a safe DNS name");
     }

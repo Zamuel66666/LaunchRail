@@ -58,9 +58,20 @@ if (!Number.isSafeInteger(runCount) || runCount < 1 || runCount > 10)
   throw new RangeError("Benchmark run count must be between 1 and 10");
 
 const apiBase = api.origin;
+const webOrigin = new URL(process.env.WEB_ORIGIN ?? "http://localhost:3000");
+if (
+  !["http:", "https:"].includes(webOrigin.protocol) ||
+  webOrigin.username !== "" ||
+  webOrigin.password !== "" ||
+  webOrigin.pathname !== "/" ||
+  webOrigin.search !== "" ||
+  webOrigin.hash !== ""
+)
+  throw new Error("WEB_ORIGIN must be an HTTP(S) origin without credentials or path data");
 const cookieHeaders = {
   accept: "application/json",
   cookie: sessionCookie,
+  origin: webOrigin.origin,
 };
 
 async function request(path, options = {}) {

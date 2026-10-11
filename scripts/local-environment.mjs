@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { chmod, lstat, mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, readFile, realpath, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, parse, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -10,6 +10,17 @@ export async function privateDirectory(path) {
     throw new Error(
       "Local infrastructure paths must be absolute, normalized, non-root directories",
     );
+  let ancestor = path;
+  while (true) {
+    try {
+      if ((await realpath(ancestor)) !== ancestor)
+        throw new Error("Local infrastructure paths may not contain symlinked directories");
+      break;
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+      ancestor = dirname(ancestor);
+    }
+  }
   await mkdir(path, { recursive: true, mode: 0o700 });
   const stats = await lstat(path);
   if (!stats.isDirectory() || stats.isSymbolicLink() || stats.uid !== process.getuid())
@@ -43,6 +54,7 @@ export async function prepareEnvironment() {
 }
 
 export async function prepareServices() {
+  await privateDirectory(resolve(projectRoot, ".launchrail"));
   const directory = resolve(
     projectRoot,
     process.env.TRAEFIK_DYNAMIC_CONFIG_DIR ?? ".launchrail/traefik",

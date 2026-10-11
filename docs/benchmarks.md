@@ -69,6 +69,7 @@ and run once:
 
 ```bash
 export LAUNCHRAIL_BENCHMARK_API_URL='http://127.0.0.1:4000'
+export WEB_ORIGIN='http://localhost:3000' # Must match the API's configured mutation origin.
 export LAUNCHRAIL_BENCHMARK_ORGANIZATION_ID='00000000-0000-4000-8000-000000000001'
 export LAUNCHRAIL_BENCHMARK_PROJECT_ID='00000000-0000-4000-8000-000000000002'
 export LAUNCHRAIL_BENCHMARK_SOURCE_REVISION='<full-lowercase-commit-sha>'

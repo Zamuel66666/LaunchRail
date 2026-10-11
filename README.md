@@ -2,7 +2,7 @@
 
 **A self-hosted platform that turns a GitHub repository into a health-checked application deployment with live logs, preview URLs, release history, and safe rollback.**
 
-> **Phases 0–9 are Available.** Phases 10–16 now include health outcomes, operator audit and webhook recovery, local dashboards and W3C trace export, lease-aware resource cleanup, exact-commit deployments, bounded build/runtime log viewing, and release tooling. Independent verification is deferred at the user's request; broader recovery, accessible onboarding, deployment benchmarks, and release evidence remain.
+> **Phases 0–9 are Available.** Phases 10–16 now include health outcomes, operator audit and webhook recovery, local dashboards and W3C trace export, lease-aware resource cleanup, exact-commit deployments, bounded build/runtime log viewing, a guided demo, and opt-in deployment benchmarking. Independent verification is deferred at the user's request; broad recovery coverage, accessibility review, benchmark results, and release evidence remain.
 
 ## What LaunchRail does
 
@@ -84,7 +84,7 @@ LaunchRail will use a modular monolith for the web/API boundary and a separate w
 - Authenticated deployment controls expose bounded health/event history, retry lineage, promote, cancel, stop, and rollback operations. The project timeline has confirmations and client-safe conflict feedback for release-changing actions.
 - Verified GitHub push webhooks are signature-checked, deduplicated, filtered to configured project branches, create immutable queued deployment snapshots, and immediately publish durable claim wake-ups; reconciliation remains the safe fallback if Redis is unavailable.
 - API request counters and correlation IDs plus worker process metrics are available at Prometheus-compatible metrics endpoints.
-- API database readiness and worker startup readiness are exposed separately from process liveness; optional W3C traces can be exported to a configured OTLP/HTTP collector.
+- API database readiness and worker startup readiness are exposed separately from process liveness and instrumented with bounded metrics; optional W3C traces can be exported to a configured OTLP/HTTP collector.
 - The project workspace shows each deployment's recorded health attempts and ordered lifecycle activity, and confirms stop/cancel/rollback actions before sending them.
 - Runtime health failures are categorized and recorded before terminal failure, preserve the previous active release and preview route, and interrupted startup grace cleans the candidate runtime without probing or promoting it.
 - Owner/admin users can expand deployment-scoped audit entries alongside lifecycle events.

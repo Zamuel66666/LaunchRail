@@ -130,13 +130,32 @@ export function buildServer({
 
   server.get("/health", async () => createHealthResponse({ now, service: "api", version }));
   server.get("/ready", async (_request, reply) => {
-    if (readinessCheck === undefined) return { ready: true };
+    const started = performance.now();
+    if (readinessCheck === undefined) {
+      metrics.increment("launchrail_readiness_checks_total", { service: "api", outcome: "ready" });
+      metrics.observe("launchrail_readiness_check_duration_seconds", 0, {
+        service: "api",
+        outcome: "ready",
+      });
+      return { ready: true };
+    }
+    let ready = false;
     try {
-      if (await readinessCheck()) return { ready: true };
+      ready = await readinessCheck();
     } catch {
       // Readiness deliberately returns only a generic status to avoid leaking dependency details.
     }
-    return reply.code(503).send({ ready: false });
+    const outcome = ready ? "ready" : "not_ready";
+    metrics.increment("launchrail_readiness_checks_total", { service: "api", outcome });
+    metrics.observe(
+      "launchrail_readiness_check_duration_seconds",
+      (performance.now() - started) / 1_000,
+      {
+        service: "api",
+        outcome,
+      },
+    );
+    return ready ? { ready: true } : reply.code(503).send({ ready: false });
   });
 
   if (

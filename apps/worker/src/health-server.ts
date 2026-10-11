@@ -128,6 +128,10 @@ export function createWorkerHealthServer({
     if (request.method !== "GET" || request.url !== "/health") {
       if (request.method === "GET" && request.url === "/ready") {
         const ready = readinessCheck();
+        metrics?.increment("launchrail_readiness_checks_total", {
+          service: "worker",
+          outcome: ready ? "ready" : "not_ready",
+        });
         response.writeHead(ready ? 200 : 503, {
           "content-type": "application/json; charset=utf-8",
           "cache-control": "no-store",

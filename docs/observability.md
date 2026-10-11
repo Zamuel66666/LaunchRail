@@ -39,7 +39,7 @@ Application build/runtime output is a separate bounded stream, not mixed into co
 
 Prometheus-compatible metrics will use low-cardinality labels such as service, route template, method, status class, job type, deployment stage, outcome, and failure category.
 
-The API exposes request counters/histograms and webhook processing counters/histograms at `/metrics` with bounded route-template, method, status-class, event-class, and outcome labels. The worker `/metrics` exposes process uptime/RSS, active-job gauge, reconciliation/dispatch counters, health-check counters/histograms, runtime handoff/failure counters, and orphan-runtime, source/build-stage, completed-checkout, orphan-image, and interrupted-route-file cleanup counters. Labels intentionally omit repository, organization, deployment, request, and delivery identifiers.
+The API exposes request counters/histograms and webhook processing counters/histograms at `/metrics` with bounded route-template, method, status-class, event-class, and outcome labels. API and worker readiness probes also expose bounded ready/not-ready counters; the API records readiness-check duration. The worker `/metrics` exposes process uptime/RSS, active-job gauge, reconciliation/dispatch counters, health-check counters/histograms, runtime handoff/failure counters, and orphan-runtime, source/build-stage, completed-checkout, orphan-image, and interrupted-route-file cleanup counters. Labels intentionally omit repository, organization, deployment, request, and delivery identifiers.
 
 Measurements still to add:
 
@@ -90,7 +90,7 @@ The shared redaction package sanitizes control-plane logs, deployment events, ad
 3. **Available:** safe source success/retry/dead-letter/fencing/reconciliation events and immutable preparation metadata are verified for Phase 6.
 4. Instrument API latency, verified webhook outcomes, health attempts, active work, and runtime outcomes with low-cardinality metrics.
 5. Provision an optional local Prometheus/Grafana stack and version the operator dashboard.
-6. Implement W3C trace propagation/export and bounded startup/dependency-readiness endpoints; independent verification remains outstanding.
+6. W3C trace propagation/export and bounded startup/dependency-readiness endpoints are implemented; independent verification remains outstanding.
 7. Run canary-secret/cardinality reviews and demonstrate successful/failed flows before marking observability available.
 
 ## Evidence required

@@ -55,7 +55,7 @@ Start the API locally, then run:
 pnpm benchmark:api --requests=1000 --concurrency=10 --warmup=100
 ```
 
-The default target is `http://127.0.0.1:4000/health`. `LAUNCHRAIL_BENCHMARK_URL` may select another IPv4/IPv6 loopback `/health` URL only. The command emits one JSON report with request count, concurrency, throughput, median/p95 latency, response codes, Node/platform metadata, and run time. It deliberately does not save a result file; retain the stdout artifact alongside the exact commit, OS/kernel, CPU/memory/storage, API configuration, and host load if publishing a result. The health endpoint measures process liveness only.
+The default target is `http://127.0.0.1:4000/health`. `LAUNCHRAIL_BENCHMARK_URL` may select another IPv4/IPv6 loopback `/health` URL only. The command emits one JSON report with request count, concurrency, throughput, median/p95 latency, response codes, Node/platform metadata, current Git commit and working-tree cleanliness when available, operating system, CPU model/count, memory, and run time. `LAUNCHRAIL_BENCHMARK_COMMIT` may explicitly provide the full lowercase SHA when the script runs outside the checkout. It deliberately does not save a result file; retain the stdout artifact alongside kernel, storage, API configuration, service versions, and host load if publishing a result. The health endpoint measures process liveness only.
 
 ### End-to-end deployment baseline
 
@@ -86,7 +86,9 @@ summaries, and does not output the cookie. `LAUNCHRAIL_BENCHMARK_RUNS` defaults 
 at ten sequential deployment attempts. Stage intervals use database event timestamps, so missing
 events are reported as `null` and never inferred from the client poll interval. A timed-out run
 remains in progress and must be inspected or stopped through the UI before starting another. Record
-cache state, exact LaunchRail revision, service versions, resource limits, and host load separately;
+cache state, storage type, service versions, resource limits, and host load separately; the report
+includes the current Git commit and working-tree cleanliness when available plus operating system,
+CPU model/count, and memory.
 these lifecycle stages are event intervals, not isolated resource timings.
 
 1. Start from the documented clean environment and verify health.

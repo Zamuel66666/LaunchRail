@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { benchmarkEnvironment } from "./benchmark-environment.mjs";
+
 const required = [
   "LAUNCHRAIL_BENCHMARK_API_URL",
   "LAUNCHRAIL_BENCHMARK_ORGANIZATION_ID",
@@ -237,6 +239,7 @@ const report = {
   node: process.version,
   platform: process.platform,
   architecture: process.arch,
+  environment: benchmarkEnvironment(),
   sideEffects: [
     `Creates ${runCount} durable deployment(s) and associated build/runtime resources.`,
     "Each successful candidate may become active and replace the project's current active release.",

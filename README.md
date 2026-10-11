@@ -2,7 +2,7 @@
 
 **A self-hosted platform that turns a GitHub repository into a health-checked application deployment with live logs, preview URLs, release history, and safe rollback.**
 
-> **Phases 0–9 are Available.** Phases 10–16 now include health outcomes, operator audit and webhook recovery, local dashboards and W3C trace export, lease-aware resource cleanup, exact-commit deployments, bounded build/runtime log viewing, a guided demo, and opt-in deployment benchmarking. Independent verification is deferred at the user's request; broad recovery coverage, accessibility review, benchmark results, and release evidence remain.
+> **Phases 0–9 are Available.** Phases 10–16 include health outcomes, operator audit and webhook recovery, local dashboards and W3C trace export, lease-aware cleanup and missing-runtime detection, exact-commit deployments, bounded build/runtime log viewing, guided onboarding, and opt-in deployment benchmarking with per-stage summaries. Recent code also adds deployment lifecycle telemetry and starter alerts. The latest implementation changes are unverified by design; broad recovery coverage, accessibility review, controlled benchmark results, and release evidence remain.
 
 ## What LaunchRail does
 
@@ -85,15 +85,18 @@ LaunchRail will use a modular monolith for the web/API boundary and a separate w
 - Verified GitHub push webhooks are signature-checked, deduplicated, filtered to configured project branches, create immutable queued deployment snapshots, and immediately publish durable claim wake-ups; reconciliation remains the safe fallback if Redis is unavailable.
 - API request counters and correlation IDs plus worker process metrics are available at Prometheus-compatible metrics endpoints.
 - API database and worker database/Redis readiness are exposed separately from process liveness and instrumented with bounded metrics; optional W3C traces can be exported to a configured OTLP/HTTP collector.
+- Persistence-adapter spans correlate API/worker database operations without exporting SQL text, bind parameters, record IDs, or user data.
 - The project workspace shows each deployment's recorded health attempts and ordered lifecycle activity, and confirms stop/cancel/rollback actions before sending them.
 - Runtime health failures are categorized and recorded before terminal failure, preserve the previous active release and preview route, and interrupted startup grace cleans the candidate runtime without probing or promoting it.
 - Owner/admin users can expand deployment-scoped audit entries alongside lifecycle events.
 - Signed webhook outcomes are persisted, reviewable by audit readers, and failed verified deliveries can be retried without duplicating a deployment for the same delivery/project pair.
 - The API and worker expose route, webhook, queue, durable stage-outcome, build-cache, runtime/route-duration, heartbeat-age, and health metrics; an optional loopback-only Prometheus/Grafana overlay provisions the LaunchRail Operations dashboard.
+- Worker retry/timeout, build/cleanup, health-grace, orphan inventory, route-repair, and deployment-outcome telemetry is available with starter local alert rules.
 - Deployment controllers can start a project deployment from a full exact Git commit SHA; durable work is persisted before the best-effort queue wake-up.
 - Organization readers can open bounded, retained build output from each deployment in the project timeline.
 - Worker reconciliation inventories LaunchRail-labeled containers, protects live leased runtimes, and cleans unrecorded or terminal runtime containers with persisted cleanup outcomes.
 - `pnpm benchmark:api` emits a reproducible loopback API liveness JSON report; `docs/release-checklist.md` records the public release gates.
+- `pnpm benchmark:deployment` can run up to ten sequential, explicitly opted-in exact-SHA attempts and report event-derived stage durations and host metadata without saving results automatically.
 - The landing page links to a guided `/demo` walkthrough; confirmations can be dismissed with Escape, and reduced-motion preferences are honored.
 - The `/demo` walkthrough includes a first-run checklist and explicit safety boundaries; every web screen has a keyboard skip-to-main-content link.
 

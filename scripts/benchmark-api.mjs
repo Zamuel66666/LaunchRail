@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { benchmarkEnvironment } from "./benchmark-environment.mjs";
+
 const arguments_ = new Map(
   process.argv.slice(2).map((argument) => {
     const [name, value] = argument.split("=", 2);
@@ -79,6 +81,7 @@ process.stdout.write(
       node: process.version,
       platform: process.platform,
       architecture: process.arch,
+      environment: benchmarkEnvironment(),
       warmupRequests: warmup,
       measuredRequests: requests,
       concurrency,

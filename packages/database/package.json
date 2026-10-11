@@ -24,6 +24,7 @@
     "@launchrail/application": "workspace:*",
     "@launchrail/contracts": "workspace:*",
     "@launchrail/domain": "workspace:*",
+    "@launchrail/observability": "workspace:*",
     "drizzle-orm": "0.45.2",
     "pg": "8.22.0"
   },

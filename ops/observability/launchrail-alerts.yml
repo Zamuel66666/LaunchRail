@@ -2,7 +2,7 @@ groups:
   - name: launchrail-operations
     rules:
       - alert: LaunchRailWorkerUnavailable
-        expr: up{job="launchrail-worker"} == 0
+        expr: up{job="launchrail-worker"} == 0 or absent(up{job="launchrail-worker"})
         for: 1m
         labels:
           severity: critical
@@ -30,7 +30,6 @@ groups:
 
       - alert: LaunchRailDeploymentJobsDeadLettered
         expr: increase(launchrail_worker_deployment_jobs_processed_total{outcome="dead_lettered"}[15m]) > 0
-        for: 0m
         labels:
           severity: warning
         annotations:

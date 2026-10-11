@@ -69,7 +69,7 @@ export default function SignInPage() {
   }
 
   return (
-    <main className="auth-shell">
+    <main id="main-content" className="auth-shell" tabIndex={-1}>
       <section className="auth-context" aria-labelledby="auth-title">
         <Link className="wordmark" href="/">
           LaunchRail

@@ -21,6 +21,8 @@ const milestoneItems = [
   "W3C trace propagation from API requests through BullMQ into worker spans",
   "Separate API database and worker startup readiness from process liveness",
   "Worker readiness checks Docker access and bootstraps only the configured Buildx builder",
+  "Missing active Docker runtimes fail closed, release route intent is cleared, and the repair is observable",
+  "Worker retry/timeout, build and cleanup metrics plus local Prometheus alert rules",
   "Guided exact-revision demo walkthrough with explicit limitations",
   "Guarded end-to-end deployment benchmark script and a public-release checklist",
   "Reproducible API liveness benchmark output",
@@ -28,7 +30,7 @@ const milestoneItems = [
 
 export default function HomePage() {
   return (
-    <main>
+    <main id="main-content" tabIndex={-1}>
       <section className="hero" aria-labelledby="page-title">
         <p className="eyebrow">Self-hosted deployment orchestration</p>
         <h1 id="page-title">LaunchRail</h1>

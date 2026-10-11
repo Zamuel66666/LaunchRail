@@ -1,4 +1,5 @@
 export { createDatabaseClient, type DatabaseClient, type LaunchRailDatabase } from "./client.js";
+export { traceDatabaseStore } from "./tracing.js";
 export { DeploymentNotFoundError, DeploymentPersistenceConflictError } from "./errors.js";
 export {
   PostgresDeploymentJobStore,

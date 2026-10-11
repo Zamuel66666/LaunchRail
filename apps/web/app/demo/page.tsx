@@ -30,7 +30,7 @@ const steps = [
 
 export default function DemoPage() {
   return (
-    <main>
+    <main id="main-content" tabIndex={-1}>
       <section className="hero" aria-labelledby="demo-title">
         <p className="eyebrow">Guided product walkthrough</p>
         <h1 id="demo-title">A release you can follow</h1>
@@ -52,11 +52,30 @@ export default function DemoPage() {
         <p className="section-label">Before you start</p>
         <h2 id="demo-prerequisites-title">A running local installation</h2>
         <p>
-          Follow the clean setup in the development guide, create the first owner account, and sign
-          in. The demo requires Docker, PostgreSQL, Redis, a configured Buildx builder, and a public
-          repository with a runnable Dockerfile. Only use source you are authorized to build.
+          Follow the{" "}
+          <Link href="https://github.com/Zamuel66666/LaunchRail/blob/main/docs/development.md">
+            clean setup guide
+          </Link>
+          , create the first owner account, and sign in. The demo requires Docker, PostgreSQL,
+          Redis, a configured Buildx builder, and a public repository with a runnable Dockerfile.
+          Only use source you are authorized to build.
         </p>
-        <Link href="/sign-in">Open sign-in</Link>
+        <ol className="demo-checklist">
+          <li>Start PostgreSQL and Redis, then apply the database migrations.</li>
+          <li>Create the first owner and sign in to the local workspace.</li>
+          <li>Confirm Docker and the configured Buildx builder are ready in worker status.</li>
+          <li>
+            Choose a public repository whose Dockerfile listens on the configured container port.
+          </li>
+        </ol>
+        <div className="hero-actions">
+          <Link className="primary-link" href="/sign-in">
+            Sign in to continue
+          </Link>
+          <Link className="secondary-link" href="/projects">
+            Open workspace
+          </Link>
+        </div>
       </section>
 
       <section className="panel demo-panel" aria-labelledby="demo-steps-title">
@@ -74,12 +93,20 @@ export default function DemoPage() {
 
       <aside className="demo-boundary" aria-labelledby="demo-boundary-title">
         <h2 id="demo-boundary-title">What this demo does not claim</h2>
-        <p>
-          LaunchRail is not production-ready or a hostile multi-tenant build sandbox. Current limits
-          include public GitHub sources only, a trusted single Docker host, and recovery paths that
-          still need independent failure-injection verification. See the project roadmap before
-          evaluating it for production.
-        </p>
+        <ul className="demo-limitations">
+          <li>Public GitHub repositories only; private source credentials are not supported.</li>
+          <li>
+            One trusted Docker host; containers are restricted, but this is not a hostile
+            multi-tenant sandbox.
+          </li>
+          <li>
+            Keep application logs free of credentials because runtime output is
+            application-controlled.
+          </li>
+          <li>
+            Recovery, accessibility, and release evidence still require independent verification.
+          </li>
+        </ul>
         <Link href="/">Review current project status</Link>
       </aside>
     </main>

@@ -11,6 +11,7 @@ import {
   PostgresDeploymentTransitionStore,
   PostgresWebhookDeliveryStore,
   PostgresDeploymentCreationStore,
+  traceDatabaseStore,
 } from "@launchrail/database";
 import { BullMqDeploymentQueuePublisher } from "@launchrail/queue";
 import { parseDeploymentJob } from "@launchrail/contracts";
@@ -43,19 +44,37 @@ async function readBoundedResponse(response: Response, maximumBytes: number): Pr
 async function main(): Promise<void> {
   const config = loadApiConfig();
   const databaseClient = createDatabaseClient(config.DATABASE_URL);
-  const identityStore = new PostgresIdentityStore(databaseClient.db, {
-    absoluteTtlMs: config.SESSION_ABSOLUTE_TTL_HOURS * 60 * 60 * 1000,
-    idleTtlMs: config.SESSION_IDLE_TTL_MINUTES * 60 * 1000,
-  });
+  const identityStore = traceDatabaseStore(
+    new PostgresIdentityStore(databaseClient.db, {
+      absoluteTtlMs: config.SESSION_ABSOLUTE_TTL_HOURS * 60 * 60 * 1000,
+      idleTtlMs: config.SESSION_IDLE_TTL_MINUTES * 60 * 1000,
+    }),
+    "identity",
+  );
   const secretCipher = new AesGcmSecretCipher(
     config.LAUNCHRAIL_SECRET_KEYRING,
     config.LAUNCHRAIL_ACTIVE_SECRET_KEY_VERSION,
   );
-  const projectStore = new PostgresProjectManagementStore(databaseClient.db, secretCipher);
-  const deploymentStore = new PostgresDeploymentJobStore(databaseClient.db);
-  const transitionStore = new PostgresDeploymentTransitionStore(databaseClient.db);
-  const webhookStore = new PostgresWebhookDeliveryStore(databaseClient.db);
-  const deploymentCreationStore = new PostgresDeploymentCreationStore(databaseClient.db);
+  const projectStore = traceDatabaseStore(
+    new PostgresProjectManagementStore(databaseClient.db, secretCipher),
+    "projects",
+  );
+  const deploymentStore = traceDatabaseStore(
+    new PostgresDeploymentJobStore(databaseClient.db),
+    "deployment_jobs",
+  );
+  const transitionStore = traceDatabaseStore(
+    new PostgresDeploymentTransitionStore(databaseClient.db),
+    "deployment_transitions",
+  );
+  const webhookStore = traceDatabaseStore(
+    new PostgresWebhookDeliveryStore(databaseClient.db),
+    "webhooks",
+  );
+  const deploymentCreationStore = traceDatabaseStore(
+    new PostgresDeploymentCreationStore(databaseClient.db),
+    "deployment_creation",
+  );
   const deploymentPublisher = new BullMqDeploymentQueuePublisher({
     onInfrastructureEvent: (event) => {
       process.stderr.write(`LaunchRail queue ${event.component}: ${event.code}\n`);

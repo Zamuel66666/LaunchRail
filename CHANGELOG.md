@@ -72,6 +72,10 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 - Worker readiness now checks Docker daemon access and bootstraps only the configured Buildx builder, with a heartbeat-interval cache to bound probe work.
 - Reconciliation now fails an active deployment when healthy Docker inventory confirms its managed runtime is missing, while protecting live runtime leases and clearing stale route intent atomically.
 - Worker telemetry now includes build/runtime-cleanup timings, queue retry/timeout and health-grace exhaustion counters, orphan and route-repair snapshots, plus starter Prometheus alerts for actionable local operations.
+- Worker configuration now rejects health-grace/runtime budgets that cannot fit inside the durable job timeout.
+- The guided demo now includes a first-run checklist and explicit product limits, and the web app provides a keyboard skip link to main content.
+- The guarded deployment benchmark now reports event-derived stage intervals and median/p95 summaries across explicitly opted-in sequential runs, with each run's mutating side effects visible.
+- API and worker PostgreSQL adapter calls now emit bounded method-level spans without SQL statements or bind parameters.
 
 - Plain-language product scope, target users, core workflow, success criteria, and explicit non-goals.
 - Initial architecture for the web application, API, worker, persistence, queue, build/runtime, routing, and observability boundaries.

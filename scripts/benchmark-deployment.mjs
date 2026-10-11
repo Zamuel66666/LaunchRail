@@ -47,10 +47,13 @@ if (!/^launchrail_session=[A-Za-z0-9_-]{43}$/u.test(sessionCookie)) {
 
 const timeoutMs = Number(process.env.LAUNCHRAIL_BENCHMARK_TIMEOUT_MS ?? 900_000);
 const pollIntervalMs = Number(process.env.LAUNCHRAIL_BENCHMARK_POLL_INTERVAL_MS ?? 1_000);
+const runCount = Number(process.env.LAUNCHRAIL_BENCHMARK_RUNS ?? 1);
 if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 60_000 || timeoutMs > 1_800_000)
   throw new RangeError("Benchmark timeout must be between 60,000 and 1,800,000 ms");
 if (!Number.isSafeInteger(pollIntervalMs) || pollIntervalMs < 250 || pollIntervalMs > 10_000)
   throw new RangeError("Poll interval must be between 250 and 10,000 ms");
+if (!Number.isSafeInteger(runCount) || runCount < 1 || runCount > 10)
+  throw new RangeError("Benchmark run count must be between 1 and 10");
 
 const apiBase = api.origin;
 const cookieHeaders = {
@@ -76,55 +79,148 @@ async function request(path, options = {}) {
 }
 
 const deploymentPath = `/v1/organizations/${organizationId}/deployments`;
-const createdAtClock = performance.now();
 const wallStart = new Date().toISOString();
-const created = await request(deploymentPath, {
-  method: "POST",
-  headers: { "content-type": "application/json" },
-  body: JSON.stringify({ projectId, sourceRevision }),
-});
-if (
-  typeof created !== "object" ||
-  created === null ||
-  typeof created.deployment !== "object" ||
-  created.deployment === null ||
-  typeof created.deployment.deploymentId !== "string" ||
-  !uuid.test(created.deployment.deploymentId)
-) {
-  throw new Error("LaunchRail API did not return a valid deployment identity");
-}
-const deploymentId = created.deployment.deploymentId;
 const listPath = `/v1/organizations/${organizationId}/projects/${projectId}/deployments?limit=200`;
-const deadline = Date.now() + timeoutMs;
-let finalState = "queued";
-let deploymentDurationMs = null;
-while (Date.now() < deadline) {
-  const history = await request(listPath);
-  if (!Array.isArray(history?.deployments))
-    throw new Error("LaunchRail API returned an invalid deployment history");
-  const deployment = history.deployments.find((item) => item?.deploymentId === deploymentId);
-  if (deployment !== undefined) {
-    finalState = deployment.state;
-    if (
-      [
-        "active",
-        "build_failed",
-        "deployment_failed",
-        "cancelled",
-        "rolled_back",
-        "stopped",
-        "superseded",
-      ].includes(finalState)
-    ) {
-      deploymentDurationMs = performance.now() - createdAtClock;
-      break;
-    }
+const terminalStates = new Set([
+  "active",
+  "build_failed",
+  "deployment_failed",
+  "cancelled",
+  "rolled_back",
+  "stopped",
+  "superseded",
+]);
+
+async function measureDeployment(runNumber) {
+  const startedAtClock = performance.now();
+  const created = await request(deploymentPath, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ projectId, sourceRevision }),
+  });
+  if (
+    typeof created !== "object" ||
+    created === null ||
+    typeof created.deployment !== "object" ||
+    created.deployment === null ||
+    typeof created.deployment.deploymentId !== "string" ||
+    !uuid.test(created.deployment.deploymentId)
+  ) {
+    throw new Error("LaunchRail API did not return a valid deployment identity");
   }
-  await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+  const deploymentId = created.deployment.deploymentId;
+  const eventsPath = `/v1/organizations/${organizationId}/deployments/${deploymentId}/events?limit=200`;
+  const deadline = Date.now() + timeoutMs;
+  let finalState = "queued";
+  let deploymentCreatedAt;
+  let completed = false;
+  while (Date.now() < deadline) {
+    const history = await request(listPath);
+    if (!Array.isArray(history?.deployments))
+      throw new Error("LaunchRail API returned an invalid deployment history");
+    const deployment = history.deployments.find((item) => item?.deploymentId === deploymentId);
+    if (deployment !== undefined) {
+      finalState = deployment.state;
+      if (typeof deployment.createdAt === "string") deploymentCreatedAt = deployment.createdAt;
+      if (terminalStates.has(finalState)) {
+        completed = true;
+        break;
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+  }
+
+  let stageDurationsMs = null;
+  let stageTimingStatus = "unavailable";
+  try {
+    const eventHistory = await request(eventsPath);
+    const events = eventHistory?.events;
+    if (
+      Array.isArray(events) &&
+      typeof deploymentCreatedAt === "string" &&
+      Number.isFinite(Date.parse(deploymentCreatedAt))
+    ) {
+      const states = new Map();
+      for (const event of [...events].sort(
+        (left, right) => Number(left?.sequence) - Number(right?.sequence),
+      )) {
+        if (
+          typeof event?.sequence !== "number" ||
+          typeof event.toState !== "string" ||
+          typeof event.createdAt !== "string"
+        )
+          continue;
+        const timestamp = Date.parse(event.createdAt);
+        if (Number.isFinite(timestamp) && !states.has(event.toState))
+          states.set(event.toState, timestamp);
+      }
+      const duration = (from, to, fallbackStart) => {
+        const start = states.get(from) ?? fallbackStart;
+        const end = states.get(to);
+        if (typeof start !== "number" || !Number.isFinite(start) || end === undefined) return null;
+        const elapsed = end - start;
+        return elapsed < 0 ? null : Number(elapsed.toFixed(1));
+      };
+      const createdAt = Date.parse(deploymentCreatedAt);
+      stageDurationsMs = {
+        queueWait: duration("queued", "cloning", createdAt),
+        sourcePreparation: duration("cloning", "building"),
+        imageBuild: duration("building", "deploying"),
+        runtimeStart: duration("deploying", "health_checking"),
+        healthAndPromotion: duration("health_checking", "active"),
+      };
+      stageTimingStatus = Object.values(stageDurationsMs).every((value) => value !== null)
+        ? "available"
+        : "partial";
+    }
+  } catch {
+    // Stage diagnostics are best-effort and must not hide the deployment's authoritative outcome.
+  }
+  const outcome = finalState === "active" ? "active" : completed ? "failed" : "timeout";
+  return {
+    runNumber,
+    deploymentId,
+    outcome,
+    finalState: completed ? finalState : "in_progress_at_timeout",
+    elapsedMs: Number((performance.now() - startedAtClock).toFixed(1)),
+    stageTimingStatus,
+    stageDurationsMs,
+  };
 }
 
-const timedOut = deploymentDurationMs === null;
-const outcome = finalState === "active" ? "active" : timedOut ? "timeout" : "failed";
+const runs = [];
+for (let runNumber = 1; runNumber <= runCount; runNumber += 1) {
+  runs.push(await measureDeployment(runNumber));
+}
+
+function summary(values) {
+  const sorted = values.filter(Number.isFinite).sort((left, right) => left - right);
+  if (sorted.length === 0) return { samples: 0, medianMs: null, p95Ms: null };
+  const percentile = (fraction) =>
+    sorted[Math.min(sorted.length - 1, Math.ceil(fraction * sorted.length) - 1)];
+  return {
+    samples: sorted.length,
+    medianMs: Number(percentile(0.5).toFixed(1)),
+    p95Ms: Number(percentile(0.95).toFixed(1)),
+  };
+}
+
+const stageNames = [
+  "queueWait",
+  "sourcePreparation",
+  "imageBuild",
+  "runtimeStart",
+  "healthAndPromotion",
+];
+const stageSummaryMs = Object.fromEntries(
+  stageNames.map((stage) => [stage, summary(runs.map((run) => run.stageDurationsMs?.[stage]))]),
+);
+const outcomes = Object.fromEntries(
+  ["active", "failed", "timeout"].map((outcome) => [
+    outcome,
+    runs.filter((run) => run.outcome === outcome).length,
+  ]),
+);
 const report = {
   schemaVersion: 1,
   scenario: "deployment-to-healthy-release",
@@ -132,28 +228,27 @@ const report = {
   apiOrigin: api.origin,
   projectId,
   sourceRevision,
-  deploymentId,
-  outcome,
-  finalState: timedOut ? "in_progress_at_timeout" : finalState,
-  elapsedMs: Number(
-    (timedOut ? performance.now() - createdAtClock : deploymentDurationMs).toFixed(1),
-  ),
+  requestedRuns: runCount,
+  outcomes,
+  runs,
+  stageSummaryMs,
   timeoutMs,
   pollIntervalMs,
   node: process.version,
   platform: process.platform,
   architecture: process.arch,
   sideEffects: [
-    "Creates a durable deployment and build/runtime resources.",
-    "A successful candidate may become active and replace the project's previous active release.",
-    "The script does not cancel, stop, or delete the created deployment or resources.",
+    `Creates ${runCount} durable deployment(s) and associated build/runtime resources.`,
+    "Each successful candidate may become active and replace the project's current active release.",
+    "The script does not cancel, stop, or delete created deployments or resources.",
   ],
   limitations: [
     "Run only against a dedicated local demo project and an exact commit selected for benchmarking.",
-    "This single run includes queue wait, source preparation, build/cache, runtime start, health grace, and promotion; it does not isolate stage durations.",
+    "Sequential runs may have different cache state and replace the active release; record those conditions explicitly.",
+    "Stage intervals derive from persisted lifecycle timestamps, not isolated resource timers, and do not include host resource telemetry.",
     "Record the LaunchRail commit, cache state, machine/service versions, and host load separately.",
     "The session cookie is never included in output; protect the shell environment and stdout artifact.",
   ],
 };
 process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
-if (outcome !== "active") process.exitCode = 1;
+if (outcomes.failed > 0 || outcomes.timeout > 0) process.exitCode = 1;

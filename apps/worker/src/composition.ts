@@ -13,6 +13,7 @@ import type { WorkerConfig } from "@launchrail/config";
 import {
   PostgresDeploymentJobStore,
   PostgresDeploymentTransitionStore,
+  traceDatabaseStore,
   type LaunchRailDatabase,
 } from "@launchrail/database";
 import type { MetricsRegistry } from "@launchrail/observability";
@@ -72,8 +73,11 @@ export function createDeploymentWorkerComponents({
   version,
   workerId,
 }: CreateDeploymentWorkerComponentsOptions): DeploymentWorkerComponents {
-  const store = new PostgresDeploymentJobStore(database);
-  const transitionStore = new PostgresDeploymentTransitionStore(database);
+  const store = traceDatabaseStore(new PostgresDeploymentJobStore(database), "deployment_jobs");
+  const transitionStore = traceDatabaseStore(
+    new PostgresDeploymentTransitionStore(database),
+    "deployment_transitions",
+  );
   const deploymentRuntimeManager =
     runtimeManager ??
     new DockerDeploymentRuntimeManager({

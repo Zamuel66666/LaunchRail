@@ -975,7 +975,7 @@ export function ProjectWorkspace() {
 
   if (sessionStatus === "checking") {
     return (
-      <main className="workspace-shell">
+      <main id="main-content" className="workspace-shell" tabIndex={-1}>
         <LoadingState label="Checking your session" />
       </main>
     );
@@ -983,7 +983,7 @@ export function ProjectWorkspace() {
 
   if (sessionStatus === "unauthenticated") {
     return (
-      <main className="workspace-shell">
+      <main id="main-content" className="workspace-shell" tabIndex={-1}>
         <section className="workspace-state" aria-labelledby="sign-in-required-title">
           <div>
             <p className="section-label">Protected workspace</p>
@@ -1000,7 +1000,7 @@ export function ProjectWorkspace() {
 
   if (sessionStatus === "unavailable") {
     return (
-      <main className="workspace-shell">
+      <main id="main-content" className="workspace-shell" tabIndex={-1}>
         <section className="workspace-state" aria-labelledby="service-unavailable-title">
           <div>
             <p className="section-label">Connection problem</p>
@@ -1024,7 +1024,7 @@ export function ProjectWorkspace() {
   if (user === null) return null;
 
   return (
-    <main className="workspace-shell">
+    <main id="main-content" className="workspace-shell" tabIndex={-1}>
       <header className="workspace-header">
         <div>
           <Link className="wordmark workspace-wordmark" href="/">

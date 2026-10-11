@@ -64,6 +64,7 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 - Both benchmark scripts now accept IPv6 loopback origins while continuing to reject non-loopback targets.
 - Confirmation flows now restore keyboard focus to their trigger or a stable contextual fallback after dismissal.
 - Resource-recovery inventory failures are now isolated from durable wake-up dispatch and retried on the next reconciliation pass.
+- Added bounded worker metrics for queue depth by state, queue wait, job processing duration/outcome, and active queue handlers, with Grafana panels and integration coverage.
 
 - Plain-language product scope, target users, core workflow, success criteria, and explicit non-goals.
 - Initial architecture for the web application, API, worker, persistence, queue, build/runtime, routing, and observability boundaries.

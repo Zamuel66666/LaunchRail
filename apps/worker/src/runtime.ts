@@ -9,6 +9,7 @@ export interface DeploymentQueueConsumerLifecycle {
   close(force?: boolean): Promise<void>;
   drain(): Promise<void>;
   pause(): Promise<void>;
+  refreshQueueMetrics?(): Promise<boolean>;
   start(): void;
   waitUntilReady(): Promise<void>;
 }
@@ -175,6 +176,7 @@ export class DeploymentWorkerRuntime {
           }
         },
       );
+      void this.consumer.refreshQueueMetrics?.();
     }, this.heartbeatIntervalMs);
     this.heartbeatInterval.unref();
 

@@ -391,6 +391,7 @@ describeWithRedis("BullMQ deployment job queue", () => {
       workItemId,
     } satisfies DeploymentClaimJob);
     await waitFor(async () => (await publisher.getState(workItemId)) === "absent");
+    await consumer.refreshQueueMetrics();
 
     const output = metrics.renderPrometheus();
     expect(output).toContain(
@@ -403,6 +404,8 @@ describeWithRedis("BullMQ deployment job queue", () => {
       'launchrail_worker_job_processing_duration_seconds_count{kind="deployment.claim",outcome="completed"} 1',
     );
     expect(output).toContain("launchrail_worker_active_queue_handlers 0");
+    expect(output).toContain('launchrail_worker_queue_jobs{state="waiting"} 0');
+    expect(output).toContain('launchrail_worker_queue_jobs{state="active"} 0');
   });
 
   it("pauses, resumes, and closes without claiming later jobs", async () => {

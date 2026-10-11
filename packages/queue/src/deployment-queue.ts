@@ -15,6 +15,17 @@ import { Redis } from "ioredis";
 export const deploymentQueueName = "launchrail-deployments";
 export const deploymentQueuePrefix = "launchrail";
 
+const measuredQueueStates = [
+  "active",
+  "completed",
+  "delayed",
+  "failed",
+  "paused",
+  "prioritized",
+  "waiting",
+  "waiting-children",
+] as const;
+
 type SafeQueueComponent = "consumer" | "publisher";
 
 export interface QueueInfrastructureEvent {
@@ -401,6 +412,19 @@ export class BullMqDeploymentQueueConsumer {
     try {
       return (await this.readinessConnection.ping()) === "PONG";
     } catch {
+      return false;
+    }
+  }
+
+  public async refreshQueueMetrics(): Promise<boolean> {
+    if (this.metrics === undefined) return true;
+    try {
+      const counts = await this.worker.getJobCounts(...measuredQueueStates);
+      for (const state of measuredQueueStates)
+        this.metrics.setGauge("launchrail_worker_queue_jobs", counts[state] ?? 0, { state });
+      return true;
+    } catch {
+      this.notify("queue_error");
       return false;
     }
   }

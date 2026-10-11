@@ -62,6 +62,14 @@ export class DeploymentJobProcessor {
       );
       return outcome;
     } finally {
+      if (outcome === "retry_scheduled")
+        this.metrics?.increment("launchrail_worker_deployment_job_retries_total", {
+          kind: job.kind,
+        });
+      if (signal.aborted && signal.reason instanceof Error && signal.reason.name === "TimeoutError")
+        this.metrics?.increment("launchrail_worker_deployment_job_timeouts_total", {
+          kind: job.kind,
+        });
       this.metrics?.increment("launchrail_worker_deployment_jobs_processed_total", {
         kind: job.kind,
         outcome,

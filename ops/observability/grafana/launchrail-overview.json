@@ -395,6 +395,91 @@
       ],
       "title": "Missing active runtime failures (hourly)",
       "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "launchrail-prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 120 },
+      "id": 26,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, outcome) (rate(launchrail_worker_build_duration_seconds_bucket[5m])))",
+          "legendFormat": "{{outcome}} p95",
+          "refId": "A"
+        }
+      ],
+      "title": "Image build duration (p95)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "launchrail-prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 120 },
+      "id": 27,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, outcome) (rate(launchrail_worker_runtime_cleanup_duration_seconds_bucket[5m])))",
+          "legendFormat": "{{outcome}} p95",
+          "refId": "A"
+        }
+      ],
+      "title": "Runtime cleanup duration (p95)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "launchrail-prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 128 },
+      "id": 28,
+      "targets": [
+        {
+          "expr": "launchrail_worker_orphan_runtime_inventory",
+          "legendFormat": "managed orphan candidates",
+          "refId": "A"
+        }
+      ],
+      "title": "Managed runtime orphan inventory",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "launchrail-prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 128 },
+      "id": 29,
+      "targets": [
+        {
+          "expr": "sum by (kind) (rate(launchrail_worker_deployment_job_retries_total[5m]))",
+          "legendFormat": "{{kind}} retries/s",
+          "refId": "A"
+        },
+        {
+          "expr": "sum by (kind) (rate(launchrail_worker_deployment_job_timeouts_total[5m]))",
+          "legendFormat": "{{kind}} timeouts/s",
+          "refId": "B"
+        }
+      ],
+      "title": "Deployment job retries and timeouts",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "launchrail-prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 136 },
+      "id": 30,
+      "targets": [
+        {
+          "expr": "launchrail_worker_route_configuration_mismatches",
+          "legendFormat": "route configuration repairs this pass",
+          "refId": "A"
+        },
+        {
+          "expr": "increase(launchrail_worker_health_grace_exhausted_total[1h])",
+          "legendFormat": "health grace windows exhausted (hourly)",
+          "refId": "B"
+        }
+      ],
+      "title": "Route configuration repairs and health grace exhaustion",
+      "type": "timeseries"
     }
   ],
   "refresh": "30s",

@@ -1,0 +1,70 @@
+groups:
+  - name: launchrail-operations
+    rules:
+      - alert: LaunchRailWorkerUnavailable
+        expr: up{job="launchrail-worker"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: LaunchRail worker metrics endpoint is unavailable
+          description: Check worker process health and its PostgreSQL, Redis, Docker, and BuildKit dependencies.
+
+      - alert: LaunchRailWorkerHeartbeatStale
+        expr: time() - launchrail_worker_last_successful_heartbeat_timestamp_seconds > 60
+        for: 30s
+        labels:
+          severity: warning
+        annotations:
+          summary: LaunchRail worker heartbeat is stale
+          description: The worker has not persisted a successful operational heartbeat in over one minute.
+
+      - alert: LaunchRailQueueBacklogGrowing
+        expr: sum(launchrail_worker_queue_jobs{state="waiting"}) > 100
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: LaunchRail queue backlog is sustained
+          description: More than 100 jobs have remained waiting for ten minutes; compare dispatch failures and worker readiness.
+
+      - alert: LaunchRailDeploymentJobsDeadLettered
+        expr: increase(launchrail_worker_deployment_jobs_processed_total{outcome="dead_lettered"}[15m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: LaunchRail deployment work reached a dead letter
+          description: Inspect the deployment event history and safe durable failure category.
+
+      - alert: LaunchRailRuntimeOrphansPersist
+        expr: launchrail_worker_orphan_runtime_inventory > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: LaunchRail runtime orphans persist
+          description: Managed runtime containers remain outside the protected durable inventory; inspect cleanup failures and Docker ownership labels.
+
+      - alert: LaunchRailPreviewRouteConfigurationDrift
+        expr: launchrail_worker_route_configuration_mismatches > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: LaunchRail preview route configuration is repeatedly repaired
+          description: Reconciliation keeps finding route files that differ from the durable route set; inspect Traefik configuration ownership and filesystem access.
+
+      - alert: LaunchRailDeploymentFailureRatioHigh
+        expr: |
+          sum(increase(launchrail_worker_deployment_jobs_processed_total{outcome=~"dead_lettered|infrastructure_unavailable"}[15m]))
+          /
+          clamp_min(sum(increase(launchrail_worker_deployment_jobs_processed_total[15m])), 1)
+          > 0.1
+          and sum(increase(launchrail_worker_deployment_jobs_processed_total[15m])) >= 20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: LaunchRail deployment job failures are elevated
+          description: More than ten percent of at least twenty recent job outcomes are failures; inspect stage metrics and deployment events.

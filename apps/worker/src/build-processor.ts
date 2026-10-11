@@ -428,6 +428,8 @@ export class DeploymentBuildProcessor {
         };
 
         let built;
+        const buildStartedAt = performance.now();
+        let buildOutcome: "succeeded" | "failed" = "succeeded";
         try {
           built = await runWithSignal(
             trackOperation(
@@ -457,10 +459,17 @@ export class DeploymentBuildProcessor {
             effectiveSignal,
           );
         } catch (error) {
+          buildOutcome = "failed";
           if (effectiveSignal.aborted) {
             throw error;
           }
           failure = safeBuildFailure(error);
+        } finally {
+          this.metrics?.observe(
+            "launchrail_worker_build_duration_seconds",
+            Math.max(0, performance.now() - buildStartedAt) / 1_000,
+            { outcome: buildOutcome },
+          );
         }
 
         if (built !== undefined) {

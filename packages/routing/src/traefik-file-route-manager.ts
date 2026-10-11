@@ -1,4 +1,4 @@
-import { lstat, mkdir, readdir, realpath, rename, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, readdir, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { basename, isAbsolute, join, parse, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 
@@ -19,7 +19,7 @@ export interface RouteTarget {
 export interface RouteManager {
   apply(route: PreviewRoute, target: RouteTarget): Promise<void>;
   remove(route: PreviewRoute): Promise<void>;
-  reconcile?(routes: readonly DesiredPreviewRoute[]): Promise<void>;
+  reconcile?(routes: readonly DesiredPreviewRoute[]): Promise<number | void>;
   cleanupTemporaryFiles?(options: { readonly olderThan: Date }): Promise<number>;
 }
 
@@ -143,20 +143,41 @@ export class TraefikFileRouteManager implements RouteManager {
   }
 
   /** Restore the file-provider directory to the persisted desired route set. */
-  public async reconcile(routes: readonly DesiredPreviewRoute[]): Promise<void> {
+  public async reconcile(routes: readonly DesiredPreviewRoute[]): Promise<number> {
     await this.prepareDirectory();
     const desired = new Set<string>();
+    let mismatches = 0;
     for (const route of routes) {
       validateRoute(route);
       validateTarget(route.target);
-      desired.add(fileName(route));
+      const name = fileName(route);
+      desired.add(name);
+      const destination = join(this.configurationDirectory, name);
+      let current: string | undefined;
+      try {
+        const stats = await lstat(destination);
+        if (stats.isFile() && !stats.isSymbolicLink())
+          current = await readFile(destination, "utf8");
+      } catch (error) {
+        if (
+          typeof error !== "object" ||
+          error === null ||
+          !("code" in error) ||
+          error.code !== "ENOENT"
+        )
+          throw error;
+      }
+      if (current !== render(route, route.target, this.upstreamHost)) mismatches += 1;
       await this.apply(route, route.target);
     }
     for (const entry of await readdir(this.configurationDirectory, { withFileTypes: true })) {
       if (!entry.isFile() || !entry.name.startsWith("launchrail-") || !entry.name.endsWith(".yaml"))
         continue;
-      if (!desired.has(entry.name))
+      if (!desired.has(entry.name)) {
+        mismatches += 1;
         await rm(join(this.configurationDirectory, entry.name), { force: true });
+      }
     }
+    return mismatches;
   }
 }

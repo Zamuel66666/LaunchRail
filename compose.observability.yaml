@@ -13,6 +13,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./ops/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./ops/observability/launchrail-alerts.yml:/etc/prometheus/launchrail-alerts.yml:ro
       - prometheus-data:/prometheus
 
   grafana:

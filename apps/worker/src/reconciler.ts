@@ -262,6 +262,7 @@ export class DeploymentJobReconciler {
             const knownIds = new Set(recoveryState.knownContainerIds);
             const cleanupIds = new Set(recoveryState.cleanupContainerIds);
             const leasedWorkItems = new Set(recoveryState.leasedWorkItemIds);
+            let orphanInventory = 0;
             if (this.runtimeManager.cleanupOrphan !== undefined) {
               for (const runtime of managed) {
                 if (
@@ -269,7 +270,10 @@ export class DeploymentJobReconciler {
                   leasedWorkItems.has(runtime.identity.workItemId)
                 )
                   continue;
+                orphanInventory += 1;
                 let removed = false;
+                const cleanupStartedAt = performance.now();
+                let cleanupOutcome: "removed" | "failed" = "removed";
                 try {
                   await this.runtimeManager.cleanupOrphan({ ...runtime, signal });
                   removed = true;
@@ -279,6 +283,7 @@ export class DeploymentJobReconciler {
                   });
                   orphanRuntimesCleaned += 1;
                 } catch {
+                  cleanupOutcome = "failed";
                   if (!removed) {
                     try {
                       await this.store.recordRuntimeCleanup?.({
@@ -299,9 +304,16 @@ export class DeploymentJobReconciler {
                     },
                     "Orphan runtime cleanup will be reconciled again",
                   );
+                } finally {
+                  this.metrics?.observe(
+                    "launchrail_worker_runtime_cleanup_duration_seconds",
+                    Math.max(0, performance.now() - cleanupStartedAt) / 1_000,
+                    { outcome: cleanupOutcome },
+                  );
                 }
               }
             }
+            this.metrics?.setGauge("launchrail_worker_orphan_runtime_inventory", orphanInventory);
           } catch {
             orphanRuntimeCleanupFailures += 1;
             this.logger.warn(
@@ -326,13 +338,15 @@ export class DeploymentJobReconciler {
       let routeOutcome: "reconciled" | "failed" = "reconciled";
       try {
         const runtimes = await this.store.listRoutableRuntimes();
-        await this.routeManager.reconcile(
+        const mismatches = await this.routeManager.reconcile(
           runtimes.map((runtime) => ({
             deploymentId: runtime.deploymentId,
             hostname: `d-${runtime.deploymentId}.localhost`,
             target: { hostPort: runtime.hostPort },
           })),
         );
+        if (mismatches !== undefined)
+          this.metrics?.setGauge("launchrail_worker_route_configuration_mismatches", mismatches);
       } catch {
         routeOutcome = "failed";
         routeReconciliationFailures += 1;

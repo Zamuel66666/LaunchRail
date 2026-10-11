@@ -238,9 +238,18 @@ export class DeploymentRuntimeProcessor {
         const healthGraceMs = this.options.healthGraceMs ?? 0;
         if (healthGraceMs > 0)
           await new Promise<void>((resolve, reject) => {
-            const timer = setTimeout(resolve, healthGraceMs);
-            const abort = (): void => {
+            const cleanup = (): void => {
               clearTimeout(timer);
+              signal.removeEventListener("abort", abort);
+            };
+            const timer = setTimeout(() => {
+              cleanup();
+              resolve();
+            }, healthGraceMs);
+            const abort = (): void => {
+              cleanup();
+              if (timeout.aborted)
+                this.options.metrics?.increment("launchrail_worker_health_grace_exhausted_total");
               reject(signal.reason ?? new Error("Health grace period interrupted"));
             };
             if (signal.aborted) abort();

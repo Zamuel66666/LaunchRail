@@ -41,15 +41,13 @@ Prometheus-compatible metrics will use low-cardinality labels such as service, r
 
 The API exposes request counters/histograms and webhook processing counters/histograms at `/metrics` with bounded route-template, method, status-class, event-class, and outcome labels. API and worker readiness probes also expose bounded ready/not-ready counters; the API records readiness-check duration. The worker `/metrics` exposes process uptime/RSS, active-job and active-queue-handler gauges, a last-successful-heartbeat timestamp, queue depth by fixed BullMQ state, queue wait and handler-processing histograms, durable deployment-job outcome counters and processing histograms by supported kind, build-cache hit/miss step histograms, runtime start/stop and preview-route apply/reconciliation duration histograms, reconciliation/dispatch counters, lost-runtime failure counters, health-check counters/histograms, runtime handoff/failure counters, orphan-runtime, source/build-stage, completed-checkout, orphan-image, interrupted-route-file, route-restoration, and resource-recovery failure counters. Queue depth is refreshed on the worker heartbeat interval, so it is an operational snapshot rather than an instantaneous guarantee. Queue metrics label only fixed states, supported job kinds, and fixed outcomes; labels intentionally omit repository, organization, deployment, request, and delivery identifiers.
 
+The worker also counts durable job retries, timeout outcomes, and exhausted health-grace windows; records build and runtime-cleanup durations; and exposes the current managed-orphan inventory and route configuration repairs. The optional Prometheus profile provisions starter alert rules for worker/heartbeat availability, sustained queue backlog, dead-lettered work, persistent runtime orphans, route configuration drift, and elevated job failure ratio. Tune thresholds to the deployment's configured heartbeat, worker concurrency, workload, and service-level targets before paging operators.
+
 Measurements still to add:
 
 - Active SSE streams, reconnects, dropped/limited chunks, and delivery lag.
-- Queue retries and timeout counts.
-- End-to-end deployment duration and success/failure/cancellation totals across all stages.
-- Build duration without repository labels.
-- Runtime cleanup duration and current orphan inventory gauge.
-- Health-check grace-period exhaustion.
-- Route desired/observed mismatch count.
+- Queue retry/timeout stage attribution beyond the worker-level counters.
+- End-to-end deployment duration and terminal success/failure/cancellation totals across all stages.
 
 Per-deployment investigation uses traces, events, and logs rather than a high-cardinality `deployment_id` metric label.
 
@@ -68,7 +66,7 @@ Queue propagation creates linked asynchronous traces rather than pretending the 
 
 ## Dashboards and alerts
 
-The provisioned local Grafana dashboard currently charts API request rate, webhook outcomes, health-check outcomes/duration, worker dispatch failures/memory, orphan-runtime cleanup outcomes, source/build staging cleanup volume/failures, completed checkout removals, orphan build-image cleanup outcomes, queue depth/wait, durable deployment stage outcomes, cache reuse, runtime start/stop duration, route apply/reconciliation duration, and worker heartbeat age. Follow-on dashboard panels should answer:
+The provisioned local Grafana dashboard currently charts API request rate, webhook outcomes, health-check outcomes/duration, worker dispatch failures/memory, orphan-runtime cleanup outcomes, source/build staging cleanup volume/failures, completed checkout removals, orphan build-image cleanup outcomes, queue depth/wait, durable deployment stage outcomes and retries/timeouts, build duration/cache reuse, runtime cleanup inventory/duration, runtime start/stop duration, route apply/reconciliation duration and configuration repair, health-grace exhaustion, and worker heartbeat age. Follow-on dashboard panels should answer:
 
 1. Are API and worker processes available?
 2. Is queued work growing or stuck?
@@ -76,7 +74,7 @@ The provisioned local Grafana dashboard currently charts API request rate, webho
 4. Are health checks or route applications degrading?
 5. Are retries, dead letters, orphan resources, or reconciliation mismatches increasing?
 
-Local alert rules are not yet configured. They should focus on actionable conditions: stale worker heartbeat, sustained queue age, elevated failure ratio with a minimum sample, dead letters, route mismatch, and orphan growth. Thresholds must be measured and documented rather than invented.
+Starter local alert rules are provisioned from `ops/observability/launchrail-alerts.yml`. They intentionally use conservative demonstration thresholds rather than measured production SLOs; operators should tune them against a controlled workload before enabling paging.
 
 ## Redaction and access
 
@@ -113,6 +111,6 @@ Start the API and worker with `pnpm dev`, then open Prometheus at `http://localh
 docker compose -f compose.yaml -f compose.observability.yaml --profile observability down
 ```
 
-The current request ID is returned as `x-request-id` and is attached to API logs. W3C trace context links instrumented API requests through BullMQ producer/consumer spans to worker processing; work-item IDs and ordered deployment events remain additional pivots. Exemplars, alert policies, remote log aggregation, database sub-operation spans, and independent OTLP canary-secret verification remain future work.
+The current request ID is returned as `x-request-id` and is attached to API logs. W3C trace context links instrumented API requests through BullMQ producer/consumer spans to worker processing; work-item IDs and ordered deployment events remain additional pivots. Exemplars, remote log aggregation, database sub-operation spans, and independent OTLP canary-secret verification remain future work.
 
 The project timeline can request a bounded tail of runtime output through an API-to-worker endpoint. Set the same random `WORKER_INTERNAL_TOKEN` (at least 32 characters) for the API and worker, and configure `WORKER_INTERNAL_URL` on the API; without the token, runtime log access stays disabled. The API authorizes the organization reader before proxying, the worker verifies the shared secret and matches the deployment and organization against managed-container labels, and responses are not cached. Runtime output is controlled by the deployed application and may include sensitive values; do not print credentials or other secrets from application code.

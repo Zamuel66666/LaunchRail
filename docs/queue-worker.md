@@ -111,7 +111,7 @@ The safe local defaults are documented in `.env.example`:
 | `WORKER_SOURCE_MAX_PATH_BYTES`         | `1024`                    | Relative path byte ceiling.          |
 | `WORKER_SOURCE_MAX_DEPTH`              | `64`                      | Relative path depth ceiling.         |
 
-Configuration validation requires the backoff base not exceed its cap, heartbeat and reconciliation intervals to be shorter than the lease, the job timeout to exceed the heartbeat interval, and source sub-timeouts not to exceed the job timeout. The per-file limit cannot exceed the total checkout limit. Queue/prefix identifiers reject unsafe punctuation. The source root must be an absolute normalized non-root path; at runtime it must be owned by the worker user and private to that user.
+Configuration validation requires the backoff base not exceed its cap, heartbeat and reconciliation intervals to be shorter than the lease, the job timeout to exceed the heartbeat interval, and source sub-timeouts not to exceed the job timeout. Runtime-start timeout, health grace, and the maximum health request window must also fit inside the durable job timeout. The per-file limit cannot exceed the total checkout limit. Queue/prefix identifiers reject unsafe punctuation. The source root must be an absolute normalized non-root path; at runtime it must be owned by the worker user and private to that user.
 
 Redis uses `noeviction` in the local Compose service because silently evicting BullMQ keys is unsafe. PostgreSQL still permits reconciliation after Redis loss, but Redis capacity exhaustion must surface as an operational failure rather than deleting arbitrary queue state.
 

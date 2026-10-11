@@ -263,6 +263,16 @@ function validateWorkerRuntime(config: WorkerConfig): void {
   if (config.WORKER_RUNTIME_TIMEOUT_MS > config.WORKER_JOB_TIMEOUT_MS) {
     issues.push("WORKER_RUNTIME_TIMEOUT_MS: cannot exceed WORKER_JOB_TIMEOUT_MS");
   }
+  if (
+    config.WORKER_RUNTIME_TIMEOUT_MS +
+      config.WORKER_HEALTH_GRACE_MS +
+      Math.min(config.WORKER_JOB_TIMEOUT_MS, 5_000) >
+    config.WORKER_JOB_TIMEOUT_MS
+  ) {
+    issues.push(
+      "WORKER_RUNTIME_TIMEOUT_MS plus WORKER_HEALTH_GRACE_MS and the health-check window cannot exceed WORKER_JOB_TIMEOUT_MS",
+    );
+  }
   if (config.WORKER_BUILD_PROGRESS_LINE_BYTES > config.WORKER_BUILD_PROGRESS_BYTES) {
     issues.push("WORKER_BUILD_PROGRESS_LINE_BYTES: cannot exceed WORKER_BUILD_PROGRESS_BYTES");
   }

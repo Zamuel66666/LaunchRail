@@ -380,6 +380,21 @@
       ],
       "title": "Worker heartbeat age",
       "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "launchrail-prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 112 },
+      "id": 25,
+      "targets": [
+        {
+          "expr": "sum(increase(launchrail_worker_lost_runtimes_failed_total[1h]))",
+          "legendFormat": "active runtimes marked failed",
+          "refId": "A"
+        }
+      ],
+      "title": "Missing active runtime failures (hourly)",
+      "type": "timeseries"
     }
   ],
   "refresh": "30s",

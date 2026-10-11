@@ -158,7 +158,10 @@ export async function transitionDeploymentInTransaction(
 
   assertDeploymentTransition(deployment.state, command.to);
 
-  if (deployment.state === "active" && command.to === "stopped") {
+  if (
+    deployment.state === "active" &&
+    (command.to === "deployment_failed" || command.to === "stopped")
+  ) {
     await transaction
       .delete(activeReleases)
       .where(
@@ -193,6 +196,13 @@ export async function transitionDeploymentInTransaction(
       version,
     })
     .where(eq(deployments.id, deployment.id));
+
+  if (deployment.state === "active" && command.to === "deployment_failed") {
+    await transaction
+      .update(runtimeInstances)
+      .set({ cleanupState: "complete", state: "failed", updatedAt: now })
+      .where(eq(runtimeInstances.deploymentId, deployment.id));
+  }
 
   if (
     ["build_failed", "cancelled", "deployment_failed", "rolled_back", "stopped"].includes(

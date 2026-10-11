@@ -70,6 +70,7 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 - Added bounded runtime start/stop and preview-route apply/reconciliation timings plus a Prometheus-computable worker heartbeat-age gauge and dashboard panels.
 - Route adapter exceptions now persist a fixed operator-safe failure message rather than arbitrary thrown text.
 - Worker readiness now checks Docker daemon access and bootstraps only the configured Buildx builder, with a heartbeat-interval cache to bound probe work.
+- Reconciliation now fails an active deployment when healthy Docker inventory confirms its managed runtime is missing, while protecting live runtime leases and clearing stale route intent atomically.
 
 - Plain-language product scope, target users, core workflow, success criteria, and explicit non-goals.
 - Initial architecture for the web application, API, worker, persistence, queue, build/runtime, routing, and observability boundaries.

@@ -215,6 +215,7 @@ export function createDeploymentWorkerComponents({
     ...(metrics === undefined ? {} : { metrics }),
     publisher,
     store,
+    transitionStore,
     routeManager: new TraefikFileRouteManager({
       configurationDirectory: config.WORKER_TRAEFIK_DYNAMIC_CONFIG_DIR,
     }),

@@ -42,7 +42,7 @@ export const deploymentFailureCategories = [
 export type DeploymentFailureCategory = (typeof deploymentFailureCategories)[number];
 
 const allowedTransitions: Readonly<Record<DeploymentState, ReadonlySet<DeploymentState>>> = {
-  active: new Set(["rolling_back", "stopped", "superseded"]),
+  active: new Set(["deployment_failed", "rolling_back", "stopped", "superseded"]),
   build_failed: new Set(),
   building: new Set(["build_failed", "cancelling", "deploying"]),
   cancelled: new Set(),

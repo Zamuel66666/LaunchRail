@@ -25,6 +25,7 @@ const validTransitions = [
   ["health_checking", "cancelling"],
   ["cancelling", "cancelled"],
   ["active", "superseded"],
+  ["active", "deployment_failed"],
   ["active", "rolling_back"],
   ["rolling_back", "rolled_back"],
   ["rolling_back", "active"],

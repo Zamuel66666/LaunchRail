@@ -22,14 +22,14 @@ Phase 2 implements the state model and transactional active-release promotion. L
 
 ## State groups
 
-| Group           | States                                                           | Meaning                                            |
-| --------------- | ---------------------------------------------------------------- | -------------------------------------------------- |
-| Waiting         | `queued`                                                         | Persisted and eligible for worker processing.      |
-| Preparing       | `cloning`, `building`                                            | Resolving source and producing an immutable image. |
-| Releasing       | `deploying`, `health_checking`                                   | Starting and validating a candidate runtime.       |
-| Serving/history | `active`, `superseded`, `rolling_back`, `rolled_back`, `stopped` | Release routing and operator-controlled history.   |
-| Cancellation    | `cancelling`, `cancelled`                                        | Cancellation requested and cleanup completed.      |
-| Failure         | `build_failed`, `deployment_failed`                              | Terminal attempt failure before activation.        |
+| Group           | States                                                           | Meaning                                                                  |
+| --------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Waiting         | `queued`                                                         | Persisted and eligible for worker processing.                            |
+| Preparing       | `cloning`, `building`                                            | Resolving source and producing an immutable image.                       |
+| Releasing       | `deploying`, `health_checking`                                   | Starting and validating a candidate runtime.                             |
+| Serving/history | `active`, `superseded`, `rolling_back`, `rolled_back`, `stopped` | Release routing and operator-controlled history.                         |
+| Cancellation    | `cancelling`, `cancelled`                                        | Cancellation requested and cleanup completed.                            |
+| Failure         | `build_failed`, `deployment_failed`                              | Terminal build/runtime failure, including runtime loss after activation. |
 
 `build_failed`, `deployment_failed`, `cancelled`, `rolled_back`, and `stopped` are terminal for that deployment attempt. `superseded` remains eligible to become `active` during a rollback.
 
@@ -47,6 +47,7 @@ stateDiagram-v2
     deploying --> deployment_failed: runtime start fails
     health_checking --> active: health succeeds and release is promoted
     health_checking --> deployment_failed: health policy fails
+    active --> deployment_failed: active runtime disappears
 
     queued --> cancelling: cancel requested
     cloning --> cancelling: cancel requested
@@ -83,6 +84,7 @@ All transition commands go through one domain service. Direct state updates outs
 | `deploying`       | `cancelling`        | Cancellation signal observed.                                          |
 | `health_checking` | `active`            | Health policy passed; promotion transaction succeeds.                  |
 | `health_checking` | `deployment_failed` | Grace period or health policy is exhausted.                            |
+| `active`          | `deployment_failed` | Reconciliation confirms the managed runtime is absent from Docker.     |
 | `health_checking` | `cancelling`        | Cancellation wins before promotion begins.                             |
 | `cancelling`      | `cancelled`         | Build/runtime cancellation and required cleanup are recorded.          |
 | `active`          | `superseded`        | A different healthy release is promoted for the same project.          |

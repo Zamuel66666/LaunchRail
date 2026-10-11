@@ -166,6 +166,51 @@ describeWithDatabase("PostgresDeploymentTransitionStore", () => {
     ).resolves.toEqual([]);
   });
 
+  it("removes the active release pointer when the active runtime is lost", async () => {
+    const seeded = await seedDeployment({ state: "active" });
+    await client.db.insert(schema.runtimeInstances).values({
+      containerId: "c".repeat(64),
+      deploymentId: seeded.deploymentId,
+      imageDigest: `sha256:${"a".repeat(64)}`,
+      organizationId: seeded.organizationId,
+      hostPort: 40_000,
+      state: "running",
+    });
+    await client.db.insert(schema.activeReleases).values({
+      activatedAt: new Date(),
+      deploymentId: seeded.deploymentId,
+      organizationId: seeded.organizationId,
+      projectId: seeded.projectId,
+      updatedAt: new Date(),
+    });
+
+    await expect(
+      store.transition({
+        deploymentId: seeded.deploymentId,
+        failure: {
+          category: "runtime_start_failed",
+          message: "The active runtime is no longer present on the Docker host",
+        },
+        idempotencyKey: `worker-runtime-lost-${seeded.deploymentId}`,
+        organizationId: seeded.organizationId,
+        to: "deployment_failed",
+      }),
+    ).resolves.toMatchObject({ from: "active", to: "deployment_failed" });
+
+    await expect(
+      client.db
+        .select()
+        .from(schema.activeReleases)
+        .where(eq(schema.activeReleases.projectId, seeded.projectId)),
+    ).resolves.toEqual([]);
+    await expect(
+      client.db
+        .select()
+        .from(schema.runtimeInstances)
+        .where(eq(schema.runtimeInstances.deploymentId, seeded.deploymentId)),
+    ).resolves.toMatchObject([{ cleanupState: "complete", state: "failed" }]);
+  });
+
   it("returns the stored result when an idempotency key is replayed", async () => {
     const seeded = await seedDeployment();
     const command = {

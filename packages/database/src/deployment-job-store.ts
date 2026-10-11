@@ -2871,7 +2871,7 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
           ),
         ),
       this.db
-        .select({ workItemId: deploymentJobs.id })
+        .select({ deploymentId: deploymentJobs.deploymentId, workItemId: deploymentJobs.id })
         .from(deploymentJobs)
         .where(
           and(
@@ -2945,6 +2945,7 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
         row.containerId === null ? [] : [row.containerId],
       ),
       leasedBuildWorkItemIds: leasedBuild.map((row) => row.workItemId),
+      leasedRuntimeDeploymentIds: [...new Set(leased.map((row) => row.deploymentId))],
       leasedCheckoutKeys: [
         ...new Set([
           ...leasedSource.map((row) => row.deploymentId),

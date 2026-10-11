@@ -511,6 +511,7 @@ export interface WorkerResourceRecoveryState {
   readonly knownContainerIds: readonly string[];
   readonly leasedBuildWorkItemIds: readonly string[];
   readonly leasedCheckoutKeys: readonly string[];
+  readonly leasedRuntimeDeploymentIds: readonly string[];
   readonly leasedWorkItemIds: readonly string[];
   readonly knownImageIds: readonly string[];
 }

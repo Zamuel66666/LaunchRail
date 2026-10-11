@@ -20,8 +20,9 @@ const requests = positiveInteger("requests", 1_000, 100_000);
 const concurrency = positiveInteger("concurrency", 10, 250);
 const warmup = positiveInteger("warmup", 100, 10_000);
 const target = new URL(process.env.LAUNCHRAIL_BENCHMARK_URL ?? "http://127.0.0.1:4000/health");
+const benchmarkHostname = target.hostname.replace(/^\[|\]$/gu, "");
 if (
-  !["127.0.0.1", "localhost", "::1"].includes(target.hostname) ||
+  !["127.0.0.1", "localhost", "::1"].includes(benchmarkHostname) ||
   target.pathname !== "/health" ||
   target.search !== "" ||
   target.hash !== "" ||

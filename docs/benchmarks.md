@@ -55,7 +55,7 @@ Start the API locally, then run:
 pnpm benchmark:api --requests=1000 --concurrency=10 --warmup=100
 ```
 
-The default target is `http://127.0.0.1:4000/health`. `LAUNCHRAIL_BENCHMARK_URL` may select another loopback `/health` URL only. The command emits one JSON report with request count, concurrency, throughput, median/p95 latency, response codes, Node/platform metadata, and run time. It deliberately does not save a result file; retain the stdout artifact alongside the exact commit, OS/kernel, CPU/memory/storage, API configuration, and host load if publishing a result. The health endpoint measures process liveness only.
+The default target is `http://127.0.0.1:4000/health`. `LAUNCHRAIL_BENCHMARK_URL` may select another IPv4/IPv6 loopback `/health` URL only. The command emits one JSON report with request count, concurrency, throughput, median/p95 latency, response codes, Node/platform metadata, and run time. It deliberately does not save a result file; retain the stdout artifact alongside the exact commit, OS/kernel, CPU/memory/storage, API configuration, and host load if publishing a result. The health endpoint measures process liveness only.
 
 ### End-to-end deployment baseline
 
@@ -77,7 +77,7 @@ export LAUNCHRAIL_BENCHMARK_ALLOW_RELEASE_MUTATION='I_UNDERSTAND_THIS_CREATES_A_
 pnpm benchmark:deployment
 ```
 
-The script restricts the destination to loopback, creates exactly one deployment, polls the
+The script restricts the destination to IPv4/IPv6 loopback, creates exactly one deployment, polls the
 organization/project-scoped deployment history until activation or terminal failure, and emits one
 JSON report. It does not output the cookie. The duration includes queue wait, source preparation,
 build/cache, runtime start, health grace, and promotion; it is an end-to-end measurement, not a

@@ -20,8 +20,9 @@ if (
 }
 
 const api = new URL(process.env.LAUNCHRAIL_BENCHMARK_API_URL);
+const apiHostname = api.hostname.replace(/^\[|\]$/gu, "");
 if (
-  !["127.0.0.1", "localhost", "::1"].includes(api.hostname) ||
+  !["127.0.0.1", "localhost", "::1"].includes(apiHostname) ||
   !["http:", "https:"].includes(api.protocol) ||
   api.username !== "" ||
   api.password !== "" ||

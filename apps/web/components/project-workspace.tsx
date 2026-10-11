@@ -413,8 +413,16 @@ function ProjectCard({
           </p>
         )}
         {pendingDeploymentControl === null ? null : (
-          <div className="deployment-control-confirmation" role="alertdialog">
-            <p>
+          <div
+            aria-labelledby="deployment-control-confirmation-title"
+            className="deployment-control-confirmation"
+            onKeyDown={(event) => {
+              if (event.key === "Escape" && controllingDeploymentId === null)
+                setPendingDeploymentControl(null);
+            }}
+            role="alertdialog"
+          >
+            <p id="deployment-control-confirmation-title">
               {pendingDeploymentControl.action === "rollback"
                 ? "Restore the previous superseded release? The current release will be superseded."
                 : pendingDeploymentControl.action === "stop"
@@ -423,6 +431,7 @@ function ProjectCard({
             </p>
             <div className="compact-actions">
               <button
+                autoFocus
                 className="button-secondary"
                 disabled={controllingDeploymentId !== null}
                 onClick={() => setPendingDeploymentControl(null)}
@@ -1079,6 +1088,9 @@ export function ProjectWorkspace() {
               aria-describedby="archive-project-description"
               aria-labelledby="archive-project-title"
               className="archive-confirmation"
+              onKeyDown={(event) => {
+                if (event.key === "Escape" && !archiving) cancelArchive();
+              }}
               role="alertdialog"
             >
               <div>
@@ -1093,6 +1105,7 @@ export function ProjectWorkspace() {
               </div>
               <div className="compact-actions">
                 <button
+                  autoFocus
                   className="button-secondary"
                   disabled={archiving}
                   onClick={cancelArchive}

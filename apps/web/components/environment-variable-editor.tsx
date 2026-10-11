@@ -139,16 +139,23 @@ export function EnvironmentVariableEditor({
 
       {confirmingRemoval === null ? null : (
         <div
-          className="inline-confirmation"
-          role="alertdialog"
           aria-labelledby={`${id}-remove-title`}
+          aria-describedby={`${id}-remove-description`}
+          className="inline-confirmation"
+          onKeyDown={(event) => {
+            if (event.key === "Escape" && !pending) setConfirmingRemoval(null);
+          }}
+          role="alertdialog"
         >
           <div>
             <strong id={`${id}-remove-title`}>Remove {confirmingRemoval}?</strong>
-            <p>Future deployments will no longer receive this variable.</p>
+            <p id={`${id}-remove-description`}>
+              Future deployments will no longer receive this variable.
+            </p>
           </div>
           <div className="compact-actions">
             <button
+              autoFocus
               className="text-button"
               disabled={pending}
               onClick={() => setConfirmingRemoval(null)}

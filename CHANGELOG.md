@@ -57,6 +57,7 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 - Added an in-app demo walkthrough covering prerequisites, the exact-revision release flow, and explicit product boundaries.
 - Added an opt-in exact-SHA deployment benchmark that records request-to-healthy-release latency without exposing its session cookie.
 - Builds now bootstrap the explicitly configured Buildx builder before work, allowing recovery of a stopped node without selecting or creating a different builder.
+- Improved confirmation-dialog labels and Escape-key dismissal, and honored reduced-motion preferences.
 
 - Plain-language product scope, target users, core workflow, success criteria, and explicit non-goals.
 - Initial architecture for the web application, API, worker, persistence, queue, build/runtime, routing, and observability boundaries.

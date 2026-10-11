@@ -94,10 +94,11 @@ LaunchRail will use a modular monolith for the web/API boundary and a separate w
 - Organization readers can open bounded, retained build output from each deployment in the project timeline.
 - Worker reconciliation inventories LaunchRail-labeled containers, protects live leased runtimes, and cleans unrecorded or terminal runtime containers with persisted cleanup outcomes.
 - `pnpm benchmark:api` emits a reproducible loopback API liveness JSON report; `docs/release-checklist.md` records the public release gates.
+- The landing page links to a guided `/demo` walkthrough; confirmations can be dismissed with Escape, and reduced-motion preferences are honored.
 
 ### Planned next
 
-- Complete and independently verify all recovery boundaries, operator-control races, trace-export redaction/collector behavior, accessible onboarding, broader controlled benchmarks, and release evidence.
+- Complete and independently verify all recovery boundaries, operator-control races, trace-export redaction/collector behavior, accessible first-run onboarding, broader controlled benchmarks, and release evidence.
 
 ### Not currently planned
 

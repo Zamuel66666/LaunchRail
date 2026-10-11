@@ -105,3 +105,11 @@ Reproduce a defect at the lowest layer that captures the observable failure, add
 ### Deployment creation regressions
 
 The PostgreSQL creation-store suite verifies that the initial event starts at positive sequence 1 and the deployment, claim job, immutable configuration, and audit record commit atomically. It covers configured attempt limits, concurrent verified-delivery deduplication, rollback on invalid delivery references, and foreign/archived project concealment. Creation locks the current project configuration so archival cannot race a new intent. Unhandled API and webhook-retry errors log fixed codes and request IDs, never raw persistence errors or SQL parameters.
+
+### Build-context permission regressions
+
+Build staging remains private to the worker's user, but copied Git files use canonical 0644/0755 permissions and nested directories remain traversable. The sealed context root is read-only and traversable. The real BuildKit suite builds the `non-root-readable` fixture and runs it as UID 65532 with a read-only filesystem and no network, proving that nested assets remain readable after `COPY`. Git fetch disk-budget sampling tolerates temporary files disappearing during Git maintenance; source integrity validation remains strict.
+
+### Runtime startup health regressions
+
+HTTP health checks allow connection-refused startup races to retry within the original bounded health window. They do not turn non-success HTTP responses into success or extend the deadline. Delayed listening and aborted response bodies have focused regression coverage; aborted bodies settle with a typed error rather than hanging.

@@ -268,10 +268,20 @@ export class HardenedGitRepositoryCheckout implements RepositoryCheckout {
       if (current === undefined) {
         break;
       }
-      const handle = await opendir(current);
+      const handle = await opendir(current).catch((error: NodeJS.ErrnoException) => {
+        if (error.code === "ENOENT" && current !== directory) return undefined;
+        throw error;
+      });
+      if (handle === undefined) continue;
       for await (const entry of handle) {
         const path = join(current, entry.name);
-        const entryStats = await lstat(path);
+        // Git can delete temporary lock/pack files while the fetch budget is
+        // sampled. Missing entries consume no retained disk space.
+        const entryStats = await lstat(path).catch((error: NodeJS.ErrnoException) => {
+          if (error.code === "ENOENT") return undefined;
+          throw error;
+        });
+        if (entryStats === undefined) continue;
         if (entryStats.isDirectory() && !entryStats.isSymbolicLink()) {
           pending.push(path);
         } else {

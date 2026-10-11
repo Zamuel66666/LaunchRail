@@ -1,4 +1,4 @@
-import { request } from "node:http";
+import { request, type ClientRequest } from "node:http";
 
 export interface HttpHealthCheckCommand {
   readonly host: string;
@@ -47,33 +47,61 @@ export async function checkHttpHealth(
     throw new RangeError("Health-check timeout must be between 1 and 30000 milliseconds");
   const started = Date.now();
   return new Promise((resolve, reject) => {
+    let currentRequest: ClientRequest | undefined;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let settled = false;
+    const fail = (error: HttpHealthCheckError) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      clearTimeout(retryTimer);
+      reject(error);
+      currentRequest?.destroy();
+    };
     const timer = setTimeout(
-      () => request_.destroy(new HttpHealthCheckError("health_timeout", Date.now() - started)),
+      () => fail(new HttpHealthCheckError("health_timeout", Date.now() - started)),
       command.timeoutMs,
     );
-    const request_ = request(
-      { hostname: command.host, port: command.port, path: command.path, method: "GET" },
-      (response) => {
-        response.resume();
-        response.once("end", () => {
-          clearTimeout(timer);
-          const statusCode = response.statusCode;
-          if (statusCode === undefined || statusCode < 100 || statusCode > 599) {
-            reject(new HttpHealthCheckError("health_invalid_response", Date.now() - started));
-            return;
-          }
-          resolve({ statusCode, durationMs: Date.now() - started });
-        });
-      },
-    );
-    request_.once("error", (error) => {
-      clearTimeout(timer);
-      reject(
-        error instanceof HttpHealthCheckError
-          ? error
-          : new HttpHealthCheckError("health_invalid_response", Date.now() - started),
+    const attempt = () => {
+      if (settled) return;
+      currentRequest = request(
+        { hostname: command.host, port: command.port, path: command.path, method: "GET" },
+        (response) => {
+          response.resume();
+          response.once("error", () =>
+            fail(new HttpHealthCheckError("health_invalid_response", Date.now() - started)),
+          );
+          response.once("aborted", () =>
+            fail(new HttpHealthCheckError("health_invalid_response", Date.now() - started)),
+          );
+          response.once("end", () => {
+            if (settled) return;
+            const statusCode = response.statusCode;
+            if (statusCode === undefined || statusCode < 100 || statusCode > 599) {
+              fail(new HttpHealthCheckError("health_invalid_response", Date.now() - started));
+              return;
+            }
+            settled = true;
+            clearTimeout(timer);
+            resolve({ statusCode, durationMs: Date.now() - started });
+          });
+        },
       );
-    });
-    request_.end();
+      currentRequest.once("error", (error: NodeJS.ErrnoException) => {
+        if (settled) return;
+        const remaining = command.timeoutMs - (Date.now() - started);
+        if (error.code === "ECONNREFUSED" && remaining > 100) {
+          retryTimer = setTimeout(attempt, 100);
+          return;
+        }
+        fail(
+          error instanceof HttpHealthCheckError
+            ? error
+            : new HttpHealthCheckError("health_invalid_response", Date.now() - started),
+        );
+      });
+      currentRequest.end();
+    };
+    attempt();
   });
 }

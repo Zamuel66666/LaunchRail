@@ -22,6 +22,9 @@ it("removes a sealed read-only build context", async () => {
       workItemId: randomUUID(),
     });
     expect((await lstat(snapshot.contextDirectory)).mode & 0o200).toBe(0);
+    expect((await lstat(snapshot.contextDirectory)).mode & 0o555).toBe(0o555);
+    expect((await lstat(snapshot.stageDirectory)).mode & 0o077).toBe(0);
+    expect((await lstat(join(snapshot.contextDirectory, "payload.txt"))).mode & 0o777).toBe(0o644);
     await removePrivateBuildContextSnapshot(snapshot.stageDirectory);
     await expect(lstat(snapshot.stageDirectory)).rejects.toMatchObject({ code: "ENOENT" });
   } finally {

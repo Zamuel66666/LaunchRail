@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -34,6 +36,28 @@ describe("real BuildKit image lifecycle", () => {
     sourceRevision: "a".repeat(40),
     treeRevision: "b".repeat(40),
     workItemId: randomUUID(),
+  });
+
+  it("preserves readable files and traversable directories for non-root image users", async () => {
+    const context = await createFixtureBuildContext("non-root-readable");
+    const command = {
+      attempt: 1,
+      context,
+      identity: identity(),
+      signal: new AbortController().signal,
+    };
+    try {
+      const image = await builder.build(command, { write: async () => undefined });
+      const output = await promisify(execFile)(
+        "docker",
+        ["run", "--rm", "--network=none", "--read-only", image.imageId],
+        { timeout: 10000 },
+      );
+      expect(output.stdout.trim()).toBe("Non-root workloads can read copied Git assets.");
+    } finally {
+      await builder.remove(command);
+      await context.dispose();
+    }
   });
 
   it("builds an exact image and adopts it after a worker retry", async () => {

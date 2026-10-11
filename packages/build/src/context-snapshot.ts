@@ -172,6 +172,7 @@ export async function createPrivateBuildContextSnapshot(options: {
           size: 0,
         });
         await copyDirectory(sourcePath, destinationPath, depth + 1);
+        await chmod(destinationPath, 0o755);
         const after = await lstat(sourcePath);
         if (!sameFilesystemEntry(before, after)) {
           throw contextError(
@@ -279,6 +280,9 @@ export async function createPrivateBuildContextSnapshot(options: {
             await destination.write(chunk);
           }
           await destination.sync();
+          // The enclosing private stage protects host data. Git file permissions
+          // must survive COPY so non-root workloads can read their own assets.
+          await destination.chmod((before.mode & 0o111) === 0 ? 0o644 : 0o755);
           const afterOpen = await source.stat();
           const afterPath = await lstat(sourcePath);
           if (
@@ -349,7 +353,7 @@ export async function createPrivateBuildContextSnapshot(options: {
         "The prepared Dockerfile no longer matches its seal",
       );
     }
-    await chmod(destinationRoot, 0o500);
+    await chmod(destinationRoot, 0o555);
     return {
       contextDirectory: destinationRoot,
       dockerfilePath: resolvedDockerfile,

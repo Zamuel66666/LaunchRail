@@ -368,7 +368,7 @@ button:disabled {
   color: #dcecf5;
 }
 
-:where(a, button, input, select, summary):focus-visible {
+:where(a, button, input, select, summary, [tabindex="-1"]):focus-visible {
   outline: 0.18rem solid #8eeaff;
   outline-offset: 0.2rem;
 }

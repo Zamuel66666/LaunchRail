@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useId, useState } from "react";
+import { type FormEvent, useEffect, useId, useRef, useState } from "react";
 
 import {
   removeEnvironmentVariable,
@@ -39,8 +39,24 @@ export function EnvironmentVariableEditor({
   const [value, setValue] = useState("");
   const [pending, setPending] = useState(false);
   const [confirmingRemoval, setConfirmingRemoval] = useState<string | null>(null);
+  const variableNameInputRef = useRef<HTMLInputElement>(null);
+  const removalReturnFocus = useRef<HTMLElement | undefined>(undefined);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    if (confirmingRemoval !== null || removalReturnFocus.current === undefined) return;
+    const target = removalReturnFocus.current;
+    removalReturnFocus.current = undefined;
+    if (target.isConnected) target.focus();
+    else variableNameInputRef.current?.focus();
+  }, [confirmingRemoval]);
+
+  function requestRemoval(variableName: string): void {
+    const activeElement = document.activeElement;
+    removalReturnFocus.current = activeElement instanceof HTMLElement ? activeElement : undefined;
+    setConfirmingRemoval(variableName);
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -126,7 +142,7 @@ export function EnvironmentVariableEditor({
                 <button
                   className="danger-link"
                   disabled={pending}
-                  onClick={() => setConfirmingRemoval(environmentVariable.name)}
+                  onClick={() => requestRemoval(environmentVariable.name)}
                   type="button"
                 >
                   Remove
@@ -180,6 +196,7 @@ export function EnvironmentVariableEditor({
           <div className="form-field">
             <label htmlFor={`${id}-name`}>Variable name</label>
             <input
+              ref={variableNameInputRef}
               autoCapitalize="characters"
               autoComplete="off"
               disabled={pending}

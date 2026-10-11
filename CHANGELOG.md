@@ -62,6 +62,7 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 - Worker readiness now rechecks PostgreSQL and Redis on an isolated bounded probe connection, without interfering with BullMQ's blocking consumer.
 - Route restoration failures no longer abort a reconciliation pass before it republishes durable deployment work.
 - Both benchmark scripts now accept IPv6 loopback origins while continuing to reject non-loopback targets.
+- Confirmation flows now restore keyboard focus to their trigger or a stable contextual fallback after dismissal.
 
 - Plain-language product scope, target users, core workflow, success criteria, and explicit non-goals.
 - Initial architecture for the web application, API, worker, persistence, queue, build/runtime, routing, and observability boundaries.

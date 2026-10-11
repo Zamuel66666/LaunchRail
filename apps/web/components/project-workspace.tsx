@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { EnvironmentVariableEditor } from "./environment-variable-editor";
 import { ProjectForm } from "./project-form";
@@ -182,6 +182,17 @@ function ProjectCard({
   const [auditEventsError, setAuditEventsError] = useState("");
   const [pendingDeploymentControl, setPendingDeploymentControl] =
     useState<PendingDeploymentControl | null>(null);
+  const deploymentControlReturnFocus = useRef<HTMLElement | undefined>(undefined);
+  const deploymentControlFocusFallback = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (pendingDeploymentControl !== null) return;
+    const target = deploymentControlReturnFocus.current;
+    deploymentControlReturnFocus.current = undefined;
+    if (target?.isConnected) target.focus();
+    else if (deploymentControlFocusFallback.current !== undefined)
+      document.getElementById(deploymentControlFocusFallback.current)?.focus();
+    deploymentControlFocusFallback.current = undefined;
+  }, [pendingDeploymentControl]);
   useEffect(() => {
     const controller = new AbortController();
     void listDeployments(organizationId, project.id, controller.signal)
@@ -191,6 +202,10 @@ function ProjectCard({
   }, [organizationId, project.id]);
 
   function requestDeploymentControl(deploymentId: string, action: DeploymentControlAction) {
+    const activeElement = document.activeElement;
+    deploymentControlReturnFocus.current =
+      activeElement instanceof HTMLElement ? activeElement : undefined;
+    deploymentControlFocusFallback.current = `deployment-entry-${deploymentId}`;
     setDeploymentActionError("");
     setPendingDeploymentControl({ action, deploymentId });
   }
@@ -457,7 +472,11 @@ function ProjectCard({
         ) : (
           <ol>
             {deployments.map((deployment) => (
-              <li key={deployment.deploymentId}>
+              <li
+                id={`deployment-entry-${deployment.deploymentId}`}
+                key={deployment.deploymentId}
+                tabIndex={-1}
+              >
                 <strong>{deployment.state}</strong> · {formatDate(deployment.createdAt)}
                 <br />
                 <code>{deployment.sourceRevision.slice(0, 12)}</code>
@@ -872,6 +891,7 @@ export function ProjectWorkspace() {
       setProjects((current) => current.filter((project) => project.id !== archiveTarget.id));
       setAnnouncement(`${archiveTarget.name} was archived.`);
       setArchiveTarget(null);
+      requestAnimationFrame(() => document.getElementById("projects-title")?.focus());
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         setSessionStatus("unauthenticated");
@@ -1041,7 +1061,9 @@ export function ProjectWorkspace() {
           <section className="workspace-toolbar" aria-labelledby="projects-title">
             <div>
               <p className="section-label">Organization projects</p>
-              <h1 id="projects-title">Configure applications safely</h1>
+              <h1 id="projects-title" tabIndex={-1}>
+                Configure applications safely
+              </h1>
               <p>
                 Repository, build, health, runtime, and encrypted environment settings are kept
                 inside the selected organization.

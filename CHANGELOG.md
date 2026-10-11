@@ -63,6 +63,7 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 - Route restoration failures no longer abort a reconciliation pass before it republishes durable deployment work.
 - Both benchmark scripts now accept IPv6 loopback origins while continuing to reject non-loopback targets.
 - Confirmation flows now restore keyboard focus to their trigger or a stable contextual fallback after dismissal.
+- Resource-recovery inventory failures are now isolated from durable wake-up dispatch and retried on the next reconciliation pass.
 
 - Plain-language product scope, target users, core workflow, success criteria, and explicit non-goals.
 - Initial architecture for the web application, API, worker, persistence, queue, build/runtime, routing, and observability boundaries.

@@ -45,6 +45,7 @@ export interface DeploymentJobReconciliationResult {
   readonly interruptedRouteFilesRemoved: number;
   readonly routeFileCleanupFailures: number;
   readonly routeReconciliationFailures: number;
+  readonly resourceRecoveryFailures: number;
 }
 
 export class DeploymentJobReconciler {
@@ -148,129 +149,138 @@ export class DeploymentJobReconciler {
     let filesystemCleanupFailures = 0;
     let orphanImagesRemoved = 0;
     let orphanImageCleanupFailures = 0;
+    let resourceRecoveryFailures = 0;
     if (this.store.listWorkerResourceRecoveryState !== undefined) {
-      const recoveryState = await this.store.listWorkerResourceRecoveryState();
-      if (this.repositoryCheckout !== undefined) {
-        for (const checkoutKey of recoveryState.cleanupCheckoutKeys) {
-          try {
-            await this.repositoryCheckout.remove(checkoutKey);
-            await this.store.recordSourceCheckoutCleanup?.({ checkoutKey });
-            finalCheckoutsRemoved += 1;
-          } catch {
-            filesystemCleanupFailures += 1;
-            this.logger.warn(
-              { event: "completed_source_checkout_cleanup_failed" },
-              "Completed source checkout cleanup will be retried during reconciliation",
-            );
-          }
-        }
-      }
-      if (this.repositoryCheckout?.cleanupAbandonedStages !== undefined) {
-        try {
-          sourceStagesRemoved = await this.repositoryCheckout.cleanupAbandonedStages({
-            olderThan,
-            protectedCheckoutKeys: recoveryState.leasedCheckoutKeys,
-          });
-        } catch {
-          filesystemCleanupFailures += 1;
-          this.logger.warn(
-            { event: "orphan_source_stage_cleanup_failed" },
-            "Abandoned source staging cleanup will be retried during reconciliation",
-          );
-        }
-      }
-      if (this.imageBuilder?.cleanupAbandonedStages !== undefined) {
-        try {
-          buildStagesRemoved = await this.imageBuilder.cleanupAbandonedStages({
-            olderThan,
-            protectedWorkItemIds: recoveryState.leasedBuildWorkItemIds,
-          });
-        } catch {
-          filesystemCleanupFailures += 1;
-          this.logger.warn(
-            { event: "orphan_build_stage_cleanup_failed" },
-            "Abandoned build staging cleanup will be retried during reconciliation",
-          );
-        }
-      }
-      if (this.imageBuilder?.cleanupOrphanedImages !== undefined) {
-        try {
-          const cleanup = await this.imageBuilder.cleanupOrphanedImages({
-            knownImageIds: recoveryState.knownImageIds,
-            olderThan,
-            protectedWorkItemIds: recoveryState.leasedBuildWorkItemIds,
-            signal: AbortSignal.timeout(30_000),
-          });
-          orphanImagesRemoved = cleanup.removed;
-          orphanImageCleanupFailures = cleanup.failed;
-          if (cleanup.failed > 0)
-            this.logger.warn(
-              { event: "orphan_build_image_cleanup_failed", failed: cleanup.failed },
-              "Orphan build image cleanup will be retried during reconciliation",
-            );
-        } catch {
-          orphanImageCleanupFailures += 1;
-          this.logger.warn(
-            { event: "orphan_build_image_inventory_failed" },
-            "Orphan build image inventory will be retried during reconciliation",
-          );
-        }
-      }
-      if (
-        this.runtimeManager?.listManagedRuntimes !== undefined &&
-        this.runtimeManager.cleanupOrphan !== undefined
-      ) {
-        const knownIds = new Set(recoveryState.knownContainerIds);
-        const cleanupIds = new Set(recoveryState.cleanupContainerIds);
-        const leasedWorkItems = new Set(recoveryState.leasedWorkItemIds);
-        const signal = new AbortController().signal;
-        try {
-          const managed = await this.runtimeManager.listManagedRuntimes(signal);
-          for (const runtime of managed) {
-            if (
-              (knownIds.has(runtime.containerId) && !cleanupIds.has(runtime.containerId)) ||
-              leasedWorkItems.has(runtime.identity.workItemId)
-            )
-              continue;
-            let removed = false;
+      try {
+        const recoveryState = await this.store.listWorkerResourceRecoveryState();
+        if (this.repositoryCheckout !== undefined) {
+          for (const checkoutKey of recoveryState.cleanupCheckoutKeys) {
             try {
-              await this.runtimeManager.cleanupOrphan({ ...runtime, signal });
-              removed = true;
-              await this.store.recordRuntimeCleanup?.({
-                containerId: runtime.containerId,
-                state: "complete",
-              });
-              orphanRuntimesCleaned += 1;
+              await this.repositoryCheckout.remove(checkoutKey);
+              await this.store.recordSourceCheckoutCleanup?.({ checkoutKey });
+              finalCheckoutsRemoved += 1;
             } catch {
-              if (!removed) {
-                try {
-                  await this.store.recordRuntimeCleanup?.({
-                    containerId: runtime.containerId,
-                    state: "failed",
-                  });
-                } catch {
-                  // Runtime label inventory still protects the resource for a later pass.
-                }
-              }
-              orphanRuntimeCleanupFailures += 1;
+              filesystemCleanupFailures += 1;
               this.logger.warn(
-                {
-                  event: removed
-                    ? "orphan_runtime_cleanup_state_record_failed"
-                    : "orphan_runtime_cleanup_failed",
-                  workItemId: runtime.identity.workItemId,
-                },
-                "Orphan runtime cleanup will be reconciled again",
+                { event: "completed_source_checkout_cleanup_failed" },
+                "Completed source checkout cleanup will be retried during reconciliation",
               );
             }
           }
-        } catch {
-          orphanRuntimeCleanupFailures += 1;
-          this.logger.warn(
-            { event: "orphan_runtime_inventory_failed" },
-            "Managed runtime inventory will be retried during reconciliation",
-          );
         }
+        if (this.repositoryCheckout?.cleanupAbandonedStages !== undefined) {
+          try {
+            sourceStagesRemoved = await this.repositoryCheckout.cleanupAbandonedStages({
+              olderThan,
+              protectedCheckoutKeys: recoveryState.leasedCheckoutKeys,
+            });
+          } catch {
+            filesystemCleanupFailures += 1;
+            this.logger.warn(
+              { event: "orphan_source_stage_cleanup_failed" },
+              "Abandoned source staging cleanup will be retried during reconciliation",
+            );
+          }
+        }
+        if (this.imageBuilder?.cleanupAbandonedStages !== undefined) {
+          try {
+            buildStagesRemoved = await this.imageBuilder.cleanupAbandonedStages({
+              olderThan,
+              protectedWorkItemIds: recoveryState.leasedBuildWorkItemIds,
+            });
+          } catch {
+            filesystemCleanupFailures += 1;
+            this.logger.warn(
+              { event: "orphan_build_stage_cleanup_failed" },
+              "Abandoned build staging cleanup will be retried during reconciliation",
+            );
+          }
+        }
+        if (this.imageBuilder?.cleanupOrphanedImages !== undefined) {
+          try {
+            const cleanup = await this.imageBuilder.cleanupOrphanedImages({
+              knownImageIds: recoveryState.knownImageIds,
+              olderThan,
+              protectedWorkItemIds: recoveryState.leasedBuildWorkItemIds,
+              signal: AbortSignal.timeout(30_000),
+            });
+            orphanImagesRemoved = cleanup.removed;
+            orphanImageCleanupFailures = cleanup.failed;
+            if (cleanup.failed > 0)
+              this.logger.warn(
+                { event: "orphan_build_image_cleanup_failed", failed: cleanup.failed },
+                "Orphan build image cleanup will be retried during reconciliation",
+              );
+          } catch {
+            orphanImageCleanupFailures += 1;
+            this.logger.warn(
+              { event: "orphan_build_image_inventory_failed" },
+              "Orphan build image inventory will be retried during reconciliation",
+            );
+          }
+        }
+        if (
+          this.runtimeManager?.listManagedRuntimes !== undefined &&
+          this.runtimeManager.cleanupOrphan !== undefined
+        ) {
+          const knownIds = new Set(recoveryState.knownContainerIds);
+          const cleanupIds = new Set(recoveryState.cleanupContainerIds);
+          const leasedWorkItems = new Set(recoveryState.leasedWorkItemIds);
+          const signal = new AbortController().signal;
+          try {
+            const managed = await this.runtimeManager.listManagedRuntimes(signal);
+            for (const runtime of managed) {
+              if (
+                (knownIds.has(runtime.containerId) && !cleanupIds.has(runtime.containerId)) ||
+                leasedWorkItems.has(runtime.identity.workItemId)
+              )
+                continue;
+              let removed = false;
+              try {
+                await this.runtimeManager.cleanupOrphan({ ...runtime, signal });
+                removed = true;
+                await this.store.recordRuntimeCleanup?.({
+                  containerId: runtime.containerId,
+                  state: "complete",
+                });
+                orphanRuntimesCleaned += 1;
+              } catch {
+                if (!removed) {
+                  try {
+                    await this.store.recordRuntimeCleanup?.({
+                      containerId: runtime.containerId,
+                      state: "failed",
+                    });
+                  } catch {
+                    // Runtime label inventory still protects the resource for a later pass.
+                  }
+                }
+                orphanRuntimeCleanupFailures += 1;
+                this.logger.warn(
+                  {
+                    event: removed
+                      ? "orphan_runtime_cleanup_state_record_failed"
+                      : "orphan_runtime_cleanup_failed",
+                    workItemId: runtime.identity.workItemId,
+                  },
+                  "Orphan runtime cleanup will be reconciled again",
+                );
+              }
+            }
+          } catch {
+            orphanRuntimeCleanupFailures += 1;
+            this.logger.warn(
+              { event: "orphan_runtime_inventory_failed" },
+              "Managed runtime inventory will be retried during reconciliation",
+            );
+          }
+        }
+      } catch {
+        resourceRecoveryFailures += 1;
+        this.logger.warn(
+          { event: "worker_resource_recovery_failed" },
+          "Resource cleanup will be retried during reconciliation",
+        );
       }
     }
     let dispatched = 0;
@@ -312,6 +322,7 @@ export class DeploymentJobReconciler {
       interruptedRouteFilesRemoved,
       routeFileCleanupFailures,
       routeReconciliationFailures,
+      resourceRecoveryFailures,
       recovered: recovered.length,
     };
     this.metrics?.increment("launchrail_worker_reconciliations_total");
@@ -352,6 +363,8 @@ export class DeploymentJobReconciler {
       this.metrics?.increment("launchrail_worker_route_file_cleanup_failures_total");
     for (let index = 0; index < routeReconciliationFailures; index += 1)
       this.metrics?.increment("launchrail_worker_route_reconciliation_failures_total");
+    for (let index = 0; index < resourceRecoveryFailures; index += 1)
+      this.metrics?.increment("launchrail_worker_resource_recovery_failures_total");
     this.logger.info(
       { event: "deployment_job_reconciliation", ...result },
       "Deployment job reconciliation pass completed",

@@ -39,7 +39,7 @@ Application build/runtime output is a separate bounded stream, not mixed into co
 
 Prometheus-compatible metrics will use low-cardinality labels such as service, route template, method, status class, job type, deployment stage, outcome, and failure category.
 
-The API exposes request counters/histograms and webhook processing counters/histograms at `/metrics` with bounded route-template, method, status-class, event-class, and outcome labels. API and worker readiness probes also expose bounded ready/not-ready counters; the API records readiness-check duration. The worker `/metrics` exposes process uptime/RSS, active-job gauge, reconciliation/dispatch counters, health-check counters/histograms, runtime handoff/failure counters, orphan-runtime, source/build-stage, completed-checkout, orphan-image, interrupted-route-file, and route-restoration failure counters. Labels intentionally omit repository, organization, deployment, request, and delivery identifiers.
+The API exposes request counters/histograms and webhook processing counters/histograms at `/metrics` with bounded route-template, method, status-class, event-class, and outcome labels. API and worker readiness probes also expose bounded ready/not-ready counters; the API records readiness-check duration. The worker `/metrics` exposes process uptime/RSS, active-job gauge, reconciliation/dispatch counters, health-check counters/histograms, runtime handoff/failure counters, orphan-runtime, source/build-stage, completed-checkout, orphan-image, interrupted-route-file, route-restoration, and resource-recovery failure counters. Labels intentionally omit repository, organization, deployment, request, and delivery identifiers.
 
 Measurements still to add:
 

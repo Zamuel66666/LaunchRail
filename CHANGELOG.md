@@ -6,6 +6,12 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 
 ### Verification fixes
 
+- Deployment creation now commits a positive initial event sequence, immutable configuration, claim job, and audit record atomically; concurrent verified deliveries remain deduplicated.
+- Private BuildKit snapshots preserve readable Git asset permissions for non-root image users. Startup health checks retry connection-refused races within the existing deadline and settle aborted response bodies safely.
+- Added a forward-only migration for recording completed source cleanup without permitting source metadata mutation.
+- Corrected Linux Traefik networking to reach loopback-only runtime ports, and tightened real routing acceptance to use a loopback-only fixture.
+- Isolated queue recovery tests from the live Docker daemon and corrected the deployment benchmark's mutation Origin header.
+
 - Runtime stop/orphan cleanup now verifies every ownership label, reserves time for graceful stop within the Docker command deadline, and treats confirmed concurrent removal as successful cleanup. A Docker outage is never treated as resource absence.
 - Added real Docker acceptance for the healthy, failed-health, Node.js, and Python applications built from repository-root contexts.
 

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { EnvironmentVariableEditor } from "./environment-variable-editor";
 import { ProjectForm } from "./project-form";
+import { deploymentPreviewUrl } from "../lib/preview";
 import {
   ApiError,
   archiveProject,
@@ -126,6 +127,7 @@ function LoadingState({ label }: Readonly<{ label: string }>) {
 function ProjectCard({
   canArchive,
   canCreateDeployment,
+  canControlDeployments,
   canReadAudit,
   canEdit,
   canManageSecrets,
@@ -138,6 +140,7 @@ function ProjectCard({
 }: Readonly<{
   canArchive: boolean;
   canCreateDeployment: boolean;
+  canControlDeployments: boolean;
   canReadAudit: boolean;
   canEdit: boolean;
   canManageSecrets: boolean;
@@ -150,6 +153,8 @@ function ProjectCard({
 }>) {
   const repositoryUrl = safeRepositoryUrl(project.repositoryUrl);
   const [deployments, setDeployments] = useState<readonly DeploymentHistorySummary[]>([]);
+  const [timelineOpen, setTimelineOpen] = useState(false);
+  const [openBuildLogIds, setOpenBuildLogIds] = useState<readonly string[]>([]);
   const [retryingDeploymentId, setRetryingDeploymentId] = useState<string | null>(null);
   const [sourceRevision, setSourceRevision] = useState("");
   const [creatingDeployment, setCreatingDeployment] = useState(false);
@@ -193,11 +198,53 @@ function ProjectCard({
   }, [pendingDeploymentControl]);
   useEffect(() => {
     const controller = new AbortController();
-    void listDeployments(organizationId, project.id, controller.signal)
-      .then(setDeployments)
-      .catch(() => setDeployments([]));
-    return () => controller.abort();
-  }, [organizationId, project.id]);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const refresh = async () => {
+      try {
+        const history = await listDeployments(organizationId, project.id, controller.signal);
+        if (!controller.signal.aborted) setDeployments(history);
+      } catch {
+        // Preserve the last known history during a transient outage.
+      } finally {
+        if (timelineOpen && !controller.signal.aborted)
+          timer = setTimeout(() => void refresh(), 2000);
+      }
+    };
+    void refresh();
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [organizationId, project.id, timelineOpen]);
+
+  useEffect(() => {
+    if (!timelineOpen || openBuildLogIds.length === 0) return;
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const refresh = async () => {
+      for (const deploymentId of openBuildLogIds) {
+        if (controller.signal.aborted) return;
+        try {
+          const logs = await listDeploymentBuildLogs(
+            organizationId,
+            deploymentId,
+            controller.signal,
+          );
+          if (!controller.signal.aborted)
+            setBuildLogs((current) => ({ ...current, [deploymentId]: logs }));
+        } catch {
+          if (!controller.signal.aborted)
+            setBuildLogsError("Build output could not be refreshed. Reopen the logs to retry.");
+        }
+      }
+      if (!controller.signal.aborted) timer = setTimeout(() => void refresh(), 2000);
+    };
+    timer = setTimeout(() => void refresh(), 2000);
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [organizationId, timelineOpen, openBuildLogIds]);
 
   function requestDeploymentControl(deploymentId: string, action: DeploymentControlAction) {
     const activeElement = document.activeElement;
@@ -347,7 +394,10 @@ function ProjectCard({
         </div>
       </dl>
 
-      <details className="project-details">
+      <details
+        className="project-details"
+        onToggle={(event) => setTimelineOpen(event.currentTarget.open)}
+      >
         <summary>Deployment timeline</summary>
         {canCreateDeployment ? (
           <form
@@ -427,7 +477,7 @@ function ProjectCard({
         )}
         {pendingDeploymentControl === null ? null : (
           <div
-            aria-labelledby="deployment-control-confirmation-title"
+            aria-labelledby={`deployment-control-confirmation-${project.id}`}
             className="deployment-control-confirmation"
             onKeyDown={(event) => {
               if (event.key === "Escape" && controllingDeploymentId === null)
@@ -435,7 +485,7 @@ function ProjectCard({
             }}
             role="alertdialog"
           >
-            <p id="deployment-control-confirmation-title">
+            <p id={`deployment-control-confirmation-${project.id}`}>
               {pendingDeploymentControl.action === "rollback"
                 ? "Restore the previous superseded release? The current release will be superseded."
                 : pendingDeploymentControl.action === "stop"
@@ -478,6 +528,19 @@ function ProjectCard({
                 <strong>{deployment.state}</strong> · {formatDate(deployment.createdAt)}
                 <br />
                 <code>{deployment.sourceRevision.slice(0, 12)}</code>
+                {deploymentPreviewUrl(deployment) !== null ? (
+                  <p>
+                    <a href={deploymentPreviewUrl(deployment)!} target="_blank" rel="noreferrer">
+                      Open preview
+                    </a>
+                  </p>
+                ) : null}
+                {deployment.failureCategory ? (
+                  <p role="status">
+                    {deployment.failureCategory.replaceAll("_", " ")}
+                    {deployment.failureMessage ? `: ${deployment.failureMessage}` : ""}
+                  </p>
+                ) : null}
                 <details
                   className="deployment-health"
                   onToggle={(event) => {
@@ -511,7 +574,13 @@ function ProjectCard({
                 <details
                   className="deployment-build-logs"
                   onToggle={(event) => {
-                    if (event.currentTarget.open) loadDeploymentBuildLogs(deployment.deploymentId);
+                    const open = event.currentTarget.open;
+                    setOpenBuildLogIds((current) =>
+                      open
+                        ? [...new Set([...current, deployment.deploymentId])]
+                        : current.filter((id) => id !== deployment.deploymentId),
+                    );
+                    if (open) loadDeploymentBuildLogs(deployment.deploymentId);
                   }}
                 >
                   <summary>Build logs</summary>
@@ -608,9 +677,10 @@ function ProjectCard({
                     )}
                   </details>
                 ) : null}
-                {deployment.state === "build_failed" ||
-                deployment.state === "deployment_failed" ||
-                deployment.state === "cancelled" ? (
+                {canControlDeployments &&
+                (deployment.state === "build_failed" ||
+                  deployment.state === "deployment_failed" ||
+                  deployment.state === "cancelled") ? (
                   <button
                     className="button-secondary"
                     disabled={retryingDeploymentId !== null}
@@ -631,7 +701,8 @@ function ProjectCard({
                     {retryingDeploymentId === deployment.deploymentId ? "Retrying…" : "Retry"}
                   </button>
                 ) : null}
-                {["queued", "cloning", "building", "deploying", "health_checking"].includes(
+                {canControlDeployments &&
+                ["queued", "cloning", "building", "deploying", "health_checking"].includes(
                   deployment.state,
                 ) ? (
                   <button
@@ -643,7 +714,7 @@ function ProjectCard({
                     Cancel
                   </button>
                 ) : null}
-                {deployment.state === "active" ? (
+                {canControlDeployments && deployment.state === "active" ? (
                   <>
                     <button
                       className="button-secondary"
@@ -1246,6 +1317,7 @@ export function ProjectWorkspace() {
                   <ProjectCard
                     canArchive={canArchive}
                     canCreateDeployment={canCreateDeployment}
+                    canControlDeployments={canControlDeployments}
                     canReadAudit={canReadAudit}
                     canEdit={canEdit}
                     canManageSecrets={canManageSecrets}

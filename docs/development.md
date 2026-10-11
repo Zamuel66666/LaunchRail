@@ -13,6 +13,8 @@ The repository now includes the runnable web/API/worker workspace, authenticated
 
 The local proxy uses Linux host networking to reach runtime ports bound only to loopback. Both the preview entrypoint (default 8080) and health entrypoint (default 18082) bind to `127.0.0.1`; the dashboard is disabled. Override `TRAEFIK_PORT` or `TRAEFIK_HEALTH_PORT` if a host port is occupied. Docker Desktop networking is not covered by this setup. The routing acceptance fixture also binds exclusively to loopback, matching the actual runtime boundary.
 
+When changing `TRAEFIK_PORT`, set `NEXT_PUBLIC_PREVIEW_PORT` to the same port before building the web application. Preview links are shown only for active deployments with their exact recorded `d-<deployment-id>.localhost` hostname. An open deployment timeline refreshes history every two seconds; open build logs refresh on the same bounded interval. Closing the sections or navigating away cancels polling. Viewers can read history and open previews but cannot see or invoke deployment controls.
+
 The workspace pins application dependencies in `pnpm-lock.yaml`. Do not replace a frozen install with an unreviewed lockfile update in CI or setup instructions.
 
 ## Clean setup

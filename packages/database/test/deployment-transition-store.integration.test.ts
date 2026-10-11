@@ -139,6 +139,51 @@ describeWithDatabase("PostgresDeploymentTransitionStore", () => {
     expect(audits).toHaveLength(1);
   });
 
+  it("returns only the project's recorded preview and safe failure details in scoped history", async () => {
+    const active = await seedDeployment({ state: "active" });
+    const failed = await seedDeployment({
+      organizationId: active.organizationId,
+      projectId: active.projectId,
+      state: "deploying",
+    });
+    await client.db.insert(schema.previewRoutes).values({
+      deploymentId: active.deploymentId,
+      organizationId: active.organizationId,
+      hostname: `d-${active.deploymentId}.localhost`,
+      hostPort: 42123,
+    });
+    await store.transition({
+      deploymentId: failed.deploymentId,
+      organizationId: failed.organizationId,
+      idempotencyKey: "history-health-failure",
+      to: "deployment_failed",
+      failure: {
+        category: "health_unhealthy",
+        message: "The runtime returned an unhealthy HTTP status",
+      },
+    });
+    const history = await store.listDeployments({
+      organizationId: active.organizationId,
+      projectId: active.projectId,
+      limit: 10,
+    });
+    expect(history.find((row) => row.deploymentId === active.deploymentId)?.previewHostname).toBe(
+      `d-${active.deploymentId}.localhost`,
+    );
+    expect(history.find((row) => row.deploymentId === failed.deploymentId)).toMatchObject({
+      previewHostname: null,
+      failureCategory: "health_unhealthy",
+      failureMessage: "The runtime returned an unhealthy HTTP status",
+    });
+    expect(
+      await store.listDeployments({
+        organizationId: randomUUID(),
+        projectId: active.projectId,
+        limit: 10,
+      }),
+    ).toEqual([]);
+  });
+
   it("removes the active release pointer when stopping the active deployment", async () => {
     const seeded = await seedDeployment({ state: "active" });
     await client.db.insert(schema.activeReleases).values({

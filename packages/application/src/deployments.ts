@@ -27,6 +27,9 @@ export interface RollbackDeploymentCommand {
 }
 
 export interface DeploymentHistorySummary {
+  readonly previewHostname?: string | null;
+  readonly failureCategory?: string | null;
+  readonly failureMessage?: string | null;
   readonly createdAt: Date;
   readonly deploymentId: string;
   readonly finishedAt: Date | null;

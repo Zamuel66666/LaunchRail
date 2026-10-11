@@ -2,7 +2,7 @@
 
 **A self-hosted platform that turns a GitHub repository into a health-checked application deployment with live logs, preview URLs, release history, and safe rollback.**
 
-> **Phases 0–9 are Available.** Phases 10–16 include health outcomes, operator audit and webhook recovery, local dashboards and W3C trace export, lease-aware cleanup and missing-runtime detection, exact-commit deployments, bounded build/runtime log viewing, guided onboarding, and opt-in deployment benchmarking with per-stage summaries. Recent code also adds deployment lifecycle telemetry and starter alerts. The latest implementation changes are unverified by design; broad recovery coverage, accessibility review, controlled benchmark results, and release evidence remain.
+> **Phases 0–9 are Available; Phases 10–16 are undergoing release acceptance.** The core public-GitHub deployment pipeline has been exercised against real PostgreSQL, Redis, BuildKit, Docker, and Traefik. Recent verification fixed atomic deployment creation, non-root image asset permissions, startup readiness, source cleanup recording, and loopback preview routing. Broad interruption recovery, complete accessible onboarding, controlled benchmark results, and final release evidence remain; this is a single-host demonstration, not a production hosting service.
 
 ## What LaunchRail does
 

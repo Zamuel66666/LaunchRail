@@ -365,11 +365,21 @@ export class PostgresDeploymentTransitionStore implements DeploymentTransitionSt
         deploymentId: deployments.id,
         finishedAt: deployments.finishedAt,
         healthCheckedAt: deployments.healthCheckedAt,
+        previewHostname: previewRoutes.hostname,
+        failureCategory: deployments.failureCategory,
+        failureMessage: deployments.failureMessage,
         projectId: deployments.projectId,
         sourceRevision: deployments.sourceRevision,
         state: deployments.state,
       })
       .from(deployments)
+      .leftJoin(
+        previewRoutes,
+        and(
+          eq(previewRoutes.deploymentId, deployments.id),
+          eq(previewRoutes.organizationId, deployments.organizationId),
+        ),
+      )
       .where(
         and(
           eq(deployments.organizationId, query.organizationId),

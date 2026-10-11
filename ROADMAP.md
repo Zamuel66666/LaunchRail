@@ -17,12 +17,13 @@ The roadmap reports verified repository state, not aspirations as completed feat
 - **Phase 6 — Repository preparation:** public GitHub revision verification, isolated exact-SHA checkout, source limits and containment, immutable preparation metadata, and restart-safe source jobs.
 - **Phase 7 — Build pipeline:** constrained BuildKit execution, immutable image identity, bounded redacted logs, cancellation, cleanup, build-failure handling, and clean-CI acceptance proof.
 - **Phase 8 — Runtime deployment:** restricted idempotent Docker lifecycle, durable runtime handoff, bounded log reads, and clean-CI lifecycle acceptance.
+- **Phase 9 — Routing and preview URLs:** organization-scoped preview records, atomic Traefik file updates, and real loopback-only proxy acceptance.
 
 ### In progress
 
-- **Phase 10 — Health checks and activation:** health outcomes, prior-route preservation, and interrupted-grace cleanup are implemented; independent verification is deferred by request.
-- **Phase 11 — Deployment controls:** API controls, retry lineage, timeline history, confirmations, actionable browser feedback, and deployment-scoped operator audit history are implemented; independent race/failure-injection verification is deferred.
-- **Phase 12 — GitHub webhooks:** verified signed pushes persist normalized retry data, idempotently create deployments, publish wake-ups, expose processing outcomes, and support scoped operator retry; independent verification is deferred.
+- **Phase 10 — Health checks and activation:** health outcomes, prior-route preservation, and interrupted-grace cleanup are implemented; release acceptance is underway.
+- **Phase 11 — Deployment controls:** API controls, retry lineage, timeline history, confirmations, actionable browser feedback, and deployment-scoped operator audit history are implemented; race/failure-injection acceptance remains.
+- **Phase 12 — GitHub webhooks:** verified signed pushes persist normalized retry data, idempotently create deployments, publish wake-ups, expose processing outcomes, and support scoped operator retry; release acceptance is underway.
 - **Phase 13 — Observability:** route-level metrics, lifecycle/health metrics, a local dashboard, bounded API database and worker database/Redis readiness, W3C API request spans, and queue-to-worker trace propagation with OTLP/HTTP export are implemented; independent verification and remote aggregation remain.
 - **Phase 14 — Failure recovery:** reconciliation inventories managed Docker containers and BuildKit images, protects active resources with durable leases/records, prunes unreferenced images and stale source/build/proxy staging files after 24 hours, and removes completed source checkouts after source/build leases end; builds now bootstrap the explicitly configured Buildx builder, while daemon/container-loss recovery, broad interruption coverage, and independent verification remain.
 - **Phase 15 — User experience and accessibility:** operators can start a deployment for an exact commit SHA and inspect retained build output plus an on-demand bounded runtime log tail in the project timeline; a guided `/demo` walkthrough is available, while onboarding polish and independent accessibility/user-flow verification remain.
@@ -55,7 +56,7 @@ Versions and contents may change as implementation evidence becomes available. P
 
 ### Phase 0 — Product definition
 
-**Status:** In progress — implementation complete; independent verification deferred by request
+**Status:** Available
 
 Delivered:
 
@@ -209,7 +210,7 @@ Exit gate: local preview routing works after proxy/worker restart and cannot cro
 
 ### Phase 10 — Health checks and activation
 
-**Status:** In progress — implementation complete; independent verification deferred by request
+**Status:** In progress — implementation complete; release acceptance underway
 
 Delivered:
 
@@ -222,7 +223,7 @@ Implementation evidence: unit and PostgreSQL acceptance cases cover delayed chec
 
 ### Phase 11 — Deployment controls
 
-**Status:** In progress — implementation complete; race/failure-injection verification deferred by request
+**Status:** In progress — implementation complete; race/failure-injection acceptance remains
 
 Organization-scoped deployment listing/event history, idempotent promotion, cancellation, stop controls, transactional rollback, authenticated retry creation, and a recruiter-readable timeline are available with permission checks and bounded inputs. Browser controls require confirmation, surface actionable client-safe errors, and reveal recorded activity on demand. Owner/admin audit readers can now inspect the scoped audit actions associated with each deployment.
 
@@ -230,7 +231,7 @@ Exit gate: independent concurrency and failure-injection verification proves saf
 
 ### Phase 12 — GitHub webhooks
 
-**Status:** In progress — implementation complete; independent verification deferred by request
+**Status:** In progress — implementation complete; release acceptance underway
 
 Signature verification, strict push-event parsing, safe wildcard branch filtering, organization-scoped delivery persistence with provider/delivery deduplication, and configured-organization API ingestion create queued deployments for matching project branches. Each durable deployment immediately publishes its deterministic claim wake-up; worker reconciliation remains the safe fallback if Redis is unavailable. Processing state and safe error codes are durable, owners/admins can inspect recent delivery results, and deployment controllers can retry failed verified deliveries. Per-delivery/project trigger records prevent retry from creating duplicate deployment rows.
 
@@ -238,7 +239,7 @@ Exit gate: independently verify invalid, duplicate, unsupported, oversized, retr
 
 ### Phase 13 — Observability
 
-**Status:** In progress — implementation complete; independent verification deferred by request
+**Status:** In progress — implementation complete; release correlation acceptance remains
 
 Structured logs and worker health are available. API/worker metrics include bounded request and webhook counters/histograms, active jobs and queue handlers, queue depth by state, queue wait and handler-processing duration, durable deployment-job stage duration/outcome by supported kind, deployment final-outcome/duration, build-cache hits/misses, worker heartbeat age, build/runtime cleanup duration, retry/timeout and health-grace exhaustion counters, orphan inventory, route configuration repairs, reconciliation, health-check outcomes/latency, runtime failures, and resource cleanup. Worker readiness also checks Docker daemon access and configured Buildx builder bootstrap, cached for one heartbeat interval. A loopback-only optional Compose overlay provisions Prometheus and Grafana with a read-only data source, operations dashboard, and starter alert rules. API server spans extract W3C trace context, capture route-template/status/duration, and export through the optional OTLP/HTTP endpoint. BullMQ producer and consumer spans carry W3C context in BullMQ telemetry metadata, separate from the identifier-only job data; worker processing, reconciliation, and persistence-adapter operations add bounded spans without SQL statements or parameters. Remote metrics aggregation, individual SQL-statement spans, and independent canary-secret/collector verification remain.
 
@@ -246,7 +247,7 @@ Exit gate: independently verify a full deployment/failure correlation across log
 
 ### Phase 14 — Failure recovery
 
-**Status:** In progress — managed runtime orphan recovery implemented; broader verification deferred by request
+**Status:** In progress — managed runtime orphan recovery implemented; broader interruption acceptance remains
 
 Worker reconciliation inventories only containers bearing LaunchRail's managed label, verifies every ownership label before removal, and preserves containers whose runtime job still has a live PostgreSQL lease. If a healthy Docker inventory shows a persisted active runtime is missing, reconciliation now records a fixed failure, clears the active-release pointer, marks the runtime record failed, and reconciles the route set; a live runtime lease protects in-progress work. Unrecorded containers and containers attached to terminal deployments are cleaned; database cleanup state, metrics, and structured failure logs make repeated cleanup failures visible. Source checkout directories are removed when the deployment has moved past `building` and no unexpired source/build lease uses them; PostgreSQL records the cleanup timestamp. Abandoned `.prepare-*` and `.build-*` staging directories and orphaned BuildKit images are removed only after a 24-hour grace period; database-known image IDs and work items with live build leases are protected. Interrupted Traefik route temp files are removed after the same grace period and tracked separately. Route-restoration and resource-inventory failures are logged and retried without blocking durable job dispatch. Build execution and worker readiness bootstrap only the configured Buildx builder; worker readiness now reports Docker/BuildKit availability, while restarting a lost Docker daemon remains an operator action. Broader interruption, database/Redis outage, and control-race convergence still need recovery acceptance coverage.
 
@@ -254,7 +255,7 @@ Exit gate: repeatable failure-injection tests show convergence or an explicit ac
 
 ### Phase 15 — User experience and accessibility
 
-**Status:** In progress — exact-revision manual deployment and bounded build-log viewing implemented; independent verification deferred by request
+**Status:** In progress — exact-revision deployment and live timeline implemented; full accessible onboarding acceptance remains
 
 Deployment controllers can create a deployment from a full exact commit SHA, with project/organization authorization and a durable database job before best-effort queue publication. The project timeline exposes retained, sequence-ordered build logs and an on-demand last-100-line runtime tail under organization read access. The API-to-worker hop uses a shared secret, fixed configured destination, bounded tail, and no-store responses. Runtime output is application-controlled and may contain sensitive data; access is limited to organization project readers, and operators should avoid printing secrets. The landing page links to a guided `/demo` walkthrough with a first-run checklist, exact-revision release path, and explicit product boundaries; all top-level screens include a keyboard skip link to their main content. Confirmation prompts have accessible names/descriptions, Escape dismissal, initial focus, and focus return; reduced-motion preferences suppress decorative transitions. Screenshot refresh and broad keyboard/responsive/accessibility review remain.
 
@@ -262,7 +263,7 @@ Exit gate: Playwright accessibility/user-flow checks pass, logs and deployment c
 
 ### Phase 16 — Benchmarks and public release
 
-**Status:** In progress — API liveness and opt-in deployment benchmarks plus the release checklist are implemented; controlled results and independent evidence are deferred
+**Status:** In progress — benchmark tooling and release checklist implemented; controlled results and release evidence remain
 
 The versioned `pnpm benchmark:api` scenario reports loopback health latency, throughput, status counts, and environment metadata as JSON. `pnpm benchmark:deployment` can measure 1–10 sequential exact-SHA attempts on an explicitly opted-in dedicated local project, reports event-derived queue/source/build/runtime/health stage durations and median/p95 summaries, and records every outcome. Reports include the current commit when available, working-tree cleanliness, OS, CPU model/count, and memory. Each run creates durable records and may replace the active release; it deliberately does not auto-clean resources. The public release checklist defines clean-clone, integration, recovery, benchmark, security, review, and publishing gates. Repeated isolated queue/build/recovery scenarios and all measured results remain absent until run on a controlled host.
 

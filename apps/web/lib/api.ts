@@ -71,6 +71,9 @@ export interface ProjectInput {
 }
 
 export interface DeploymentHistorySummary {
+  readonly previewHostname?: string | null;
+  readonly failureCategory?: string | null;
+  readonly failureMessage?: string | null;
   readonly createdAt: string;
   readonly deploymentId: string;
   readonly finishedAt: string | null;

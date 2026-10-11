@@ -2,16 +2,16 @@
 
 **A self-hosted platform that turns a GitHub repository into a health-checked application deployment with live logs, preview URLs, release history, and safe rollback.**
 
-> **Phases 0–9 are Available.** Phases 10–16 now include health outcomes, operator audit and webhook recovery, local dashboards, lease-aware resource cleanup, exact-commit deployments, build logs, and release tooling. Independent verification is deferred at the user's request; distributed tracing, broader recovery, runtime logs, deployment benchmarks, and release evidence remain.
+> **Phases 0–9 are Available.** Phases 10–16 now include health outcomes, operator audit and webhook recovery, local dashboards, lease-aware resource cleanup, exact-commit deployments, bounded build/runtime log viewing, and release tooling. Independent verification is deferred at the user's request; distributed tracing, broader recovery, accessible onboarding, deployment benchmarks, and release evidence remain.
 
 ## What LaunchRail does
 
-LaunchRail can build a public GitHub revision, run it in a restricted container, gate activation on an HTTP health check, and expose a local preview URL. A configured signed push webhook is the current deployment creation path.
+LaunchRail can build a public GitHub revision, run it in a restricted container, gate activation on an HTTP health check, and expose a local preview URL. Deployment creation is available through the project workspace for exact commit SHAs or through a configured signed push webhook.
 
 The finished local demonstration will let a user:
 
 - Connect a GitHub repository and select a revision to deploy.
-- Watch build and runtime logs as they happen.
+- Inspect retained build output and recent runtime logs from the project timeline.
 - Open a generated preview URL after health checks pass.
 - Inspect deployment history and actionable failure details.
 - Retry, cancel, stop, or roll back a release.
@@ -96,7 +96,7 @@ LaunchRail will use a modular monolith for the web/API boundary and a separate w
 
 ### Planned next
 
-- Complete and independently verify all recovery boundaries, operator-control races, distributed trace export, runtime log viewing, accessible onboarding, broader controlled benchmarks, and release evidence.
+- Complete and independently verify all recovery boundaries, operator-control races, distributed trace export, accessible onboarding, broader controlled benchmarks, and release evidence.
 
 ### Not currently planned
 
@@ -157,7 +157,7 @@ See the [development guide](docs/development.md) for verification, configuration
 
 ## Current limitations
 
-LaunchRail is not production-ready. Authentication remains local-password only without password reset, invitations, MFA, SSO, or session administration. Source preparation supports unauthenticated public GitHub repositories only; private repositories, Git LFS, submodules, and external-network acceptance smoke tests are unsupported. Runtime-container orphan cleanup, terminal source-checkout cleanup, and 24-hour stale source/build staging cleanup are implemented, but BuildKit image cleanup and broad interruption acceptance remain incomplete. Saved secrets are not placed in Redis or injected into workloads, and automated key re-encryption is not implemented. Browser build logs are available as bounded retained output; runtime log streaming, registry publication/signing/scanning, distributed trace export, and remote telemetry remain unfinished. The BuildKit daemon and Docker host are trusted infrastructure, so current limits do not make a single-host worker a hostile multi-tenant sandbox. Application health endpoints and `pnpm smoke:health` prove process liveness only, not queue/database readiness. Manual deployment creation requires an exact full commit SHA from a public GitHub repository. Recent Phases 10–16 implementation changes are awaiting independent verification; no benchmark result has been published and no release is ready.
+LaunchRail is not production-ready. Authentication remains local-password only without password reset, invitations, MFA, SSO, or session administration. Source preparation supports unauthenticated public GitHub repositories only; private repositories, Git LFS, submodules, and external-network acceptance smoke tests are unsupported. Runtime-container orphan cleanup, terminal source-checkout cleanup, and 24-hour stale source/build staging cleanup are implemented, but BuildKit image cleanup and broad interruption acceptance remain incomplete. Saved secrets are not placed in Redis or injected into workloads, and automated key re-encryption is not implemented. The browser exposes bounded retained build output and an on-demand tail of runtime output when the shared API/worker credential is configured; runtime output is application-controlled and can contain sensitive data. Registry publication/signing/scanning, distributed trace export, and remote telemetry remain unfinished. The BuildKit daemon and Docker host are trusted infrastructure, so current limits do not make a single-host worker a hostile multi-tenant sandbox. Application health endpoints and `pnpm smoke:health` prove process liveness only, not queue/database readiness. Manual deployment creation requires an exact full commit SHA from a public GitHub repository. Recent Phases 10–16 implementation changes are awaiting independent verification; no benchmark result has been published and no release is ready.
 
 ## License
 

@@ -41,6 +41,7 @@ export interface DeploymentWorkerComponents {
   readonly publisher: BullMqDeploymentQueuePublisher;
   readonly reconciler: DeploymentJobReconciler;
   readonly runtime: DeploymentWorkerRuntime;
+  readonly runtimeManager: DeploymentRuntimeManager;
   readonly sourceProcessor: DeploymentSourceProcessor;
   readonly runtimeProcessor: DeploymentRuntimeProcessor;
   readonly store: DeploymentJobStore;
@@ -238,6 +239,7 @@ export function createDeploymentWorkerComponents({
     publisher,
     reconciler,
     runtime,
+    runtimeManager: deploymentRuntimeManager,
     sourceProcessor,
     runtimeProcessor,
     store,

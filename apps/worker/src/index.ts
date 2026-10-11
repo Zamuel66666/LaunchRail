@@ -117,14 +117,20 @@ async function main(): Promise<void> {
         await finishShutdown();
         return;
       }
-      runtime = createDeploymentWorkerComponents({
+      const components = createDeploymentWorkerComponents({
         config,
         database: databaseClient.db,
         logger,
         metrics,
         version: workerVersion,
         workerId: `worker-${randomUUID()}`,
-      }).runtime;
+      });
+      runtime = components.runtime;
+      healthServer.configureRuntimeLogs(
+        config.WORKER_INTERNAL_TOKEN === undefined
+          ? undefined
+          : { runtimeManager: components.runtimeManager, token: config.WORKER_INTERNAL_TOKEN },
+      );
       if (shutdownRequested) {
         await finishShutdown();
         return;

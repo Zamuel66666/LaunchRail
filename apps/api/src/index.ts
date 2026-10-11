@@ -16,6 +16,28 @@ import { parseDeploymentJob } from "@launchrail/contracts";
 import { buildServer } from "./server.js";
 import { createGitHubWebhookDeploymentTrigger } from "./webhook-trigger.js";
 
+async function readBoundedResponse(response: Response, maximumBytes: number): Promise<string> {
+  if (response.body === null) return "";
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > maximumBytes) {
+        await reader.cancel();
+        throw new Error("Worker runtime log response exceeded its safe bound");
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return new TextDecoder().decode(Buffer.concat(chunks));
+}
+
 async function main(): Promise<void> {
   const config = loadApiConfig();
   const databaseClient = createDatabaseClient(config.DATABASE_URL);
@@ -40,6 +62,7 @@ async function main(): Promise<void> {
     queueName: config.WORKER_QUEUE_NAME,
     redisUrl: config.REDIS_URL,
   });
+  const workerInternalToken = config.WORKER_INTERNAL_TOKEN;
   const webhookTrigger =
     config.GITHUB_WEBHOOK_SECRET === undefined
       ? undefined
@@ -59,6 +82,34 @@ async function main(): Promise<void> {
     logger: serviceLoggerOptions("api", config.LOG_LEVEL),
     projectStore,
     deploymentStore,
+    ...(workerInternalToken === undefined
+      ? {}
+      : {
+          runtimeLogReader: async ({ deploymentId, organizationId, tail }) => {
+            const workerUrl = new URL("/internal/runtime-logs", config.WORKER_INTERNAL_URL);
+            workerUrl.searchParams.set("deploymentId", deploymentId);
+            workerUrl.searchParams.set("organizationId", organizationId);
+            workerUrl.searchParams.set("tail", String(tail));
+            const response = await fetch(workerUrl, {
+              headers: { "x-launchrail-internal-token": workerInternalToken },
+              redirect: "error",
+              signal: AbortSignal.timeout(6_000),
+            });
+            if (response.status === 404) return null;
+            if (!response.ok) throw new Error("Worker runtime log request failed");
+            const body = await readBoundedResponse(response, 280_000);
+            const parsed: unknown = JSON.parse(body);
+            if (
+              typeof parsed !== "object" ||
+              parsed === null ||
+              !("logs" in parsed) ||
+              typeof parsed.logs !== "string" ||
+              Buffer.byteLength(parsed.logs, "utf8") > 262_144
+            )
+              throw new Error("Worker runtime log response was invalid");
+            return parsed.logs;
+          },
+        }),
     deploymentCreationStore,
     deploymentWakeup: async ({ deploymentId, organizationId }) => {
       try {

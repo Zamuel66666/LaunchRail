@@ -25,6 +25,11 @@ interface RegisterAuthRoutesOptions {
   readonly now: () => Date;
   readonly projectStore?: ProjectManagementStore;
   readonly deploymentStore?: DeploymentJobStore;
+  readonly runtimeLogReader?: (query: {
+    readonly deploymentId: string;
+    readonly organizationId: string;
+    readonly tail: number;
+  }) => Promise<string | null>;
   readonly deploymentCreationStore?: DeploymentCreationStore;
   readonly deploymentWakeup?: (deployment: {
     readonly deploymentId: string;
@@ -852,6 +857,61 @@ export function registerAuthRoutes(
       },
     );
   }
+
+  server.get<{
+    Params: { organizationId: string; deploymentId: string };
+    Querystring: { tail?: string };
+  }>(
+    "/v1/organizations/:organizationId/deployments/:deploymentId/runtime-logs",
+    {
+      schema: {
+        params: {
+          additionalProperties: false,
+          properties: {
+            deploymentId: { pattern: uuidPattern, type: "string" },
+            organizationId: { pattern: uuidPattern, type: "string" },
+          },
+          required: ["organizationId", "deploymentId"],
+          type: "object",
+        },
+        querystring: {
+          additionalProperties: false,
+          properties: { tail: { pattern: "^[1-9][0-9]{0,2}$", type: "string" } },
+          type: "object",
+        },
+      },
+    },
+    async (request, reply) => {
+      const authorization = await authorizeOrganization(
+        request,
+        reply,
+        request.params.organizationId,
+        "project:read",
+      );
+      if (authorization === null) return;
+      if (options.runtimeLogReader === undefined)
+        return reply
+          .code(503)
+          .send(errorBody("runtime_logs_unavailable", "Runtime log viewing is not configured"));
+      const tail = request.query.tail === undefined ? 100 : Number(request.query.tail);
+      if (!Number.isSafeInteger(tail) || tail < 1 || tail > 200)
+        return reply.code(400).send(errorBody("invalid_request", "Invalid runtime log tail"));
+      try {
+        const logs = await options.runtimeLogReader({
+          deploymentId: request.params.deploymentId,
+          organizationId: request.params.organizationId,
+          tail,
+        });
+        if (logs === null)
+          return reply.code(404).send(errorBody("runtime_not_found", "Runtime was not found"));
+        return reply.header("cache-control", "no-store").send({ logs });
+      } catch {
+        return reply
+          .code(503)
+          .send(errorBody("runtime_logs_unavailable", "Runtime logs could not be loaded"));
+      }
+    },
+  );
 
   if (options.deploymentCreationStore !== undefined) {
     server.post<{

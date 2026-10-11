@@ -115,3 +115,5 @@ docker compose -f compose.yaml -f compose.observability.yaml --profile observabi
 ```
 
 The current request ID is returned as `x-request-id` and is attached to API logs. Worker logs include durable work-item IDs, while deployment events and webhook delivery IDs provide database pivots between the two. This is operational correlation, not distributed tracing: trace/span export, exemplars, alert policies, and remote log aggregation remain future work.
+
+The project timeline can request a bounded tail of runtime output through an API-to-worker endpoint. Set the same random `WORKER_INTERNAL_TOKEN` (at least 32 characters) for the API and worker, and configure `WORKER_INTERNAL_URL` on the API; without the token, runtime log access stays disabled. The API authorizes the organization reader before proxying, the worker verifies the shared secret and matches the deployment and organization against managed-container labels, and responses are not cached. Runtime output is controlled by the deployed application and may include sensitive values; do not print credentials or other secrets from application code.

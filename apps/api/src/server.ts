@@ -26,6 +26,11 @@ interface BuildServerOptions {
   readonly now?: () => Date;
   readonly projectStore?: ProjectManagementStore;
   readonly deploymentStore?: DeploymentJobStore;
+  readonly runtimeLogReader?: (query: {
+    readonly deploymentId: string;
+    readonly organizationId: string;
+    readonly tail: number;
+  }) => Promise<string | null>;
   readonly deploymentCreationStore?: DeploymentCreationStore;
   readonly deploymentWakeup?: (deployment: {
     readonly deploymentId: string;
@@ -49,6 +54,7 @@ export function buildServer({
   now,
   projectStore,
   deploymentStore,
+  runtimeLogReader,
   deploymentCreationStore,
   deploymentWakeup,
   transitionStore,
@@ -270,6 +276,7 @@ export function buildServer({
         now: now ?? (() => new Date()),
         ...(projectStore === undefined ? {} : { projectStore }),
         ...(deploymentStore === undefined ? {} : { deploymentStore }),
+        ...(runtimeLogReader === undefined ? {} : { runtimeLogReader }),
         ...(deploymentCreationStore === undefined ? {} : { deploymentCreationStore }),
         ...(deploymentWakeup === undefined ? {} : { deploymentWakeup }),
         ...(transitionStore === undefined ? {} : { transitionStore }),

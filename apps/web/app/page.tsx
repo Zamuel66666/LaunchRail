@@ -15,6 +15,7 @@ const milestoneItems = [
   "Signed GitHub delivery outcomes, safe retry records, and webhook-trigger idempotency",
   "Bounded API, worker, queue, and health metrics with an optional local operations dashboard",
   "Manual deployment by exact Git commit and organization-scoped retained build-log viewing",
+  "Organization-authorized runtime log tails via a private API-to-worker endpoint",
   "Lease-aware cleanup of orphaned runtimes and stale source/build staging directories",
   "Reproducible API liveness benchmark output and a public-release readiness checklist",
 ];
@@ -26,13 +27,13 @@ export default function HomePage() {
         <p className="eyebrow">Self-hosted deployment orchestration</p>
         <h1 id="page-title">LaunchRail</h1>
         <p className="summary">
-          LaunchRail will turn a GitHub repository into a health-checked container deployment with
-          live logs, preview URLs, release history, and safe rollback.
+          LaunchRail turns a GitHub repository into a health-checked container deployment with
+          recent logs, preview URLs, release history, and safe rollback.
         </p>
         <div className="status" role="status">
           <span className="status-dot" aria-hidden="true" />
-          Core deployment stages through operator recovery, exact-SHA starts, build output, and
-          release preparation are implemented; independent verification remains
+          Core deployment stages through operator recovery, exact-SHA starts, build/runtime output,
+          and release preparation are implemented; independent verification remains
         </div>
         <div className="hero-actions">
           <Link className="primary-link" href="/projects">
@@ -47,7 +48,7 @@ export default function HomePage() {
       <section className="panel" aria-labelledby="milestone-title">
         <p className="section-label">Current milestone</p>
         <h2 id="milestone-title">
-          Recovery, manual deployment, build logs, and release preparation are implemented
+          Recovery, manual deployment, runtime logs, and release preparation are implemented
         </h2>
         <ul>
           {milestoneItems.map((item) => (
@@ -61,10 +62,10 @@ export default function HomePage() {
         <h2 id="next-title">Close failure recovery, traceability, and operator-control gaps</h2>
         <p>
           The workspace exposes health, lifecycle activity, operator audit, webhook outcomes,
-          exact-SHA deployment starts, and retained build output. Remaining implementation work
-          centers on recovering every external resource type, distributed tracing, runtime logs,
-          broader benchmarks, and accessible end-to-end onboarding; recent additions still need
-          independent validation.
+          exact-SHA deployment starts, and bounded build/runtime output. Remaining implementation
+          work centers on recovering every external resource type, distributed tracing, broader
+          benchmarks, and accessible end-to-end onboarding; recent additions still need independent
+          validation.
         </p>
       </section>
     </main>

@@ -104,6 +104,8 @@ export interface DeploymentBuildLogSummary {
   readonly stream: "stderr" | "stdout" | "system";
 }
 
+export type DeploymentRuntimeLogs = string;
+
 export interface AuditEventSummary {
   readonly action: string;
   readonly actorUserId: string | null;
@@ -285,6 +287,18 @@ export async function listDeploymentBuildLogs(
 ): Promise<readonly DeploymentBuildLogSummary[]> {
   const response = await apiRequest<{ readonly logs: readonly DeploymentBuildLogSummary[] }>(
     `/v1/organizations/${encodeURIComponent(organizationId)}/deployments/${encodeURIComponent(deploymentId)}/build-logs?limit=200`,
+    signal === undefined ? {} : { signal },
+  );
+  return response.logs;
+}
+
+export async function getDeploymentRuntimeLogs(
+  organizationId: string,
+  deploymentId: string,
+  signal?: AbortSignal,
+): Promise<DeploymentRuntimeLogs> {
+  const response = await apiRequest<{ readonly logs: DeploymentRuntimeLogs }>(
+    `/v1/organizations/${encodeURIComponent(organizationId)}/deployments/${encodeURIComponent(deploymentId)}/runtime-logs?tail=100`,
     signal === undefined ? {} : { signal },
   );
   return response.logs;

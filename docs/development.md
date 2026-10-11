@@ -73,39 +73,44 @@ The volume-deleting command is not wrapped in the normal shutdown script so data
 
 `.env.example` is the safe local template. The API and worker load the root `.env` through Node's `--env-file-if-exists` option. The smoke test uses `.env` when present and falls back to `.env.example`.
 
-| Variable                                   | Purpose                         | Local default             |
-| ------------------------------------------ | ------------------------------- | ------------------------- |
-| `NODE_ENV`                                 | Runtime policy                  | `development`             |
-| `LOG_LEVEL`                                | API/worker structured log level | `info`                    |
-| `API_HOST`, `API_PORT`                     | API health listener             | `127.0.0.1:4000`          |
-| `WORKER_HEALTH_HOST`, `WORKER_HEALTH_PORT` | Worker health listener          | `127.0.0.1:4001`          |
-| `WORKER_MODE`                              | Full worker or health-only      | `run`                     |
-| `WORKER_QUEUE_NAME`, `WORKER_QUEUE_PREFIX` | Bounded BullMQ identifiers      | See `.env.example`        |
-| `WORKER_CONCURRENCY`                       | Concurrent job handlers         | `2`                       |
-| `WORKER_MAX_ATTEMPTS`                      | Durable attempt ceiling         | `5`                       |
-| `WORKER_JOB_TIMEOUT_MS`                    | Per-job execution bound         | `300000`                  |
-| `WORKER_BACKOFF_BASE_MS`, `*_CAP_MS`       | Deterministic retry bounds      | `1000`, `60000`           |
-| `WORKER_LEASE_MS`                          | PostgreSQL job lease            | `60000`                   |
-| `WORKER_HEARTBEAT_INTERVAL_MS`             | Job/worker heartbeat interval   | `10000`                   |
-| `WORKER_RECONCILIATION_INTERVAL_MS`        | Recovery scan interval          | `15000`                   |
-| `WORKER_RECONCILIATION_BATCH_SIZE`         | Maximum rows per recovery scan  | `100`                     |
-| `WORKER_SHUTDOWN_GRACE_MS`                 | Active-work drain bound         | `30000`                   |
-| `WORKER_SOURCE_ROOT`                       | Private retained checkout root  | `/tmp/launchrail-sources` |
-| `WORKER_SOURCE_RESOLVE_*`                  | GitHub response/deadline bounds | See `.env.example`        |
-| `WORKER_SOURCE_CLONE_TIMEOUT_MS`           | Source preparation deadline     | `120000`                  |
-| `WORKER_SOURCE_GIT_*`                      | Git directory/output bounds     | See `.env.example`        |
-| `WORKER_SOURCE_MAX_*`                      | Checkout file/byte/path bounds  | See `.env.example`        |
-| `WEB_HOST`, `WEB_PORT`                     | Next.js listener                | `127.0.0.1:3000`          |
-| `NEXT_PUBLIC_API_BASE_URL`                 | Browser-facing API base URL     | `http://localhost:4000`   |
-| `DATABASE_URL`                             | PostgreSQL connection URL       | Local Compose service     |
-| `REDIS_URL`                                | Redis connection URL            | Local Compose service     |
-| `WEB_ORIGIN`                               | Allowed browser request origin  | `http://localhost:3000`   |
-| `SESSION_*`                                | Cookie and session lifetimes    | See `.env.example`        |
-| `SIGN_IN_RATE_LIMIT_MAX`                   | Sign-in attempts/client/minute  | `5`                       |
-| `LAUNCHRAIL_SECRET_KEYRING`                | Versioned AES-256 project keys  | No default                |
-| `LAUNCHRAIL_ACTIVE_SECRET_KEY_VERSION`     | Key version for new writes      | No default                |
-| `LAUNCHRAIL_BOOTSTRAP_*`                   | One-time initial owner fields   | No active default         |
-| `POSTGRES_*`, `REDIS_PORT`                 | Compose service configuration   | See `.env.example`        |
+| Variable                                   | Purpose                          | Local default                 |
+| ------------------------------------------ | -------------------------------- | ----------------------------- |
+| `NODE_ENV`                                 | Runtime policy                   | `development`                 |
+| `LOG_LEVEL`                                | API/worker structured log level  | `info`                        |
+| `API_HOST`, `API_PORT`                     | API health listener              | `127.0.0.1:4000`              |
+| `WORKER_HEALTH_HOST`, `WORKER_HEALTH_PORT` | Worker health listener           | `127.0.0.1:4001`              |
+| `WORKER_INTERNAL_URL`                      | API's private worker endpoint    | `http://127.0.0.1:4001`       |
+| `WORKER_INTERNAL_TOKEN`                    | Shared API/worker log credential | Unset (runtime logs disabled) |
+
+| `WORKER_MODE` | Full worker or health-only | `run` |
+| `WORKER_QUEUE_NAME`, `WORKER_QUEUE_PREFIX` | Bounded BullMQ identifiers | See `.env.example` |
+| `WORKER_CONCURRENCY` | Concurrent job handlers | `2` |
+| `WORKER_MAX_ATTEMPTS` | Durable attempt ceiling | `5` |
+| `WORKER_JOB_TIMEOUT_MS` | Per-job execution bound | `300000` |
+| `WORKER_BACKOFF_BASE_MS`, `*_CAP_MS` | Deterministic retry bounds | `1000`, `60000` |
+| `WORKER_LEASE_MS` | PostgreSQL job lease | `60000` |
+| `WORKER_HEARTBEAT_INTERVAL_MS` | Job/worker heartbeat interval | `10000` |
+| `WORKER_RECONCILIATION_INTERVAL_MS` | Recovery scan interval | `15000` |
+| `WORKER_RECONCILIATION_BATCH_SIZE` | Maximum rows per recovery scan | `100` |
+| `WORKER_SHUTDOWN_GRACE_MS` | Active-work drain bound | `30000` |
+| `WORKER_SOURCE_ROOT` | Private retained checkout root | `/tmp/launchrail-sources` |
+| `WORKER_SOURCE_RESOLVE_*` | GitHub response/deadline bounds | See `.env.example` |
+| `WORKER_SOURCE_CLONE_TIMEOUT_MS` | Source preparation deadline | `120000` |
+| `WORKER_SOURCE_GIT_*` | Git directory/output bounds | See `.env.example` |
+| `WORKER_SOURCE_MAX_*` | Checkout file/byte/path bounds | See `.env.example` |
+| `WEB_HOST`, `WEB_PORT` | Next.js listener | `127.0.0.1:3000` |
+| `NEXT_PUBLIC_API_BASE_URL` | Browser-facing API base URL | `http://localhost:4000` |
+| `DATABASE_URL` | PostgreSQL connection URL | Local Compose service |
+| `REDIS_URL` | Redis connection URL | Local Compose service |
+
+To enable runtime log viewing, generate a unique value with `openssl rand -hex 32` and put it in the untracked `.env` as `WORKER_INTERNAL_TOKEN`; both API and worker must receive the same value. Use a loopback HTTP URL for a same-host setup or HTTPS for a remote worker. Never expose the worker health/internal listener to untrusted networks.
+| `WEB_ORIGIN` | Allowed browser request origin | `http://localhost:3000` |
+| `SESSION_*` | Cookie and session lifetimes | See `.env.example` |
+| `SIGN_IN_RATE_LIMIT_MAX` | Sign-in attempts/client/minute | `5` |
+| `LAUNCHRAIL_SECRET_KEYRING` | Versioned AES-256 project keys | No default |
+| `LAUNCHRAIL_ACTIVE_SECRET_KEY_VERSION` | Key version for new writes | No default |
+| `LAUNCHRAIL_BOOTSTRAP_*` | One-time initial owner fields | No active default |
+| `POSTGRES_*`, `REDIS_PORT` | Compose service configuration | See `.env.example` |
 
 Configuration parsing reports every invalid field without echoing supplied values. Production mode rejects the documented development database password and an insecure browser origin. Source sub-timeouts cannot exceed the job timeout, the individual-file ceiling cannot exceed the checkout ceiling, and the source root must be absolute, normalized, non-root, private, and owned by the worker user. The API has no encryption-key default: its comma-separated keyring accepts one to eight unique positive versions with exact 32-byte base64url keys, and the selected active version must exist. Set `GITHUB_WEBHOOK_SECRET` and `GITHUB_WEBHOOK_ORGANIZATION_ID` together to enable signed GitHub push ingestion; blank values disable it. `GITHUB_WEBHOOK_MAX_ATTEMPTS` bounds the durable claim created for each matching push and defaults to `5`. Never commit `.env`; retain historical keys during manual rotation until every affected value has been replaced. The public GitHub adapter deliberately uses no credentials; future webhook/private-source credentials must have no insecure defaults.
 

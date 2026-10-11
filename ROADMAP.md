@@ -25,7 +25,7 @@ The roadmap reports verified repository state, not aspirations as completed feat
 - **Phase 12 — GitHub webhooks:** verified signed pushes persist normalized retry data, idempotently create deployments, publish wake-ups, expose processing outcomes, and support scoped operator retry; independent verification is deferred.
 - **Phase 13 — Observability:** route-level API metrics, worker lifecycle/health metrics, request timing, and a provisioned local Prometheus/Grafana dashboard are implemented; independent verification and distributed tracing remain.
 - **Phase 14 — Failure recovery:** reconciliation inventories managed Docker containers, protects containers with durable runtime leases, persists runtime cleanup state, prunes stale source/build staging directories after 24 hours, and removes completed source checkouts once no build/source lease needs them; BuildKit/image resource recovery, broad interruption coverage, and independent verification remain.
-- **Phase 15 — User experience and accessibility:** operators can start a deployment for an exact commit SHA and inspect bounded retained build output in the project timeline; runtime log viewing, demonstration flow, and independent accessibility/user-flow verification remain.
+- **Phase 15 — User experience and accessibility:** operators can start a deployment for an exact commit SHA and inspect retained build output plus an on-demand bounded runtime log tail in the project timeline; demonstration flow and independent accessibility/user-flow verification remain.
 - **Phase 16 — Benchmarks and public release:** a bounded loopback API liveness benchmark and public release checklist are available; deployment benchmarks, measured results, and clean-release evidence remain.
 
 ### Planned later
@@ -256,7 +256,7 @@ Exit gate: repeatable failure-injection tests show convergence or an explicit ac
 
 **Status:** In progress — exact-revision manual deployment and bounded build-log viewing implemented; independent verification deferred by request
 
-Deployment controllers can create a deployment from a full exact commit SHA, with project/organization authorization and a durable database job before best-effort queue publication. The project timeline exposes retained, sequence-ordered build logs under organization read access. Runtime log viewing, richer onboarding/demo data, screenshot refresh, and broad keyboard/responsive/accessibility review remain.
+Deployment controllers can create a deployment from a full exact commit SHA, with project/organization authorization and a durable database job before best-effort queue publication. The project timeline exposes retained, sequence-ordered build logs and an on-demand last-100-line runtime tail under organization read access. The API-to-worker hop uses a shared secret, fixed configured destination, bounded tail, and no-store responses. Runtime output is application-controlled and may contain sensitive data; access is limited to organization project readers, and operators should avoid printing secrets. Richer onboarding/demo data, screenshot refresh, and broad keyboard/responsive/accessibility review remain.
 
 Exit gate: Playwright accessibility/user-flow checks pass, logs and deployment controls are correctly scoped, and the README demonstrates a real working milestone.
 

@@ -16,6 +16,7 @@ import {
   listDeploymentEvents,
   listDeploymentHealthChecks,
   listDeploymentBuildLogs,
+  getDeploymentRuntimeLogs,
   listAuditEvents,
   listWebhookDeliveries,
   retryDeployment,
@@ -171,6 +172,9 @@ function ProjectCard({
   >({});
   const [loadingBuildLogsId, setLoadingBuildLogsId] = useState<string | null>(null);
   const [buildLogsError, setBuildLogsError] = useState("");
+  const [runtimeLogs, setRuntimeLogs] = useState<Readonly<Record<string, string>>>({});
+  const [loadingRuntimeLogsId, setLoadingRuntimeLogsId] = useState<string | null>(null);
+  const [runtimeLogsError, setRuntimeLogsError] = useState("");
   const [auditEvents, setAuditEvents] = useState<
     Readonly<Record<string, readonly AuditEventSummary[]>>
   >({});
@@ -253,6 +257,18 @@ function ProjectCard({
         setBuildLogsError(actionError(error, "Build logs could not be loaded.")),
       )
       .finally(() => setLoadingBuildLogsId(null));
+  }
+
+  function loadDeploymentRuntimeLogs(deploymentId: string) {
+    if (runtimeLogs[deploymentId] !== undefined || loadingRuntimeLogsId !== null) return;
+    setRuntimeLogsError("");
+    setLoadingRuntimeLogsId(deploymentId);
+    void getDeploymentRuntimeLogs(organizationId, deploymentId)
+      .then((logs) => setRuntimeLogs((current) => ({ ...current, [deploymentId]: logs })))
+      .catch((error: unknown) =>
+        setRuntimeLogsError(actionError(error, "Runtime logs could not be loaded.")),
+      )
+      .finally(() => setLoadingRuntimeLogsId(null));
   }
 
   function loadDeploymentAuditEvents(deploymentId: string) {
@@ -386,6 +402,11 @@ function ProjectCard({
             {buildLogsError}
           </p>
         )}
+        {runtimeLogsError.length === 0 ? null : (
+          <p className="deployment-action-error" role="alert">
+            {runtimeLogsError}
+          </p>
+        )}
         {auditEventsError.length === 0 ? null : (
           <p className="deployment-action-error" role="alert">
             {auditEventsError}
@@ -479,6 +500,26 @@ function ProjectCard({
                       {buildLogs[deployment.deploymentId]
                         ?.map((log) => `[${log.sequence} ${log.stream}] ${log.content}`)
                         .join("")}
+                    </pre>
+                  )}
+                </details>
+                <details
+                  className="deployment-build-logs"
+                  onToggle={(event) => {
+                    if (event.currentTarget.open)
+                      loadDeploymentRuntimeLogs(deployment.deploymentId);
+                  }}
+                >
+                  <summary>Runtime logs</summary>
+                  {loadingRuntimeLogsId === deployment.deploymentId ? (
+                    <p role="status">Loading recent runtime output…</p>
+                  ) : runtimeLogs[deployment.deploymentId] === undefined ? (
+                    <p>Open to load the latest 100 lines from a running or retained container.</p>
+                  ) : runtimeLogs[deployment.deploymentId]?.length === 0 ? (
+                    <p>No runtime output was recorded.</p>
+                  ) : (
+                    <pre className="build-log-output" aria-label="Runtime output" tabIndex={0}>
+                      {runtimeLogs[deployment.deploymentId]}
                     </pre>
                   )}
                 </details>

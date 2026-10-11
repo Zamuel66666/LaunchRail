@@ -10,6 +10,16 @@ const portSchema = z.coerce.number().int().min(1).max(65_535);
 const positiveIntegerSchema = z.coerce.number().int().positive();
 const nonNegativeIntegerSchema = z.coerce.number().int().min(0);
 const urlSchema = z.string().url();
+const workerInternalUrlSchema = urlSchema.refine((value) => {
+  const url = new URL(value);
+  return (
+    (url.protocol === "https:" ||
+      (url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname))) &&
+    url.username.length === 0 &&
+    url.password.length === 0 &&
+    url.hash.length === 0
+  );
+}, "must use HTTPS or loopback HTTP without embedded credentials or fragments");
 const workerIdentifierSchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/);
 const optionalEnvironmentValue = (schema: z.ZodString) =>
   z.preprocess((value) => (value === "" ? undefined : value), schema.optional());
@@ -81,6 +91,8 @@ const sharedServiceSchema = z.object({
 const apiSchema = sharedServiceSchema.extend({
   API_HOST: z.string().min(1).default("127.0.0.1"),
   API_PORT: portSchema.default(4000),
+  WORKER_INTERNAL_TOKEN: optionalEnvironmentValue(z.string().min(32).max(256)),
+  WORKER_INTERNAL_URL: workerInternalUrlSchema.default("http://127.0.0.1:4001"),
   GITHUB_WEBHOOK_SECRET: optionalEnvironmentValue(z.string().min(1)),
   GITHUB_WEBHOOK_ORGANIZATION_ID: optionalEnvironmentValue(z.string().uuid()),
   GITHUB_WEBHOOK_MAX_ATTEMPTS: positiveIntegerSchema.max(20).default(5),
@@ -99,6 +111,7 @@ const apiSchema = sharedServiceSchema.extend({
 });
 
 const workerSchema = sharedServiceSchema.extend({
+  WORKER_INTERNAL_TOKEN: optionalEnvironmentValue(z.string().min(32).max(256)),
   WORKER_BACKOFF_BASE_MS: positiveIntegerSchema.max(3_600_000).default(1_000),
   WORKER_BACKOFF_CAP_MS: positiveIntegerSchema.max(86_400_000).default(60_000),
   WORKER_BUILD_CPU_MILLICORES: positiveIntegerSchema.max(16_000).default(1_000),

@@ -53,10 +53,11 @@ export default function HomePage() {
 
       <section className="next" aria-labelledby="next-title">
         <p className="section-label">Next milestone</p>
-        <h2 id="next-title">Complete webhook dispatch and operator observability</h2>
+        <h2 id="next-title">Prove release recovery and operator controls end to end</h2>
         <p>
-          The next phase publishes verified matching pushes directly to the durable queue and makes
-          deployment health, queue progress, and recovery evidence easier for operators to inspect.
+          The workspace now shows health attempts and deployment activity with confirmed release
+          controls. Next, interruption and concurrency checks must prove the release route and
+          durable history converge safely after recovery.
         </p>
       </section>
     </main>

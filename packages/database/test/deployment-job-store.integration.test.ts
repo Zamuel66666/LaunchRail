@@ -1464,6 +1464,67 @@ describeWithDatabase("PostgresDeploymentJobStore", () => {
     });
   });
 
+  it("dead-letters a runtime health failure with its specific category", async () => {
+    const deployment = await seedDeployment();
+    const { buildJob, source } = await enterBuilding(deployment);
+    const buildClaim = await claim(buildJob.id, { expectedKind: "deployment.build" });
+    if (buildClaim.kind !== "claimed") throw new Error("Expected build work lease");
+    const image = {
+      cacheHitCount: 0,
+      cacheMissCount: 1,
+      contextSha256: source.contextSha256,
+      imageId: `sha256:${"a".repeat(64)}`,
+      imageReference: `launchrail/deployment:${deployment.deploymentId}`,
+      imageSizeBytes: 1_024,
+      manifestDigest: `sha256:${"b".repeat(64)}`,
+      platform: "linux/amd64",
+    } as const;
+    await expect(
+      store.completeBuild({
+        image,
+        leaseToken: buildClaim.lease.leaseToken,
+        workItemId: buildJob.id,
+      }),
+    ).resolves.toMatchObject({ kind: "completed" });
+
+    const jobs = await client.db
+      .select()
+      .from(schema.deploymentJobs)
+      .where(eq(schema.deploymentJobs.deploymentId, deployment.deploymentId));
+    const runtimeJob = jobs.find(({ kind }) => kind === "deployment.start_runtime");
+    if (runtimeJob === undefined) throw new Error("Expected runtime start work");
+    const runtimeClaim = await claim(runtimeJob.id, { expectedKind: "deployment.start_runtime" });
+    if (runtimeClaim.kind !== "claimed") throw new Error("Expected runtime work lease");
+
+    await expect(
+      store.failRuntime({
+        failure: { category: "health_timeout", message: "Health check timed out" },
+        leaseToken: runtimeClaim.lease.leaseToken,
+        retryable: false,
+        retryDelayMs: 0,
+        workItemId: runtimeJob.id,
+      }),
+    ).resolves.toMatchObject({ kind: "dead_lettered" });
+    await expect(
+      client.db
+        .select({
+          failureCategory: schema.deployments.failureCategory,
+          state: schema.deployments.state,
+        })
+        .from(schema.deployments)
+        .where(eq(schema.deployments.id, deployment.deploymentId)),
+    ).resolves.toEqual([{ failureCategory: "health_timeout", state: "deployment_failed" }]);
+    await expect(
+      client.db
+        .select({
+          status: schema.deploymentJobs.status,
+          lastErrorCode: schema.deploymentJobs.lastErrorCode,
+        })
+        .from(schema.deploymentJobs)
+        .where(eq(schema.deploymentJobs.id, runtimeJob.id)),
+    ).resolves.toEqual([{ lastErrorCode: "health_timeout", status: "dead_lettered" }]);
+  });
+
   it("rolls back image metadata and deployment transition when the final build fence expires", async () => {
     const deployment = await seedDeployment();
     const { buildJob, source } = await enterBuilding(deployment);

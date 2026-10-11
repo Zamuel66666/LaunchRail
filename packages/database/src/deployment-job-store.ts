@@ -401,6 +401,9 @@ function assertRuntimeFailure(command: FailDeploymentRuntimeCommand): void {
     command.failure.category !== "runtime_policy_rejected" &&
     command.failure.category !== "runtime_start_failed" &&
     command.failure.category !== "runtime_timeout" &&
+    command.failure.category !== "health_timeout" &&
+    command.failure.category !== "health_unhealthy" &&
+    command.failure.category !== "health_invalid_response" &&
     command.failure.category !== "infrastructure_unavailable" &&
     command.failure.category !== "internal_invariant_violation"
   ) {

@@ -124,7 +124,7 @@ Clients recover missed notifications by reading events after their last sequence
 
 ## Healthy activation
 
-Candidate health checks use a direct runtime address, not the active user route. After the health policy passes, one transaction:
+The worker waits the configured startup grace period, then checks the candidate at its direct loopback runtime address rather than through the active user route. Each HTTP response or failed probe is persisted with its outcome, status code (when present), and duration. Only HTTP 200–399 passes. A timeout, invalid response, or unhealthy HTTP status stops the candidate and writes the corresponding terminal failure category. After a passing check, one transaction:
 
 1. Locks the project and current active-release rows.
 2. Confirms the candidate is still `health_checking` and not cancelled.
@@ -137,7 +137,7 @@ After commit, the route adapter applies persisted route intent. The old runtime 
 
 ## Failed candidate behavior
 
-A clone, build, runtime-start, or health failure records the correct terminal state and category. LaunchRail removes candidate routes/resources as appropriate but does not modify the active-release pointer. The UI shows the candidate failure alongside the still-serving release.
+A clone, build, runtime-start, or health failure records the correct terminal state and category. Health failures distinguish `health_timeout`, `health_invalid_response`, and `health_unhealthy`. LaunchRail removes candidate routes/resources as appropriate but does not modify the active-release pointer. The project workspace shows health-attempt history and ordered deployment events alongside the still-serving release.
 
 ## Cancellation
 

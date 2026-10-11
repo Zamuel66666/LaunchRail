@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { checkHttpHealth } from "../src/index.js";
+import { checkHttpHealth, type HttpHealthCheckError } from "../src/index.js";
 
 describe("checkHttpHealth", () => {
   const server = createServer((_request, response) => response.writeHead(204).end());
@@ -29,5 +29,23 @@ describe("checkHttpHealth", () => {
     await expect(
       checkHttpHealth({ host: "example.com", port, path: "/health", timeoutMs: 1000 }),
     ).rejects.toThrow(RangeError);
+  });
+  it("returns a bounded typed failure when the application exceeds the timeout", async () => {
+    const slowServer = createServer((_request, response) => {
+      setTimeout(() => response.writeHead(204).end(), 100);
+    });
+    await new Promise<void>((resolve) => slowServer.listen(0, "127.0.0.1", resolve));
+    const slowPort = (slowServer.address() as { port: number }).port;
+
+    await expect(
+      checkHttpHealth({ host: "127.0.0.1", port: slowPort, path: "/health", timeoutMs: 15 }),
+    ).rejects.toMatchObject({
+      code: "health_timeout",
+      durationMs: expect.any(Number),
+    } satisfies Partial<HttpHealthCheckError>);
+
+    await new Promise<void>((resolve, reject) =>
+      slowServer.close((error) => (error ? reject(error) : resolve())),
+    );
   });
 });

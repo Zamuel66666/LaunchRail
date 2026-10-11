@@ -374,6 +374,9 @@ export type DeploymentRuntimeFailureCategory = Extract<
   | "runtime_policy_rejected"
   | "runtime_start_failed"
   | "runtime_timeout"
+  | "health_timeout"
+  | "health_unhealthy"
+  | "health_invalid_response"
   | "infrastructure_unavailable"
   | "internal_invariant_violation"
 >;

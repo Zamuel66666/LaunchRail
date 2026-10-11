@@ -9,7 +9,7 @@ import type {
 import { RuntimeStartError } from "@launchrail/application";
 import type { DeploymentStartRuntimeJob } from "@launchrail/contracts";
 import { computeDeploymentJobBackoffMs } from "@launchrail/queue";
-import type { HttpHealthCheckResult } from "@launchrail/runtime";
+import { HttpHealthCheckError, type HttpHealthCheckResult } from "@launchrail/runtime";
 import type { RouteManager } from "@launchrail/routing";
 
 import type { DeploymentJobProcessingOutcome, WorkerEventLogger } from "./processor.js";
@@ -42,6 +42,13 @@ interface SafeRuntimeFailure {
 }
 
 function safeFailure(error: unknown): SafeRuntimeFailure {
+  if (error instanceof HttpHealthCheckError) {
+    return {
+      category: error.code,
+      message: error.message,
+      retryable: false,
+    };
+  }
   if (!(error instanceof RuntimeStartError)) {
     return {
       category: "infrastructure_unavailable",
@@ -192,12 +199,25 @@ export class DeploymentRuntimeProcessor {
             if (signal.aborted) abort();
             else signal.addEventListener("abort", abort, { once: true });
           });
-        const health = await this.options.healthCheck({
-          host: "127.0.0.1",
-          path: loaded.runtime.healthCheckPath,
-          port: started.hostPort,
-          timeoutMs: Math.min(this.options.jobTimeoutMs, 5_000),
-        });
+        let health: HttpHealthCheckResult;
+        try {
+          health = await this.options.healthCheck({
+            host: "127.0.0.1",
+            path: loaded.runtime.healthCheckPath,
+            port: started.hostPort,
+            timeoutMs: Math.min(this.options.jobTimeoutMs, 5_000),
+          });
+        } catch (error) {
+          await this.options.store.recordHealthCheck?.({
+            checkedAt: new Date(),
+            deploymentId: loaded.runtime.deploymentId,
+            durationMs: error instanceof HttpHealthCheckError ? error.durationMs : 0,
+            organizationId: loaded.runtime.organizationId,
+            outcome: "failed",
+            statusCode: null,
+          });
+          throw error;
+        }
         await this.options.store.recordHealthCheck?.({
           checkedAt: new Date(),
           deploymentId: loaded.runtime.deploymentId,
@@ -206,8 +226,54 @@ export class DeploymentRuntimeProcessor {
           outcome: health.statusCode >= 200 && health.statusCode < 400 ? "passed" : "failed",
           statusCode: health.statusCode,
         });
-        if (health.statusCode < 200 || health.statusCode >= 400)
-          throw new Error(`Health check returned HTTP ${health.statusCode}`);
+        if (health.statusCode < 200) {
+          await this.options.runtimeManager
+            .stop({
+              containerId: started.containerId,
+              identity: {
+                deploymentId: loaded.runtime.deploymentId,
+                organizationId: loaded.runtime.organizationId,
+                projectId: loaded.runtime.projectId,
+                workItemId: loaded.runtime.workItemId,
+              },
+              signal,
+            })
+            .catch(() => undefined);
+          if (signal.aborted) return "interrupted";
+          return await this.persistFailure(
+            lease,
+            {
+              category: "health_invalid_response",
+              message: "Health check returned an invalid HTTP status",
+              retryable: false,
+            },
+            signal,
+          );
+        }
+        if (health.statusCode >= 400) {
+          await this.options.runtimeManager
+            .stop({
+              containerId: started.containerId,
+              identity: {
+                deploymentId: loaded.runtime.deploymentId,
+                organizationId: loaded.runtime.organizationId,
+                projectId: loaded.runtime.projectId,
+                workItemId: loaded.runtime.workItemId,
+              },
+              signal,
+            })
+            .catch(() => undefined);
+          if (signal.aborted) return "interrupted";
+          return await this.persistFailure(
+            lease,
+            {
+              category: "health_unhealthy",
+              message: `Health check returned HTTP ${health.statusCode}`,
+              retryable: false,
+            },
+            signal,
+          );
+        }
       } catch (error) {
         await this.options.runtimeManager
           .stop({
@@ -222,15 +288,7 @@ export class DeploymentRuntimeProcessor {
           })
           .catch(() => undefined);
         if (signal.aborted) return "interrupted";
-        return await this.persistFailure(
-          lease,
-          {
-            category: "runtime_start_failed",
-            message: error instanceof Error ? error.message : "Runtime health check failed",
-            retryable: true,
-          },
-          signal,
-        );
+        return await this.persistFailure(lease, safeFailure(error), signal);
       }
       if (this.options.routeManager !== undefined) {
         try {

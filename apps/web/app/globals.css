@@ -907,6 +907,27 @@ button:disabled {
   margin-top: 0.65rem;
 }
 
+.deployment-health {
+  margin-top: 0.65rem;
+}
+
+.deployment-health > summary {
+  color: #9fc9da;
+  cursor: pointer;
+  font-size: 0.82rem;
+}
+
+.deployment-health p,
+.deployment-health ol {
+  margin: 0.55rem 0 0;
+  color: #a9c1cf;
+  font-size: 0.8rem;
+}
+
+.deployment-health li + li {
+  margin-top: 0.45rem;
+}
+
 .deployment-activity > summary {
   color: #9fc9da;
   cursor: pointer;

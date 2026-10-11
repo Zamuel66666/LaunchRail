@@ -16,6 +16,9 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 - Added a basic project-workspace deployment timeline backed by the deployment history API.
 - Added retry actions for terminal failed deployments directly in the project timeline.
 - Added an active-release stop action to the project timeline.
+- Added per-deployment health attempt history to the project workspace.
+- Added durable failure recording for health timeouts, invalid responses, and unhealthy HTTP statuses before candidate promotion.
+- Added startup grace and unhealthy candidate behavior to deployment lifecycle documentation.
 - Added confirmed cancel, stop, and rollback actions plus client-safe conflict feedback to the project deployment timeline.
 - Added on-demand recorded deployment activity to the project timeline.
 - Added worker-driven promotion after a successful bounded health check, preserving the atomic promotion path and idempotent command record.

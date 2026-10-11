@@ -89,6 +89,13 @@ export interface DeploymentEventSummary {
   readonly toState: string | null;
 }
 
+export interface DeploymentHealthCheckSummary {
+  readonly checkedAt: string;
+  readonly durationMs: number;
+  readonly outcome: "failed" | "passed";
+  readonly statusCode: number | null;
+}
+
 interface ApiErrorBody {
   readonly error?: {
     readonly code?: string;
@@ -204,6 +211,18 @@ export async function listDeploymentEvents(
     signal === undefined ? {} : { signal },
   );
   return response.events;
+}
+
+export async function listDeploymentHealthChecks(
+  organizationId: string,
+  deploymentId: string,
+  signal?: AbortSignal,
+): Promise<readonly DeploymentHealthCheckSummary[]> {
+  const response = await apiRequest<{ readonly checks: readonly DeploymentHealthCheckSummary[] }>(
+    `/v1/organizations/${encodeURIComponent(organizationId)}/deployments/${encodeURIComponent(deploymentId)}/health-checks?limit=100`,
+    signal === undefined ? {} : { signal },
+  );
+  return response.checks;
 }
 
 export async function retryDeployment(

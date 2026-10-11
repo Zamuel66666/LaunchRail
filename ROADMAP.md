@@ -20,7 +20,7 @@ The roadmap reports verified repository state, not aspirations as completed feat
 
 ### In progress
 
-- **Phase 10 — Health checks and activation:** bounded checks, durable attempts, grace periods, and worker-driven healthy promotion are implemented; richer operator health presentation remains.
+- **Phase 10 — Health checks and activation:** bounded checks, durable attempts, grace periods, worker-driven healthy promotion, and a workspace view of health attempts are implemented; end-to-end route preservation and interruption acceptance remain.
 - **Phase 11 — Deployment controls:** API controls, retry lineage, timeline history, confirmations, and actionable browser feedback are implemented; broader audit presentation and concurrency/failure-injection coverage remain.
 - **Phase 12 — GitHub webhooks:** signed push ingestion creates matching queued deployment snapshots; direct queue publication and richer delivery processing remain.
 - **Phase 13 — Observability:** request/process metrics and correlation IDs are available; deployment/queue/health metrics, traces, and dashboards remain.
@@ -208,7 +208,7 @@ Exit gate: local preview routing works after proxy/worker restart and cannot cro
 
 **Status:** In progress
 
-The runtime boundary now includes a bounded loopback-only HTTP checker with strict path, port, and timeout validation. Durable health attempts and worker-driven promotion after a successful check are available; configurable grace periods and richer health presentation remain to be implemented.
+The runtime boundary includes a bounded loopback-only HTTP checker with strict path, port, timeout, and response validation. Durable health attempts record both HTTP responses and failed probes, with distinct timeout, invalid-response, and unhealthy categories. Configurable grace periods and worker-driven promotion are available, and the workspace displays recorded health attempts alongside each deployment. End-to-end route-preservation and interruption acceptance remain.
 
 Add configurable HTTP checks, grace periods, atomic healthy promotion, previous-release preservation, and detailed health presentation.
 
@@ -226,7 +226,7 @@ Exit gate: concurrency and failure-injection tests prove safe control races and 
 
 **Status:** In progress
 
-Signature verification, strict push-event parsing, safe wildcard branch filtering, organization-scoped delivery persistence with provider/delivery deduplication, and configured-organization API ingestion create queued deployments for matching project branches. Each durable deployment now immediately publishes its deterministic claim wake-up; worker reconciliation remains the safe fallback if Redis is unavailable. Richer delivery processing remains to be implemented.
+Signature verification, strict push-event parsing, safe wildcard branch filtering, organization-scoped delivery persistence with provider/delivery deduplication, and configured-organization API ingestion create queued deployments for matching project branches. Each durable deployment now immediately publishes its deterministic claim wake-up; worker reconciliation remains the safe fallback if Redis is unavailable. Delivery-result presentation and retry tooling remain to be implemented.
 
 Exit gate: invalid, duplicate, unsupported, oversized, and valid deliveries have deterministic tested outcomes.
 

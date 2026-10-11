@@ -13,12 +13,14 @@ import {
   listProjects,
   listDeployments,
   listDeploymentEvents,
+  listDeploymentHealthChecks,
   retryDeployment,
   controlDeployment,
   signOut,
   updateProject,
   type EnvironmentVariableSummary,
   type DeploymentEventSummary,
+  type DeploymentHealthCheckSummary,
   type DeploymentHistorySummary,
   type Membership,
   type ProjectInput,
@@ -143,6 +145,11 @@ function ProjectCard({
   >({});
   const [deploymentEventsError, setDeploymentEventsError] = useState("");
   const [loadingDeploymentEventsId, setLoadingDeploymentEventsId] = useState<string | null>(null);
+  const [healthChecks, setHealthChecks] = useState<
+    Readonly<Record<string, readonly DeploymentHealthCheckSummary[]>>
+  >({});
+  const [healthChecksError, setHealthChecksError] = useState("");
+  const [loadingHealthChecksId, setLoadingHealthChecksId] = useState<string | null>(null);
   const [pendingDeploymentControl, setPendingDeploymentControl] =
     useState<PendingDeploymentControl | null>(null);
   useEffect(() => {
@@ -196,6 +203,18 @@ function ProjectCard({
         setDeploymentEventsError(actionError(error, "Deployment activity could not be loaded.")),
       )
       .finally(() => setLoadingDeploymentEventsId(null));
+  }
+
+  function loadDeploymentHealthChecks(deploymentId: string) {
+    if (healthChecks[deploymentId] !== undefined || loadingHealthChecksId !== null) return;
+    setHealthChecksError("");
+    setLoadingHealthChecksId(deploymentId);
+    void listDeploymentHealthChecks(organizationId, deploymentId)
+      .then((checks) => setHealthChecks((current) => ({ ...current, [deploymentId]: checks })))
+      .catch((error: unknown) =>
+        setHealthChecksError(actionError(error, "Health check history could not be loaded.")),
+      )
+      .finally(() => setLoadingHealthChecksId(null));
   }
 
   return (
@@ -261,6 +280,11 @@ function ProjectCard({
             {deploymentEventsError}
           </p>
         )}
+        {healthChecksError.length === 0 ? null : (
+          <p className="deployment-action-error" role="alert">
+            {healthChecksError}
+          </p>
+        )}
         {pendingDeploymentControl === null ? null : (
           <div className="deployment-control-confirmation" role="alertdialog">
             <p>
@@ -301,6 +325,36 @@ function ProjectCard({
                 <strong>{deployment.state}</strong> · {formatDate(deployment.createdAt)}
                 <br />
                 <code>{deployment.sourceRevision.slice(0, 12)}</code>
+                <details
+                  className="deployment-health"
+                  onToggle={(event) => {
+                    if (event.currentTarget.open)
+                      loadDeploymentHealthChecks(deployment.deploymentId);
+                  }}
+                >
+                  <summary>Health checks</summary>
+                  {loadingHealthChecksId === deployment.deploymentId ? (
+                    <p role="status">Loading health check history…</p>
+                  ) : healthChecks[deployment.deploymentId] === undefined ? (
+                    <p>Open to load recorded health check attempts.</p>
+                  ) : healthChecks[deployment.deploymentId]?.length === 0 ? (
+                    <p>No health check attempts have been recorded.</p>
+                  ) : (
+                    <ol>
+                      {healthChecks[deployment.deploymentId]?.map((check, index) => (
+                        <li key={`${check.checkedAt}-${index}`}>
+                          <strong>{check.outcome === "passed" ? "Passed" : "Failed"}</strong>
+                          {check.statusCode === null
+                            ? " · No HTTP status"
+                            : ` · HTTP ${check.statusCode}`}
+                          {` · ${check.durationMs} ms`}
+                          <br />
+                          <span>{formatDate(check.checkedAt)}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                </details>
                 <details
                   className="deployment-activity"
                   onToggle={(event) => {

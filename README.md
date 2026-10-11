@@ -2,11 +2,11 @@
 
 **A self-hosted platform that turns a GitHub repository into a health-checked application deployment with live logs, preview URLs, release history, and safe rollback.**
 
-> **Phases 0–9 are Available.** Health-checked activation, operator controls, verified webhook ingestion, and observability are progressing toward the next local demonstration release.
+> **Phases 0–9 are Available.** Phases 10–13 have working health-checked activation, deployment controls, verified push ingestion, and baseline metrics. Recovery, full operational telemetry, and user-facing deployment creation still need acceptance work.
 
 ## What LaunchRail does
 
-LaunchRail is designed to take an application stored on GitHub, build it automatically, run it in an isolated container, check whether it started successfully, and give the user a URL where it can be accessed.
+LaunchRail can build a public GitHub revision, run it in a restricted container, gate activation on an HTTP health check, and expose a local preview URL. A configured signed push webhook is the current deployment creation path.
 
 The finished local demonstration will let a user:
 
@@ -84,10 +84,11 @@ LaunchRail will use a modular monolith for the web/API boundary and a separate w
 - Authenticated deployment controls expose bounded health/event history, retry lineage, promote, cancel, stop, and rollback operations. The project timeline has confirmations and client-safe conflict feedback for release-changing actions.
 - Verified GitHub push webhooks are signature-checked, deduplicated, filtered to configured project branches, create immutable queued deployment snapshots, and immediately publish durable claim wake-ups; reconciliation remains the safe fallback if Redis is unavailable.
 - API request counters and correlation IDs plus worker process metrics are available at Prometheus-compatible metrics endpoints.
+- The project workspace shows each deployment's recorded health attempts and ordered lifecycle activity, and confirms stop/cancel/rollback actions before sending them.
 
 ### Planned next
 
-- Complete richer webhook delivery processing and add deployment/queue/health metrics, trace evidence, and a broader operator audit view.
+- Prove route preservation, worker restart convergence, and control races through failure-injection acceptance tests; then finish delivery-result presentation and deployment/queue/health telemetry.
 
 ### Not currently planned
 
@@ -144,7 +145,7 @@ See the [development guide](docs/development.md) for verification, configuration
 
 ## Current limitations
 
-LaunchRail is not production-ready. Authentication remains local-password only without password reset, invitations, MFA, SSO, or session administration. Source preparation supports unauthenticated public GitHub repositories only; private repositories, Git LFS, submodules, and external-network smoke tests are intentionally unsupported. Checkouts and local images/runtimes remain on a trusted worker host; broad hard-crash orphan cleanup remains Phase 14 work. Saved secrets are not placed in Redis or injected into workloads, and automated key re-encryption is not implemented. Browser log streaming, registry publication/signing/scanning, traces, dashboards, and full telemetry remain later phases. The BuildKit daemon and Docker host are trusted infrastructure, so current limits do not make a single-host worker a hostile multi-tenant sandbox. Application health endpoints and `pnpm smoke:health` prove process liveness only, not queue/database readiness.
+LaunchRail is not production-ready. Authentication remains local-password only without password reset, invitations, MFA, SSO, or session administration. Source preparation supports unauthenticated public GitHub repositories only; private repositories, Git LFS, submodules, and external-network acceptance smoke tests are unsupported. Checkouts and images/runtimes remain on a trusted worker host; broad hard-crash orphan cleanup and route convergence under interruption still need Phase 14 acceptance. Saved secrets are not placed in Redis or injected into workloads, and automated key re-encryption is not implemented. Browser log streaming, webhook delivery-result presentation, registry publication/signing/scanning, traces, dashboards, and full telemetry remain unfinished. The BuildKit daemon and Docker host are trusted infrastructure, so current limits do not make a single-host worker a hostile multi-tenant sandbox. Application health endpoints and `pnpm smoke:health` prove process liveness only, not queue/database readiness. Manual authenticated deployment creation is not available yet; signed webhooks are the supported creation path.
 
 ## License
 

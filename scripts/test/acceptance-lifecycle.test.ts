@@ -51,6 +51,7 @@ it("checks health preservation, promotion, rollback, cancellation and stop again
       const action = parts.at(-1)!;
       const deployment = deployments.find((item) => item.deploymentId === parts.at(-2))!;
       controls.push(action);
+      expect(request.headers["idempotency-key"]).toMatch(/^[0-9a-f-]{36}$/u);
       if (action === "rollback") {
         deployment.state = "rolled_back";
         deployments[0]!.state = "active";

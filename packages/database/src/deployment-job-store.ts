@@ -99,6 +99,7 @@ import {
   previewRoutes,
   healthCheckAttempts,
   runtimeInstances,
+  rollbackRequests,
   workerHeartbeats,
 } from "./schema.js";
 
@@ -2875,7 +2876,7 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
       .where(
         and(
           eq(runtimeInstances.state, "running"),
-          sql`${deployments.state} in ('health_checking', 'active')`,
+          sql`${deployments.state} in ('health_checking', 'active', 'rolling_back')`,
         ),
       );
     return rows
@@ -2888,6 +2889,26 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
   }
 
   public async listWorkerResourceRecoveryState(): Promise<WorkerResourceRecoveryState> {
+    const rollbackLeases = await this.db
+      .select({
+        sourceDeploymentId: rollbackRequests.sourceDeploymentId,
+        targetDeploymentId: rollbackRequests.targetDeploymentId,
+        workItemId: deploymentJobs.id,
+      })
+      .from(rollbackRequests)
+      .innerJoin(
+        deploymentJobs,
+        and(
+          eq(deploymentJobs.deploymentId, rollbackRequests.targetDeploymentId),
+          eq(deploymentJobs.kind, "deployment.start_runtime"),
+        ),
+      )
+      .where(
+        and(
+          eq(rollbackRequests.status, "running"),
+          sql`${rollbackRequests.leaseExpiresAt} > clock_timestamp()`,
+        ),
+      );
     const [
       known,
       cleanupTargets,
@@ -2992,14 +3013,22 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
         row.containerId === null ? [] : [row.containerId],
       ),
       leasedBuildWorkItemIds: leasedBuild.map((row) => row.workItemId),
-      leasedRuntimeDeploymentIds: [...new Set(leased.map((row) => row.deploymentId))],
+      leasedRuntimeDeploymentIds: [
+        ...new Set([
+          ...leased.map((row) => row.deploymentId),
+          ...rollbackLeases.flatMap((row) => [row.sourceDeploymentId, row.targetDeploymentId]),
+        ]),
+      ],
       leasedCheckoutKeys: [
         ...new Set([
           ...leasedSource.map((row) => row.deploymentId),
           ...leasedBuild.map((row) => row.deploymentId),
         ]),
       ],
-      leasedWorkItemIds: leased.map((row) => row.workItemId),
+      leasedWorkItemIds: [
+        ...leased.map((row) => row.workItemId),
+        ...rollbackLeases.map((row) => row.workItemId),
+      ],
       knownImageIds: knownImages.map((row) => row.imageId),
     };
   }

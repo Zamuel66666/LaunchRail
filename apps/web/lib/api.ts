@@ -339,7 +339,9 @@ export async function retryWebhookDelivery(
 ): Promise<WebhookDeliverySummary> {
   const response = await apiRequest<{ readonly delivery: WebhookDeliverySummary }>(
     `/v1/organizations/${encodeURIComponent(organizationId)}/webhook-deliveries/${encodeURIComponent(deliveryId)}/retry`,
-    { method: "POST" },
+    {
+      method: "POST",
+    },
   );
   return response.delivery;
 }
@@ -362,7 +364,10 @@ export async function controlDeployment(
 ): Promise<void> {
   await apiRequest<void>(
     `/v1/organizations/${encodeURIComponent(organizationId)}/deployments/${encodeURIComponent(deploymentId)}/${action}`,
-    { method: "POST" },
+    {
+      method: "POST",
+      ...(action === "rollback" ? { headers: { "idempotency-key": crypto.randomUUID() } } : {}),
+    },
   );
 }
 

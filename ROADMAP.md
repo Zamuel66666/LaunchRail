@@ -22,7 +22,7 @@ The roadmap reports verified repository state, not aspirations as completed feat
 ### In progress
 
 - **Phase 10 — Health checks and activation:** health outcomes, prior-route preservation, and interrupted-grace cleanup are implemented; release acceptance is underway.
-- **Phase 11 — Deployment controls:** API controls, retry lineage, timeline history, confirmations, actionable browser feedback, and deployment-scoped operator audit history are implemented; rollback target runtime preparation and fresh health validation, plus race/failure-injection acceptance, remain.
+- **Phase 11 — Deployment controls:** API controls, retry lineage, timeline history, confirmations, actionable browser feedback, and deployment-scoped operator audit history are implemented. Durable rollback now prepares retained runtimes and requires fresh health before switching; broader race/failure-injection acceptance remains.
 - **Phase 12 — GitHub webhooks:** verified signed pushes persist normalized retry data, idempotently create deployments, publish wake-ups, expose processing outcomes, and support scoped operator retry; release acceptance is underway.
 - **Phase 13 — Observability:** route-level metrics, lifecycle/health metrics, a local dashboard, bounded API database and worker database/Redis readiness, W3C API request spans, and queue-to-worker trace propagation with OTLP/HTTP export are implemented; independent verification and remote aggregation remain.
 - **Phase 14 — Failure recovery:** reconciliation inventories managed Docker containers and BuildKit images, protects active resources with durable leases/records, prunes unreferenced images and stale source/build/proxy staging files after 24 hours, and removes completed source checkouts after source/build leases end; builds now bootstrap the explicitly configured Buildx builder, while daemon/container-loss recovery, broad interruption coverage, and independent verification remain.
@@ -223,7 +223,7 @@ Implementation evidence: unit and PostgreSQL acceptance cases cover delayed chec
 
 ### Phase 11 — Deployment controls
 
-**Status:** In progress — rollback runtime validation and race/failure-injection acceptance remain
+**Status:** In progress — health-gated durable rollback implemented; broader race/failure-injection acceptance remains
 
 Organization-scoped deployment listing/event history, idempotent promotion, cancellation, stop controls, transactional rollback, authenticated retry creation, and a recruiter-readable timeline are available with permission checks and bounded inputs. Browser controls require confirmation, surface actionable client-safe errors, and reveal recorded activity on demand. Owner/admin audit readers can now inspect the scoped audit actions associated with each deployment.
 

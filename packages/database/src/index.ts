@@ -13,3 +13,4 @@ export { PasswordHasher, type ScryptParameters } from "./passwords.js";
 export { PostgresProjectManagementStore } from "./project-store.js";
 export { AesGcmSecretCipher, SecretDecryptionError } from "./secrets.js";
 export * as schema from "./schema.js";
+export { PostgresRollbackStore } from "./rollback-store.js";

@@ -453,6 +453,60 @@ export const healthCheckAttempts = pgTable(
   ],
 );
 
+export const rollbackRequests = pgTable(
+  "rollback_requests",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id").notNull(),
+    projectId: uuid("project_id").notNull(),
+    sourceDeploymentId: uuid("source_deployment_id").notNull(),
+    targetDeploymentId: uuid("target_deployment_id").notNull(),
+    actorUserId: uuid("actor_user_id").references(() => users.id, { onDelete: "set null" }),
+    idempotencyKey: text("idempotency_key").notNull(),
+    status: text("status").default("pending").notNull(),
+    attemptCount: integer("attempt_count").default(0).notNull(),
+    leaseToken: uuid("lease_token"),
+    leaseExpiresAt: timestamp("lease_expires_at", { mode: "date", withTimezone: true }),
+    workerId: text("worker_id"),
+    errorCode: text("error_code"),
+    ...timestamps,
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.sourceDeploymentId, table.projectId, table.organizationId],
+      foreignColumns: [deployments.id, deployments.projectId, deployments.organizationId],
+      name: "rollback_requests_source_owner_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.targetDeploymentId, table.projectId, table.organizationId],
+      foreignColumns: [deployments.id, deployments.projectId, deployments.organizationId],
+      name: "rollback_requests_target_owner_fk",
+    }).onDelete("restrict"),
+    unique("rollback_requests_source_key_unique").on(
+      table.sourceDeploymentId,
+      table.idempotencyKey,
+    ),
+    index("rollback_requests_pending_index").on(table.status, table.createdAt),
+    check(
+      "rollback_requests_status",
+      sql`${table.status} in ('pending', 'running', 'completed', 'failed')`,
+    ),
+    check("rollback_requests_attempt_bounds", sql`${table.attemptCount} between 0 and 3`),
+    check(
+      "rollback_requests_distinct_releases",
+      sql`${table.sourceDeploymentId} <> ${table.targetDeploymentId}`,
+    ),
+    check(
+      "rollback_requests_lease",
+      sql`(${table.status} = 'running') = (${table.leaseToken} is not null and ${table.leaseExpiresAt} is not null and ${table.workerId} is not null)`,
+    ),
+    check(
+      "rollback_requests_error",
+      sql`${table.errorCode} is null or ${table.errorCode} in ('rollback_unhealthy', 'rollback_infrastructure_unavailable', 'rollback_invalid_snapshot', 'rollback_lease_exhausted', 'rollback_state_conflict')`,
+    ),
+  ],
+);
+
 export const activeReleases = pgTable(
   "active_releases",
   {

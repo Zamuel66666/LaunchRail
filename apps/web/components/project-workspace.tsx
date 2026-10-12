@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { rollbackFailureFeedback } from "../lib/rollback-feedback";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { EnvironmentVariableEditor } from "./environment-variable-editor";
@@ -636,6 +637,9 @@ function ProjectCard({
                       {deploymentEvents[deployment.deploymentId]?.map((event) => (
                         <li key={event.sequence}>
                           <strong>{event.kind.replaceAll("_", " ")}</strong>
+                          {event.kind === "rollback_failed" ? (
+                            <p>{rollbackFailureFeedback(event.metadata.errorCode)}</p>
+                          ) : null}
                           {event.fromState === null || event.toState === null
                             ? ""
                             : ` · ${event.fromState} → ${event.toState}`}

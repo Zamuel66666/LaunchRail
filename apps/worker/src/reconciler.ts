@@ -18,6 +18,7 @@ export interface DeploymentJobPublisher {
 }
 
 export interface DeploymentJobReconcilerOptions {
+  readonly rollbackProcessor?: { runOnce(): Promise<void> };
   readonly batchSize: number;
   readonly logger: WorkerEventLogger;
   readonly maxAttempts: number;
@@ -53,6 +54,7 @@ export interface DeploymentJobReconciliationResult {
 }
 
 export class DeploymentJobReconciler {
+  private readonly rollbackProcessor: DeploymentJobReconcilerOptions["rollbackProcessor"];
   private readonly batchSize: number;
   private inFlight: Promise<DeploymentJobReconciliationResult> | undefined;
   private readonly logger: WorkerEventLogger;
@@ -78,6 +80,7 @@ export class DeploymentJobReconciler {
     runtimeManager,
     imageBuilder,
     repositoryCheckout,
+    rollbackProcessor,
   }: DeploymentJobReconcilerOptions) {
     this.batchSize = batchSize;
     this.logger = logger;
@@ -90,6 +93,7 @@ export class DeploymentJobReconciler {
     this.runtimeManager = runtimeManager;
     this.imageBuilder = imageBuilder;
     this.repositoryCheckout = repositoryCheckout;
+    this.rollbackProcessor = rollbackProcessor;
   }
 
   public runOnce(): Promise<DeploymentJobReconciliationResult> {
@@ -412,6 +416,15 @@ export class DeploymentJobReconciler {
     }
 
     const deadLettered = recovered.filter((job) => job.status === "dead_lettered").length;
+    try {
+      await this.rollbackProcessor?.runOnce();
+    } catch {
+      resourceRecoveryFailures += 1;
+      this.logger.warn(
+        { event: "rollback_reconciliation_failed" },
+        "Durable rollback work will be retried",
+      );
+    }
     const result = {
       deadLettered,
       dispatchFailed,

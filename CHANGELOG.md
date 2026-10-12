@@ -6,6 +6,8 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 
 ### Verification fixes
 
+- Rollback now prepares or recreates the previous runtime from its retained image and immutable configuration, then requires fresh health before switching. Durable leases fence stale workers; failed preparation retains the current release, records actionable history, and schedules failed-target cleanup. Added explicit missing-container and paused-container lifecycle fault scenarios.
+
 - Cancelling deployments now converge to `cancelled` after durable leases drain or expire; the terminal transition independently fences live work. Added a real local control-lifecycle acceptance command covering failed-candidate preservation, replacement, rollback, cancellation, and stop.
 
 - Invalid, empty, oversized, or unsupported request bodies retain safe HTTP 400/413/415 responses instead of being reported as internal server errors. Webhook processing failures log fixed codes rather than raw exception payloads.

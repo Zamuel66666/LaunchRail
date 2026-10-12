@@ -125,6 +125,12 @@ Build staging remains private to the worker's user, but copied Git files use can
 
 HTTP health checks allow connection-refused startup races to retry within the original bounded health window. They do not turn non-success HTTP responses into success or extend the deadline. Delayed listening and aborted response bodies have focused regression coverage; aborted bodies settle with a typed error rather than hanging.
 
+### Durable rollback acceptance
+
+The PostgreSQL rollback suite covers accepted-command idempotency, current-route retention during preparation, immutable target settings, fresh-health and image proof validation, managed-resource lease protection, successful activation, failed-target cleanup intent, competing requests, stale completions, post-lock lease expiry, bounded lease exhaustion, missing image metadata, and a target stopped during preparation. Worker unit tests cover startup/health order, bounded startup grace, heartbeat activity, unhealthy responses, adapter-error redaction, stale-owner cleanup protection, and in-flight deduplication.
+
+The lifecycle command accepts `LAUNCHRAIL_ACCEPTANCE_ROLLBACK_FAULT=missing` or `paused` only with the additional `LAUNCHRAIL_ACCEPTANCE_ALLOW_DOCKER_FAULT=DEDICATED_LOCAL_ACCEPTANCE` acknowledgement. It creates a dedicated project, checks the exact container's organization/project/deployment/managed labels and work identity, then deletes or pauses only that fixture's prior container. Missing-container acceptance requires recreation and a working preview. Paused-container acceptance first requires a recorded unhealthy rollback and a still-working current preview, then retries with a new command key. This mutates dedicated local Docker resources and is not a production-host test.
+
 ### Completed source cleanup
 
 Migration `0012_allow_source_cleanup_marker` permits only the one-way null-to-timestamp checkout cleanup marker update. All source identity fields remain immutable, and the marker cannot be cleared or replaced. PostgreSQL tests verify repeated cleanup recording is idempotent and immutable metadata remains protected. Apply migrations before restarting a worker with existing source-preparation records.

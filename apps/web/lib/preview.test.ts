@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { deploymentPreviewUrl } from "./preview";
 
-it("links only an active deployment's exact localhost route", () => {
+it("links only the serving deployment's exact localhost route, including rollback preparation", () => {
   const deploymentId = "11111111-1111-4111-8111-111111111111";
   const deployment = {
     deploymentId,
@@ -9,6 +9,9 @@ it("links only an active deployment's exact localhost route", () => {
     previewHostname: `d-${deploymentId}.localhost`,
   };
   expect(deploymentPreviewUrl(deployment)).toBe(`http://d-${deploymentId}.localhost:8080/`);
+  expect(deploymentPreviewUrl({ ...deployment, state: "rolling_back" })).toBe(
+    `http://d-${deploymentId}.localhost:8080/`,
+  );
   for (const previewHostname of [
     "javascript:alert(1)",
     "example.com",

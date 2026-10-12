@@ -7,6 +7,7 @@ import type { DeploymentSourceProcessor } from "./source-processor.js";
 import type { DeploymentRuntimeProcessor } from "./runtime-processor.js";
 
 export interface DeploymentJobProcessorOptions {
+  readonly rollbackProcessor?: { getActiveJobCount(): number; waitForIdle(): Promise<void> };
   readonly buildProcessor: DeploymentBuildProcessor;
   readonly claimProcessor: DeploymentClaimProcessor;
   readonly sourceProcessor: DeploymentSourceProcessor;
@@ -15,6 +16,7 @@ export interface DeploymentJobProcessorOptions {
 }
 
 export class DeploymentJobProcessor {
+  private readonly rollbackProcessor: DeploymentJobProcessorOptions["rollbackProcessor"];
   private readonly buildProcessor: DeploymentBuildProcessor;
   private readonly claimProcessor: DeploymentClaimProcessor;
   private readonly sourceProcessor: DeploymentSourceProcessor;
@@ -27,12 +29,14 @@ export class DeploymentJobProcessor {
     sourceProcessor,
     runtimeProcessor,
     metrics,
+    rollbackProcessor,
   }: DeploymentJobProcessorOptions) {
     this.buildProcessor = buildProcessor;
     this.claimProcessor = claimProcessor;
     this.sourceProcessor = sourceProcessor;
     this.runtimeProcessor = runtimeProcessor;
     this.metrics = metrics;
+    this.rollbackProcessor = rollbackProcessor;
   }
 
   public async process(
@@ -87,7 +91,8 @@ export class DeploymentJobProcessor {
       this.buildProcessor.getActiveJobCount() +
       this.claimProcessor.getActiveJobCount() +
       this.sourceProcessor.getActiveJobCount() +
-      this.runtimeProcessor.getActiveJobCount()
+      this.runtimeProcessor.getActiveJobCount() +
+      (this.rollbackProcessor?.getActiveJobCount() ?? 0)
     );
   }
 
@@ -98,6 +103,7 @@ export class DeploymentJobProcessor {
         this.claimProcessor.waitForIdle(),
         this.sourceProcessor.waitForIdle(),
         this.runtimeProcessor.waitForIdle(),
+        this.rollbackProcessor?.waitForIdle(),
       ]);
     }
   }

@@ -4,7 +4,7 @@ export function deploymentPreviewUrl(deployment: {
   readonly previewHostname?: string | null;
 }): string | null {
   if (
-    deployment.state !== "active" ||
+    !["active", "rolling_back"].includes(deployment.state) ||
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(
       deployment.deploymentId,
     ) ||

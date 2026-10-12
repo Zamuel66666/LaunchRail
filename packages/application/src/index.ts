@@ -185,3 +185,4 @@ export {
   type StartDeploymentRuntimeCommand,
   type StopDeploymentRuntimeCommand,
 } from "./runtimes.js";
+export type { DeploymentRollbackLease, DeploymentRollbackStore } from "./rollbacks.js";

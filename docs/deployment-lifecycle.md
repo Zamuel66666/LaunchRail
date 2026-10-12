@@ -159,11 +159,15 @@ Once the activation transaction starts, cancellation loses the race and receives
 
 ## Rollback
 
-Acceptance gap: the current rollback implementation atomically restores the latest superseded release records and route intent, but does not yet implement the runtime preparation and fresh health check described below. The passing lifecycle scenario used an already-running prior container; it does not prove missing or unhealthy target recovery. This remains an implementation requirement, not merely a documentation or test gate.
+Rollback is durable worker work: the API commits a `rollback_requests` row and the `rolling_back` event before returning. An idempotent replay reports the same accepted command; deployment history reports its eventual outcome. Use a new idempotency key to retry after a failed rollback. The browser generates a new key for each confirmed rollback action.
 
 Rollback accepts only a previously healthy `superseded` release belonging to the same project. LaunchRail verifies that its image and configuration are still available, starts or checks its runtime if necessary, and health-checks it before changing route intent.
 
-The current active release moves to `rolling_back` while this preparation is controlled. On success, one transaction moves it to `rolled_back`, returns the target from `superseded` to `active`, changes the active pointer, and appends deployment and audit events. On a pre-switch failure, the current release returns to `active` and remains routed. Concurrent promotions, stops, and rollbacks serialize on the project row.
+The current active release moves to `rolling_back` while this preparation is controlled. On success, one transaction moves it to `rolled_back`, returns the target from `superseded` to `active`, changes the active pointer, and appends deployment and audit events. On a pre-switch failure, the current release returns to `active` and remains routed. Rollback requests and completion lock the project; concurrent controls recheck release state under row locks and cannot bypass preparation.
+
+Workers poll the durable rollback requests during reconciliation after ordinary job dispatch. Preparation has an expiring, heartbeated PostgreSQL lease and the configured total worker-job deadline. Up to three expired leases can be reclaimed; exhaustion restores the current release with a fixed actionable error. Fresh health and image identity are checked at completion, and lease ownership is checked again after waiting for project locks. A stopped or otherwise ineligible target cannot be activated. Rollback uses the target's immutable snapshot and original runtime identity, so an existing container is adopted or restarted and a missing container is recreated from its retained image. Missing metadata or images fail explicitly; no rebuild or source re-fetch is substituted.
+
+The current preview remains routable during preparation. Only the successful database transaction changes route intent; the proxy converges through the same idempotent reconciliation as normal activation. A failed prepared target is recorded for managed cleanup. Stale workers never stop a container owned by a replacement lease. These controls retain the single-host trust boundary and do not make database and proxy changes a distributed transaction.
 
 ## Retry semantics
 

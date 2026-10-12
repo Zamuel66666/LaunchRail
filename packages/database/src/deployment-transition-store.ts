@@ -11,7 +11,8 @@ import {
   type DeploymentState,
 } from "@launchrail/domain";
 import type { MetricsRegistry } from "@launchrail/observability";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
+import { PostgresRollbackStore } from "./rollback-store.js";
 
 import type { LaunchRailDatabase } from "./client.js";
 import {
@@ -592,138 +593,6 @@ export class PostgresDeploymentTransitionStore implements DeploymentTransitionSt
   }
 
   public async rollback(command: RollbackDeploymentCommand): Promise<DeploymentTransitionResult> {
-    if (command.idempotencyKey.trim().length === 0)
-      throw new DeploymentPersistenceConflictError("Idempotency key cannot be blank");
-    const result = await this.db.transaction(async (transaction) => {
-      const [current] = await transaction
-        .select()
-        .from(deployments)
-        .where(
-          and(
-            eq(deployments.id, command.deploymentId),
-            eq(deployments.organizationId, command.organizationId),
-          ),
-        )
-        .for("update");
-      if (current === undefined) throw new DeploymentNotFoundError();
-      const [prior] = await transaction
-        .select({ result: deploymentCommands.result })
-        .from(deploymentCommands)
-        .where(
-          and(
-            eq(deploymentCommands.deploymentId, current.id),
-            eq(deploymentCommands.idempotencyKey, command.idempotencyKey),
-          ),
-        );
-      if (prior !== undefined) {
-        assertReplayTarget(prior.result, current.id, "active");
-        return replayResult(prior.result);
-      }
-      if (current.state !== "active")
-        throw new DeploymentPersistenceConflictError("Only the active release can be rolled back");
-      const [previous] = await transaction
-        .select()
-        .from(deployments)
-        .where(
-          and(
-            eq(deployments.projectId, current.projectId),
-            eq(deployments.organizationId, command.organizationId),
-            eq(deployments.state, "superseded"),
-          ),
-        )
-        .orderBy(desc(deployments.updatedAt))
-        .limit(1)
-        .for("update");
-      if (previous === undefined)
-        throw new DeploymentPersistenceConflictError(
-          "No previous release is available for rollback",
-        );
-      const now = await readDatabaseClock(transaction);
-      const currentSequence = current.eventSequence + 1;
-      await transaction
-        .update(deployments)
-        .set({
-          eventSequence: currentSequence,
-          state: "rolled_back",
-          finishedAt: now,
-          updatedAt: now,
-          version: current.version + 1,
-        })
-        .where(eq(deployments.id, current.id));
-      await transaction.insert(deploymentEvents).values({
-        deploymentId: current.id,
-        fromState: current.state,
-        kind: "release_rolled_back",
-        metadata: { replacementDeploymentId: previous.id },
-        organizationId: current.organizationId,
-        sequence: currentSequence,
-        toState: "rolled_back",
-      });
-      const previousSequence = previous.eventSequence + 1;
-      await transaction
-        .update(deployments)
-        .set({
-          eventSequence: previousSequence,
-          state: "active",
-          finishedAt: null,
-          updatedAt: now,
-          version: previous.version + 1,
-        })
-        .where(eq(deployments.id, previous.id));
-      await transaction.insert(deploymentEvents).values({
-        deploymentId: previous.id,
-        fromState: previous.state,
-        kind: "release_activated",
-        metadata: { rollbackOfDeploymentId: current.id },
-        organizationId: previous.organizationId,
-        sequence: previousSequence,
-        toState: "active",
-      });
-      await transaction
-        .insert(activeReleases)
-        .values({
-          activatedAt: now,
-          deploymentId: previous.id,
-          organizationId: previous.organizationId,
-          projectId: previous.projectId,
-          updatedAt: now,
-        })
-        .onConflictDoUpdate({
-          target: activeReleases.projectId,
-          set: {
-            activatedAt: now,
-            deploymentId: previous.id,
-            organizationId: previous.organizationId,
-            updatedAt: now,
-          },
-        });
-      const result = {
-        deploymentId: current.id,
-        eventSequence: currentSequence,
-        from: current.state,
-        to: "active" as DeploymentState,
-        version: current.version + 1,
-      } satisfies PersistedTransitionResult;
-      await transaction.insert(deploymentCommands).values({
-        deploymentId: current.id,
-        idempotencyKey: command.idempotencyKey,
-        organizationId: current.organizationId,
-        result,
-      });
-      await transaction.insert(auditEvents).values({
-        action: "deployment.rollback",
-        ...(command.actorUserId === undefined ? {} : { actorUserId: command.actorUserId }),
-        correlationId: command.idempotencyKey,
-        metadata: { replacementDeploymentId: previous.id },
-        organizationId: current.organizationId,
-        outcome: "succeeded",
-        targetId: current.id,
-        targetType: "deployment",
-      });
-      return freshResult(result);
-    });
-    if (!result.idempotentReplay)
-      await this.recordFinalOutcome(command.deploymentId, command.organizationId, "rolled_back");
-    return result;
+    return new PostgresRollbackStore(this.db).request(command);
   }
 }

@@ -2,6 +2,12 @@
 
 This is an incremental verification record, not a release approval. Remaining gates are tracked in the [release checklist](release-checklist.md).
 
+## Durable rollback verification — 2026-10-12
+
+The previously identified rollback preparation gap is now implemented. PostgreSQL acceptance covers retained-route preparation, immutable settings, fresh-health and image identity validation, stale-owner fencing, post-lock expiry, target-stop races, bounded interrupted-work reclamation, failed-target cleanup intent, idempotent requests, and concurrent claims. All 328 unit tests, 94 PostgreSQL/service tests, 15 queue/restart tests, and 18 HTTP integration tests passed locally, along with formatting, lint, documentation checks, full type checks, the application build, and process-health smoke checks. The production dependency audit reported no known vulnerabilities.
+
+Two real single-host lifecycle fault runs used dedicated synthetic projects and the healthy application from published source revision `8d441729a02e873e5e09b8e7eb8e53da544f6707`. Deleting the retained prior container produced a working recreated runtime and successful rollback (18 checks). Pausing the prior container produced a recorded `rollback_unhealthy` outcome and retained HTTP 200 from the current preview; a new command then successfully restored the prior release (21 checks). PostgreSQL retained the failed health attempt and both rollback outcomes. Follow-up Docker inventories found no remaining containers for either dedicated project after stop/cancellation cleanup. The saved reports explicitly record a dirty development worktree; these are development acceptance results, not exact-clean-release approval or controlled performance measurements.
+
 Runtime snapshot acceptance additionally edits a project after an image is built and verifies runtime startup retains the deployment's original health path, port, CPU, memory, PID limit, and read-only policy. Invalid snapshots are dead-lettered before starting or probing a container. After this correction, 319 unit tests, 84 PostgreSQL/service tests, and 15 queue/restart tests passed. The rollback audit found a remaining implementation gap: prior runtime preparation and fresh health validation are not yet performed; the healthy retained-container scenario does not establish those requirements.
 
 ## 2026-10-11 verification

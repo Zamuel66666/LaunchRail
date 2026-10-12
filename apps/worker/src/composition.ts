@@ -13,6 +13,7 @@ import type { WorkerConfig } from "@launchrail/config";
 import {
   PostgresDeploymentJobStore,
   PostgresDeploymentTransitionStore,
+  PostgresRollbackStore,
   traceDatabaseStore,
   type LaunchRailDatabase,
 } from "@launchrail/database";
@@ -33,6 +34,7 @@ import { DeploymentJobReconciler } from "./reconciler.js";
 import { DeploymentWorkerRuntime } from "./runtime.js";
 import { DeploymentSourceProcessor } from "./source-processor.js";
 import { DeploymentRuntimeProcessor } from "./runtime-processor.js";
+import { DeploymentRollbackProcessor } from "./rollback-processor.js";
 
 export interface DeploymentWorkerComponents {
   readonly buildProcessor: DeploymentBuildProcessor;
@@ -198,7 +200,19 @@ export function createDeploymentWorkerComponents({
     transitionStore,
     workerId,
   });
+  const rollbackProcessor = new DeploymentRollbackProcessor({
+    store: new PostgresRollbackStore(database),
+    runtimeManager: deploymentRuntimeManager,
+    healthCheck: checkHttpHealth,
+    workerId,
+    leaseDurationMs: config.WORKER_LEASE_MS,
+    heartbeatIntervalMs: config.WORKER_HEARTBEAT_INTERVAL_MS,
+    jobTimeoutMs: config.WORKER_JOB_TIMEOUT_MS,
+    healthGraceMs: config.WORKER_HEALTH_GRACE_MS,
+    logger,
+  });
   const processor = new DeploymentJobProcessor({
+    rollbackProcessor,
     buildProcessor,
     claimProcessor,
     ...(metrics === undefined ? {} : { metrics }),
@@ -212,6 +226,7 @@ export function createDeploymentWorkerComponents({
     ...(metrics === undefined ? {} : { metrics }),
   });
   const reconciler = new DeploymentJobReconciler({
+    rollbackProcessor,
     batchSize: config.WORKER_RECONCILIATION_BATCH_SIZE,
     logger,
     maxAttempts: config.WORKER_MAX_ATTEMPTS,

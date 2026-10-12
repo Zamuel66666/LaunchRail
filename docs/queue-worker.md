@@ -1,5 +1,7 @@
 # Queue and worker operations
 
+Rollback requests use a separate PostgreSQL-authoritative `rollback_requests` work table, polled during worker reconciliation after ordinary queue dispatch. They do not put runtime configuration or credentials into Redis. A heartbeated lease protects the source and target releases plus the original runtime work identity from concurrent orphan cleanup; expired preparation is reclaimed up to three attempts. Completion is lease-fenced and atomically records either fresh-health activation or current-release retention. Worker active-work accounting and graceful drain include rollback preparation. Apply migration `0013` before starting the new worker.
+
 ## Current scope
 
 Phase 6 extends LaunchRail's durable background-work foundation through source preparation. PostgreSQL owns every work item's identity, organization/deployment relationship, status, attempt count, due time, lease, safe failure, completion/dead-letter result, immutable source input/output, and worker heartbeat. Redis and BullMQ provide at-least-once wake-ups only.

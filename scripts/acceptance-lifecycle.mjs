@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import { request as httpRequest } from "node:http";
 import { benchmarkEnvironment } from "./benchmark-environment.mjs";
 
@@ -39,6 +40,14 @@ if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 1800000)
 const base = `/v1/organizations/${organizationId}`;
 const startedAt = new Date().toISOString();
 const evidence = [];
+const rollbackFault = process.env.LAUNCHRAIL_ACCEPTANCE_ROLLBACK_FAULT ?? "none";
+if (!["none", "missing", "paused"].includes(rollbackFault))
+  throw new Error("Invalid rollback fault mode");
+if (
+  rollbackFault !== "none" &&
+  process.env.LAUNCHRAIL_ACCEPTANCE_ALLOW_DOCKER_FAULT !== "DEDICATED_LOCAL_ACCEPTANCE"
+)
+  throw new Error("Docker fault injection requires explicit dedicated acceptance acknowledgement");
 let project;
 
 async function request(path, options = {}) {
@@ -48,6 +57,7 @@ async function request(path, options = {}) {
       cookie,
       origin: origin.origin,
       ...(options.body === undefined ? {} : { "content-type": "application/json" }),
+      ...options.headers,
     },
     signal: AbortSignal.timeout(10000),
   });
@@ -150,7 +160,31 @@ async function preview(id, expected) {
   });
 }
 async function control(id, action) {
-  await request(`${base}/deployments/${id}/${action}`, { method: "POST" });
+  await request(`${base}/deployments/${id}/${action}`, {
+    method: "POST",
+    headers: { "idempotency-key": randomUUID() },
+  });
+}
+
+function ownedRuntime(id) {
+  const name = `launchrail-runtime-${id}`;
+  const [container] = JSON.parse(
+    execFileSync("docker", ["inspect", name], {
+      encoding: "utf8",
+      timeout: 10000,
+      maxBuffer: 262144,
+    }),
+  );
+  const labels = container?.Config?.Labels;
+  if (
+    labels?.["dev.launchrail.managed"] !== "true" ||
+    labels?.["dev.launchrail.organization-id"] !== organizationId ||
+    labels?.["dev.launchrail.project-id"] !== project.id ||
+    labels?.["dev.launchrail.deployment-id"] !== id ||
+    !uuid.test(labels?.["dev.launchrail.work-item-id"] ?? "")
+  )
+    throw new Error("Fault target does not belong to the dedicated acceptance project");
+  return container.Id;
 }
 
 try {
@@ -187,6 +221,36 @@ try {
   await state(second, "active");
   await state(first, "superseded");
   await preview(second, 200);
+  if (rollbackFault !== "none") {
+    const containerId = ownedRuntime(first);
+    execFileSync(
+      "docker",
+      rollbackFault === "missing" ? ["rm", "--force", containerId] : ["pause", containerId],
+      { timeout: 10000, maxBuffer: 262144 },
+    );
+    evidence.push({ check: `rollback-target-${rollbackFault}`, deploymentId: first });
+    if (rollbackFault === "paused") {
+      await control(second, "rollback");
+      await until("rollback-unhealthy-retains-current", async () => {
+        const events = (await request(`${base}/deployments/${second}/events`)).events;
+        return events.some(
+          (event) =>
+            event.kind === "rollback_failed" && event.metadata.errorCode === "rollback_unhealthy",
+        );
+      });
+      await state(second, "active");
+      await preview(second, 200);
+      // The worker may already have removed the failed target through reconciliation.
+      try {
+        execFileSync("docker", ["unpause", ownedRuntime(first)], {
+          timeout: 10000,
+          maxBuffer: 262144,
+        });
+      } catch {
+        /* A removed target will be recreated from the retained image. */
+      }
+    }
+  }
   await control(second, "rollback");
   await state(second, "rolled_back");
   await state(first, "active");
@@ -200,11 +264,32 @@ try {
   await control(first, "stop");
   await state(first, "stopped");
   await preview(first, 404);
+  if (rollbackFault !== "none")
+    await until(
+      "dedicated-project-runtime-cleanup",
+      async () =>
+        execFileSync(
+          "docker",
+          [
+            "ps",
+            "--all",
+            "--quiet",
+            "--filter",
+            `label=dev.launchrail.organization-id=${organizationId}`,
+            "--filter",
+            `label=dev.launchrail.project-id=${project.id}`,
+            "--filter",
+            "label=dev.launchrail.managed=true",
+          ],
+          { encoding: "utf8", timeout: 10000, maxBuffer: 262144 },
+        ).trim() === "",
+    );
   process.stdout.write(
     `${JSON.stringify(
       {
         schemaVersion: 1,
         scenario: "real-deployment-control-lifecycle",
+        rollbackFault,
         startedAt,
         environment: benchmarkEnvironment(),
         projectId: project.id,

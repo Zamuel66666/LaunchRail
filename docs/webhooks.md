@@ -1,5 +1,7 @@
 # GitHub webhook operations
 
+Repository owner/name matching is case-insensitive, consistent with canonical lowercase project URLs and GitHub's mixed-case payload names. Branch filtering remains case-sensitive. A release-verification regression demonstrated a signed mixed-case push receiving HTTP 202 but creating no intent before this correction; the PostgreSQL/Redis test now verifies both durable creation and the real wake-up. Previously processed unmatched receipts are not automatically replayed, avoiding unexpected historical deployments.
+
 LaunchRail accepts GitHub `push` deliveries at `POST /v1/webhooks/github`. Configure the webhook with the API's `GITHUB_WEBHOOK_SECRET`, select JSON delivery, and subscribe to push events. Set `GITHUB_WEBHOOK_ORGANIZATION_ID` to the organization whose projects may be triggered. The secret must not be committed or copied into project environment variables.
 
 The API verifies the HMAC-SHA256 signature over the original request bytes before parsing the event. It stores only the payload digest and the normalized branch/repository/revision fields needed to retry a verified push. Raw request bodies and signature values are not persisted. Delivery IDs are bounded and deduplicated within the configured organization and provider.

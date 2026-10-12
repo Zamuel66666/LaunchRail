@@ -240,6 +240,8 @@ Signature verification, strict push-event parsing, safe wildcard branch filterin
 
 Exit gate: independently verify invalid, duplicate, unsupported, oversized, retried, partially failed, and valid deliveries against clean PostgreSQL and Redis services.
 
+Live signed-push verification exposed case-sensitive owner/repository comparison against canonical lowercase project URLs: HTTP 202 was returned without creating an intent. The real PostgreSQL/Redis regression failed with zero deployments before the correction. Matching now normalizes repository identity while preserving case-sensitive branch filtering; new unit cases and the durable wake-up regression verify this boundary. Whole-application signed acceptance must be repeated after publishing the fix.
+
 ### Phase 13 — Observability
 
 **Status:** In progress — live correlation and dashboard queries verified; clean-release independent acceptance remains

@@ -6,6 +6,8 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 
 ### Verification fixes
 
+- Fixed signed pushes with mixed-case GitHub owner/repository names failing to match canonical project URLs. Repository identity matching is case-insensitive; branch filters remain case-sensitive. Previously processed unmatched receipts are not retroactively deployed.
+
 - Prevented PostgreSQL idle-connection interruption from crashing API/worker processes through an unhandled pool error. Readiness remains unavailable while database queries fail; reconnection and diagnostics failure are handled safely without logging raw database errors.
 
 - Added a guarded, repeatable physical interruption acceptance command and a recoverable slow-build example. The command owns its test processes, validates scoped Compose targets, preserves volumes, and requires observed in-progress work before injecting a worker fault.

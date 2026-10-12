@@ -205,6 +205,22 @@ suite("GitHub delivery persistence and Redis wake-ups", () => {
     expect(await client.db.select().from(schema.webhookDeploymentTriggers)).toHaveLength(1);
   });
 
+  it("matches provider owner and repository casing to the canonical project URL", async () => {
+    const response = await push(randomUUID(), {
+      payload: {
+        after: "a".repeat(40),
+        ref: "refs/heads/main",
+        repository: { name: "App", owner: { login: "Octo" } },
+      },
+    });
+    expect(response.statusCode).toBe(202);
+    const rows = await client.db.select().from(schema.deployments);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.projectId).toBe(projectId);
+    const [job] = await client.db.select().from(schema.deploymentJobs);
+    expect(await publisher.getState(job!.id)).toBe("waiting");
+  });
+
   it("rejects invalid signatures, unsupported events and invalid or oversized payloads without intents", async () => {
     expect((await push(randomUUID(), { valid: false })).statusCode).toBe(401);
     expect((await push(randomUUID(), { event: "issues" })).statusCode).toBe(400);

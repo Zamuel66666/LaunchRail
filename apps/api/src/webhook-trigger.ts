@@ -24,7 +24,10 @@ export interface CreateGitHubWebhookDeploymentTriggerOptions {
 function matchesRepository(repositoryUrl: string, owner: string, name: string): boolean {
   const repository = new URL(repositoryUrl);
   const [configuredOwner, configuredName] = repository.pathname.slice(1).split("/");
-  return configuredOwner === owner && configuredName === name;
+  return (
+    configuredOwner?.toLowerCase() === owner.toLowerCase() &&
+    configuredName?.toLowerCase() === name.toLowerCase()
+  );
 }
 
 export function createGitHubWebhookDeploymentTrigger({

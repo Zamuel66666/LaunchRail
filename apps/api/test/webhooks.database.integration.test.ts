@@ -170,7 +170,10 @@ suite("GitHub delivery persistence and Redis wake-ups", () => {
         after: "a".repeat(40),
         ref: `refs/heads/${options.branch ?? "main"}`,
         repository: { name: "app", owner: { login: "octo" } },
+        description: "Raw bytes: café 🚆",
       },
+      null,
+      2,
     );
     return server.inject({
       method: "POST",
@@ -215,6 +218,39 @@ suite("GitHub delivery persistence and Redis wake-ups", () => {
     const records = await client.db.select().from(schema.webhookDeliveries);
     expect(records).toHaveLength(3);
     expect(records.some((row) => row.verificationState === "rejected")).toBe(true);
+  });
+
+  it("accepts a verified redelivery after a rejected receipt without losing its audit history", async () => {
+    const deliveryId = randomUUID();
+    expect((await push(deliveryId, { valid: false })).statusCode).toBe(401);
+    const responses = await Promise.all([push(deliveryId), push(deliveryId)]);
+    expect(responses.map((response) => response.statusCode).sort()).toEqual([200, 202]);
+    expect(await client.db.select().from(schema.deployments)).toHaveLength(1);
+    const [receipt] = await client.db.select().from(schema.webhookDeliveries);
+    expect(receipt).toMatchObject({
+      verificationState: "verified",
+      processingState: "processed",
+      attemptCount: 2,
+    });
+    const audit = await client.db.select().from(schema.auditEvents);
+    expect(audit.find((row) => row.action === "webhook.verification_recovered")).toMatchObject({
+      targetId: receipt!.id,
+      metadata: expect.objectContaining({
+        previousVerificationState: "rejected",
+        previousProcessingError: "invalid_signature",
+      }),
+    });
+    expect((await push(deliveryId, { valid: false })).statusCode).toBe(401);
+    expect(await client.db.select().from(schema.deployments)).toHaveLength(1);
+    // A rejected request may finish marking after a concurrent signed recovery.
+    expect(
+      await deliveries.mark({
+        deliveryId,
+        organizationId,
+        processingError: "invalid_signature",
+        processingState: "failed",
+      }),
+    ).toMatchObject({ verificationState: "verified", processingState: "processed" });
   });
 
   it("retries partial processing without duplicating an already accepted project intent", async () => {

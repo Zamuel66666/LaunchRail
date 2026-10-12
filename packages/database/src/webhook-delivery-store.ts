@@ -7,55 +7,97 @@ import type { GitHubPushEvent } from "@launchrail/application";
 import { and, desc, eq, sql } from "drizzle-orm";
 
 import type { LaunchRailDatabase } from "./client.js";
-import { webhookDeliveries } from "./schema.js";
+import { auditEvents, webhookDeliveries } from "./schema.js";
 
 export class PostgresWebhookDeliveryStore implements WebhookDeliveryStore {
   public constructor(private readonly db: LaunchRailDatabase) {}
 
   public async record(command: RecordWebhookDeliveryCommand): Promise<WebhookDeliverySummary> {
-    const [inserted] = await this.db
-      .insert(webhookDeliveries)
-      .values({
-        deliveryId: command.deliveryId,
-        eventName: command.eventName,
-        organizationId: command.organizationId,
-        payloadDigest: command.payloadDigest,
-        attemptCount: 1,
-        processingState: "pending",
-        provider: command.provider,
-        pushPayload: command.push === undefined ? null : { ...command.push },
-        verificationState: command.verificationState,
-      })
-      .onConflictDoNothing()
-      .returning();
-    const row =
-      inserted ??
-      (
-        await this.db
-          .select()
-          .from(webhookDeliveries)
-          .where(
-            and(
-              eq(webhookDeliveries.organizationId, command.organizationId),
-              eq(webhookDeliveries.provider, command.provider),
-              eq(webhookDeliveries.deliveryId, command.deliveryId),
-            ),
-          )
-      )[0];
-    if (row === undefined) throw new Error("Webhook delivery record disappeared");
-    return {
-      attemptCount: row.attemptCount,
-      deliveryId: row.deliveryId,
-      duplicate: inserted === undefined,
-      eventName: row.eventName,
-      organizationId: row.organizationId,
-      payloadDigest: row.payloadDigest,
-      processingError: row.processingError,
-      processingState: row.processingState,
-      provider: row.provider,
-      receivedAt: row.receivedAt,
-      verificationState: row.verificationState,
-    };
+    return this.db.transaction(async (tx) => {
+      const [inserted] = await tx
+        .insert(webhookDeliveries)
+        .values({
+          deliveryId: command.deliveryId,
+          eventName: command.eventName,
+          organizationId: command.organizationId,
+          payloadDigest: command.payloadDigest,
+          attemptCount: 1,
+          processingState: "pending",
+          provider: command.provider,
+          pushPayload: command.push === undefined ? null : { ...command.push },
+          verificationState: command.verificationState,
+        })
+        .onConflictDoNothing()
+        .returning();
+      let row =
+        inserted ??
+        (
+          await tx
+            .select()
+            .from(webhookDeliveries)
+            .where(
+              and(
+                eq(webhookDeliveries.organizationId, command.organizationId),
+                eq(webhookDeliveries.provider, command.provider),
+                eq(webhookDeliveries.deliveryId, command.deliveryId),
+              ),
+            )
+            .for("update")
+        )[0];
+      if (row === undefined) throw new Error("Webhook delivery record disappeared");
+      let recovered = false;
+      if (
+        inserted === undefined &&
+        row.verificationState === "rejected" &&
+        command.verificationState === "verified"
+      ) {
+        await tx.insert(auditEvents).values({
+          organizationId: command.organizationId,
+          action: "webhook.verification_recovered",
+          targetType: "webhook_delivery",
+          targetId: row.id,
+          outcome: "succeeded",
+          metadata: {
+            previousVerificationState: row.verificationState,
+            previousProcessingState: row.processingState,
+            previousProcessingError: row.processingError,
+            previousPayloadDigest: row.payloadDigest,
+            previousEventName: row.eventName,
+            previousReceivedAt: row.receivedAt.toISOString(),
+          },
+        });
+        const [updated] = await tx
+          .update(webhookDeliveries)
+          .set({
+            verificationState: "verified",
+            processingState: "pending",
+            processingError: null,
+            processedAt: null,
+            eventName: command.eventName,
+            payloadDigest: command.payloadDigest,
+            pushPayload: command.push === undefined ? null : { ...command.push },
+            attemptCount: sql`least(${webhookDeliveries.attemptCount} + 1, 100)`,
+          })
+          .where(eq(webhookDeliveries.id, row.id))
+          .returning();
+        if (updated === undefined) throw new Error("Webhook delivery record disappeared");
+        row = updated;
+        recovered = true;
+      }
+      return {
+        attemptCount: row.attemptCount,
+        deliveryId: row.deliveryId,
+        duplicate: inserted === undefined && !recovered,
+        eventName: row.eventName,
+        organizationId: row.organizationId,
+        payloadDigest: row.payloadDigest,
+        processingError: row.processingError,
+        processingState: row.processingState,
+        provider: row.provider,
+        receivedAt: row.receivedAt,
+        verificationState: row.verificationState,
+      };
+    });
   }
 
   public async list(
@@ -90,7 +132,7 @@ export class PostgresWebhookDeliveryStore implements WebhookDeliveryStore {
     readonly processingState: "failed" | "ignored" | "processed" | "pending";
     readonly retry?: boolean;
   }): Promise<WebhookDeliverySummary> {
-    const [row] = await this.db
+    let [row] = await this.db
       .update(webhookDeliveries)
       .set({
         ...(command.retry ? { attemptCount: sql`${webhookDeliveries.attemptCount} + 1` } : {}),
@@ -103,9 +145,28 @@ export class PostgresWebhookDeliveryStore implements WebhookDeliveryStore {
           eq(webhookDeliveries.organizationId, command.organizationId),
           eq(webhookDeliveries.deliveryId, command.deliveryId),
           ...(command.retry ? [eq(webhookDeliveries.processingState, "failed" as const)] : []),
+          ...(command.processingError === "invalid_signature" ||
+          command.processingError === "invalid_payload"
+            ? [eq(webhookDeliveries.verificationState, "rejected" as const)]
+            : []),
         ),
       )
       .returning();
+    if (
+      row === undefined &&
+      (command.processingError === "invalid_signature" ||
+        command.processingError === "invalid_payload")
+    ) {
+      [row] = await this.db
+        .select()
+        .from(webhookDeliveries)
+        .where(
+          and(
+            eq(webhookDeliveries.organizationId, command.organizationId),
+            eq(webhookDeliveries.deliveryId, command.deliveryId),
+          ),
+        );
+    }
     if (row === undefined) throw new Error("Webhook delivery is not retryable or was not found");
     return {
       attemptCount: row.attemptCount,

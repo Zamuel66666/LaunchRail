@@ -8,6 +8,8 @@ Matching project branches create immutable deployment snapshots and deterministi
 
 Audit readers can inspect recent results in the project workspace or request `GET /v1/organizations/{organizationId}/webhook-deliveries?limit=50`. Results include the verification state, processing outcome, safe error code, attempt count, and receipt time, but not the stored payload. A deployment controller can retry a failed verified push with `POST /v1/organizations/{organizationId}/webhook-deliveries/{deliveryId}/retry`. Invalid signatures, malformed pushes, and unsupported events cannot be retried through this route.
 
+A rejected receipt does not reserve a delivery ID forever: a subsequent correctly signed, valid delivery can recover that receipt. PostgreSQL serializes concurrent recoveries so only one processes the push. The recovery increments the attempt count and records `webhook.verification_recovered` in the organization audit, retaining the previous rejection state, safe error, event name, digest, and receipt time without retaining the raw body or signature. A late rejection cannot overwrite the recovered verified result.
+
 Processing errors are safe low-cardinality codes, not exception text. Retrying requires an authenticated organization member with deployment-control permission and a request from the configured web origin.
 
 ## Service-backed acceptance

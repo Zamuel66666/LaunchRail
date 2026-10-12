@@ -6,6 +6,8 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 
 ### Verification fixes
 
+- Removed a scheduling-dependent deadlock in queue recovery acceptance by explicitly occupying one of two handler slots before duplicate wake-ups. Duplicate-effect, drain, and lease assertions and timeouts are unchanged; no production queue behavior was altered.
+
 - Health checks now tolerate Docker's pre-header connection-reset startup race within the existing deadline. A real Node example that failed before listening now activates with zero startup grace; continuous resets, aborted bodies, and unhealthy HTTP statuses remain failures.
 
 - The keyboard skip link now uses native fragment navigation, correctly moving focus to the main landmark instead of only scrolling. Verified focus transfer in Chromium and checked four public/signed-out pages at desktop and mobile widths with axe-core.

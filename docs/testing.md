@@ -107,6 +107,8 @@ The current baseline is `pnpm test` for package/web unit tests (including fake-H
 
 ## Defect workflow
 
+The real queue recovery fixture deliberately holds a runtime handler before publishing duplicate source/build/claim wake-ups. It uses the supported two-slot worker profile so duplicate handlers can drain while that runtime occupies the other slot; a single-slot profile would deadlock the fixture until its timeout. Startup is awaited explicitly to avoid a timing-dependent pass. Assertions still require exactly one source preparation, build artifact, log record, and committed lifecycle effects, plus graceful drain and lease recovery. Per-boundary waits and the overall test timeout are unchanged.
+
 Reproduce a defect at the lowest layer that captures the observable failure, add a regression test where practical, implement the focused correction, and run adjacent integration coverage. Do not weaken an invariant or assertion merely to make a failure disappear.
 
 ### Cancellation convergence

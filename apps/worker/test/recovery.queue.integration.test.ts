@@ -189,7 +189,9 @@ describeWithServices("deployment worker restart recovery", () => {
       WORKER_BACKOFF_CAP_MS: "1",
       WORKER_BUILD_TIMEOUT_MS: "400",
       WORKER_BUILD_ROOT: `/tmp/launchrail-build-${suffix}`,
-      WORKER_CONCURRENCY: "1",
+      // One deliberately held runtime occupies a slot while duplicate wake-ups
+      // exercise the other slot. A single slot deadlocks this fixture until timeout.
+      WORKER_CONCURRENCY: "2",
       WORKER_HEARTBEAT_INTERVAL_MS: "20",
       WORKER_JOB_TIMEOUT_MS: "6000",
       WORKER_LEASE_MS: "100",
@@ -300,6 +302,9 @@ describeWithServices("deployment worker restart recovery", () => {
     if (sourceJob === undefined) {
       throw new Error("Expected a durable source preparation job");
     }
+    // Make the occupied-slot scenario deterministic, rather than racing duplicate
+    // publication against runtime startup on a fast local machine.
+    await waitFor(async () => finishRuntimeFixture !== undefined);
 
     // Fresh duplicate deliveries after the completed source/build effects remain harmless and removable.
     await components.publisher.enqueue({
@@ -327,7 +332,6 @@ describeWithServices("deployment worker restart recovery", () => {
         (await components.publisher.getState(sourceJob.id, "deployment.prepare_source")) ===
         "absent",
     );
-    await waitFor(async () => finishRuntimeFixture !== undefined);
     const stopping = components.runtime.stop();
     // Settle the held fake adapter after pausing intake, proving graceful drain
     // without relying on the shorter Docker timeout to abort the entire job.

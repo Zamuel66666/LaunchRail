@@ -9,3 +9,9 @@ Matching project branches create immutable deployment snapshots and deterministi
 Audit readers can inspect recent results in the project workspace or request `GET /v1/organizations/{organizationId}/webhook-deliveries?limit=50`. Results include the verification state, processing outcome, safe error code, attempt count, and receipt time, but not the stored payload. A deployment controller can retry a failed verified push with `POST /v1/organizations/{organizationId}/webhook-deliveries/{deliveryId}/retry`. Invalid signatures, malformed pushes, and unsupported events cannot be retried through this route.
 
 Processing errors are safe low-cardinality codes, not exception text. Retrying requires an authenticated organization member with deployment-control permission and a request from the configured web origin.
+
+## Service-backed acceptance
+
+`pnpm test:database` includes a webhook suite requiring both `DATABASE_URL` and `REDIS_URL`. It verifies signatures against raw request bytes, delivery/project deduplication, one atomic intent/claim and a real identifier-only Redis wake-up, unsupported/invalid/oversized inputs, branch mismatch, and partial processing followed by authenticated operator retry. A viewer receives HTTP 403 for retry, an unsigned session receives HTTP 401, and a foreign organization is concealed with HTTP 404. A dispatch-failure fixture proves a verified delivery retains authoritative pending work for later reconciliation; this fixture is not evidence of a physical Redis outage.
+
+The suite uses an isolated Redis prefix and removes only that prefix's queue. Queue recovery fixtures hold and explicitly settle their fake runtime adapter before shutdown, making graceful-drain assertions independent of Docker command timeout settings and protecting live host resources.

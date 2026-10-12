@@ -22,4 +22,12 @@ The Chromium browser checks used the real API on port 4100 and production web se
 
 Closing the timeline produced zero history requests over the same 4.5-second observation window. The generated SVG application icon removed the previous missing-icon response after a production rebuild.
 
-These checks do not yet establish full keyboard onboarding coverage, every control race, all interruption boundaries, benchmark performance, or release readiness. Node example startup has intermittently exceeded the example acceptance window on hosted CI; bounded process diagnostics are retained on failure rather than suppressing the failure.
+These checks do not yet establish full keyboard onboarding coverage, every control race, all interruption boundaries, benchmark performance, or release readiness. Example readiness uses an explicit bounded 30-second functional window while retaining CPU, memory, process, and filesystem restrictions; measured startup durations and bounded process diagnostics are retained in test output. This is not a five-second performance SLA.
+
+## 2026-10-12 continuation
+
+Verification added safe request-parser status handling, durable cancellation convergence, and a runtime-job budget correction so configured health grace is not cut short by the Docker command timeout. All 318 unit tests, 83 PostgreSQL/service tests, 18 HTTP integration tests, 15 queue/restart tests, and five restricted runtime/example tests passed locally. The webhook service suite covers real Redis wake-ups and retry after partial processing, including authorization and canary error boundaries.
+
+The repeatable `pnpm acceptance:lifecycle` run passed healthy activation, failed-candidate preservation, replacement, rollback, queued cancellation, stop, and observed HTTP 200/404 preview changes without modifying the running worker during the run. Its worker profile used 10-second startup grace with a five-second Docker command timeout, proving grace consumes the total job budget instead. This is functional evidence, not a controlled performance benchmark.
+
+The [operations guide](operations.md) records the private logical PostgreSQL backup/restore rehearsal and its explicit limitations. Clean-clone setup, complete interruption recovery, accessible first-run onboarding, controlled benchmarks, independent release review, and publication remain open.

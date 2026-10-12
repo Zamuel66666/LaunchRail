@@ -235,6 +235,7 @@ describeWithServices("deployment worker restart recovery", () => {
         sizeBytes: 1024,
       };
     });
+    let finishRuntimeFixture: (() => void) | undefined;
     const components = createDeploymentWorkerComponents({
       imageBuilder: { build, remove: async () => undefined },
       config,
@@ -252,6 +253,7 @@ describeWithServices("deployment worker restart recovery", () => {
         readLogs: async () => "",
         start: async ({ signal }) =>
           new Promise((_resolve, reject) => {
+            finishRuntimeFixture = () => reject(new Error("Fixture runtime is unavailable"));
             if (signal.aborted) reject(signal.reason);
             else signal.addEventListener("abort", () => reject(signal.reason), { once: true });
           }),
@@ -313,7 +315,12 @@ describeWithServices("deployment worker restart recovery", () => {
         (await components.publisher.getState(sourceJob.id, "deployment.prepare_source")) ===
         "absent",
     );
-    await components.runtime.stop();
+    await waitFor(async () => finishRuntimeFixture !== undefined);
+    const stopping = components.runtime.stop();
+    // Settle the held fake adapter after pausing intake, proving graceful drain
+    // without relying on the shorter Docker timeout to abort the entire job.
+    finishRuntimeFixture?.();
+    await stopping;
 
     // An interrupted runtime fixture may leave its durable lease in place.
     // Prove the next reconciliation can recover it before inspecting outcomes.

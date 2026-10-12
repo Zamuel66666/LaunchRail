@@ -296,9 +296,12 @@ export function buildServer({
             processingState: "processed",
           });
           return reply.code(202).send({ delivery: processed, push: parsed });
-        } catch (error) {
+        } catch {
           recordWebhookMetric("failed");
-          request.log.warn({ error, requestId: request.id }, "GitHub webhook processing failed");
+          request.log.warn(
+            { code: "webhook_processing_failed", requestId: request.id },
+            "GitHub webhook processing failed",
+          );
           const failed = await webhookStore.mark({
             deliveryId,
             organizationId,
@@ -333,6 +336,20 @@ export function buildServer({
   }
 
   server.setErrorHandler((error, request, reply) => {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      typeof error.code === "string" &&
+      error.code.startsWith("FST_ERR_CTP_") &&
+      "statusCode" in error &&
+      [400, 413, 415].includes(Number(error.statusCode))
+    ) {
+      void reply.code(Number(error.statusCode)).send({
+        error: { code: "invalid_request", message: "Request body is invalid or unsupported" },
+      });
+      return;
+    }
     if (error instanceof DeploymentNotFoundError) {
       void reply.code(404).send({
         error: { code: "deployment_not_found", message: "Deployment was not found" },

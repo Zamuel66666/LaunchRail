@@ -6,6 +6,8 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 
 ### Verification fixes
 
+- Invalid, empty, oversized, or unsupported request bodies retain safe HTTP 400/413/415 responses instead of being reported as internal server errors. Webhook processing failures log fixed codes rather than raw exception payloads.
+
 - Deployment creation now commits a positive initial event sequence, immutable configuration, claim job, and audit record atomically; concurrent verified deliveries remain deduplicated.
 - Private BuildKit snapshots preserve readable Git asset permissions for non-root image users. Startup health checks retry connection-refused races within the existing deadline and settle aborted response bodies safely.
 - Added a forward-only migration for recording completed source cleanup without permitting source metadata mutation.

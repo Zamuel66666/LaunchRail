@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import Link from "next/link";
 
 import "./globals.css";
 
@@ -13,9 +12,9 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
   return (
     <html lang="en">
       <body>
-        <Link className="skip-link" href="#main-content">
+        <a className="skip-link" href="#main-content">
           Skip to main content
-        </Link>
+        </a>
         {children}
       </body>
     </html>

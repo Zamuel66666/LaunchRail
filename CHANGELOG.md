@@ -6,6 +6,8 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 
 ### Verification fixes
 
+- The keyboard skip link now uses native fragment navigation, correctly moving focus to the main landmark instead of only scrolling. Verified focus transfer in Chromium and checked four public/signed-out pages at desktop and mobile widths with axe-core.
+
 - Preserved request trace context through asynchronous API handlers and durable reconstruction of deployment stages without adding data to queue payloads. Structured completion logs include trace/span IDs. Added real export, secret-canary, collector-failure, and bounded telemetry-drop checks.
 - Corrected missing final-outcome metrics for direct stage failures, exhausted work, and health-gated rollback. Metrics are emitted after commit only; replayed or fenced operations do not count, and instrumentation cannot reverse committed state.
 

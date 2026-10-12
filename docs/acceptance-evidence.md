@@ -4,6 +4,14 @@ This is an incremental verification record, not a release approval. Remaining ga
 
 ## Observability correlation verification
 
+Published observability revision `22c6f5c478398bf71b00deac9c3db9e4deba0b63` passed all three [CI jobs](https://github.com/Zamuel66666/LaunchRail/actions/runs/38220439999). Local real-service acceptance additionally passed eight BuildKit, five Docker runtime/example, and one Traefik routing tests. A repeated real 17-check lifecycle scenario passed after publication; its report records a dirty worktree because the separate skip-link accessibility correction was being tested concurrently, so it is not clean-release proof.
+
+## Incremental keyboard and responsive review
+
+Four public/signed-out routes (`/`, `/demo`, `/sign-in`, `/projects`) passed axe-core WCAG 2 A/AA and WCAG 2.1 A/AA checks at 1280- and 390-pixel viewports with zero violations or horizontal overflow. Keyboard activation exposed a client-navigation skip link that left focus on the link; native fragment navigation now moves focus to the main landmark. Owner sign-in succeeded by submitting the real form with Enter. Signed-in project/control, viewer, and screenshot acceptance remain open.
+
+## Observability implementation and development run
+
 The next verification pass corrected lost asynchronous API context, missing trace anchors when durable work reconstructs later stage wake-ups, and omitted final-outcome metrics in direct failure and rollback transactions. It passed 336 unit tests, 95 PostgreSQL/service tests, 19 HTTP integration tests, 15 queue/restart tests, full type checks, and the application build. A dedicated loopback collector test verifies bounded requests, secret rejection without retention, and injected HTTP 503 behavior; SDK tests prove collector failure and excess telemetry dropping do not discard application work.
 
 A real dedicated lifecycle run passed all 17 checks, including healthy activation, unhealthy-candidate preservation, replacement, rollback, cancellation, stop, and preview responses. Its injected trace reached both API and worker services, HTTP handlers, persistence adapters, BullMQ producer/consumer operations, and reconstructed source/build/runtime stages. Structured API completion and worker stage logs carried that trace ID. The collector rejected zero secret-bearing payloads and tolerated one injected export failure; configured synthetic, credential, and keyring canaries were absent from inspected logs. Worker metrics recorded three activations (including restoration), one failed deployment, one cancellation, one rolled-back source, and one completed rollback. These are dirty-development acceptance results, not exact-clean-release or benchmark evidence. Dashboard query validation and independent review remain open.

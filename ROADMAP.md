@@ -263,6 +263,8 @@ Deployment controllers can create a deployment from a full exact commit SHA, wit
 
 Exit gate: Playwright accessibility/user-flow checks pass, logs and deployment controls are correctly scoped, and the README demonstrates a real working milestone.
 
+Incremental browser evidence: landing, walkthrough, sign-in, and signed-out workspace passed WCAG 2 A/AA and WCAG 2.1 A/AA axe-core checks at 1280 and 390 pixels with no horizontal overflow. Keyboard testing found and corrected client-side skip-link navigation that scrolled without focusing; native navigation now focuses `main-content`. Real owner sign-in also passed. Complete signed-in project/control flows and screenshots still remain.
+
 ### Phase 16 — Benchmarks and public release
 
 **Status:** In progress — benchmark tooling and release checklist implemented; controlled results and release evidence remain

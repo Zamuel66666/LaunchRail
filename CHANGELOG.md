@@ -6,6 +6,8 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 
 ### Verification fixes
 
+- Health checks now tolerate Docker's pre-header connection-reset startup race within the existing deadline. A real Node example that failed before listening now activates with zero startup grace; continuous resets, aborted bodies, and unhealthy HTTP statuses remain failures.
+
 - The keyboard skip link now uses native fragment navigation, correctly moving focus to the main landmark instead of only scrolling. Verified focus transfer in Chromium and checked four public/signed-out pages at desktop and mobile widths with axe-core.
 
 - Preserved request trace context through asynchronous API handlers and durable reconstruction of deployment stages without adding data to queue payloads. Structured completion logs include trace/span IDs. Added real export, secret-canary, collector-failure, and bounded telemetry-drop checks.

@@ -64,9 +64,11 @@ export async function checkHttpHealth(
     );
     const attempt = () => {
       if (settled) return;
+      let receivedHeaders = false;
       currentRequest = request(
         { hostname: command.host, port: command.port, path: command.path, method: "GET" },
         (response) => {
+          receivedHeaders = true;
           response.resume();
           response.once("error", () =>
             fail(new HttpHealthCheckError("health_invalid_response", Date.now() - started)),
@@ -90,8 +92,14 @@ export async function checkHttpHealth(
       currentRequest.once("error", (error: NodeJS.ErrnoException) => {
         if (settled) return;
         const remaining = command.timeoutMs - (Date.now() - started);
-        if (error.code === "ECONNREFUSED" && remaining > 100) {
-          retryTimer = setTimeout(attempt, 100);
+        if (
+          !receivedHeaders &&
+          (error.code === "ECONNREFUSED" || error.code === "ECONNRESET") &&
+          remaining > 0
+        ) {
+          // Docker's published port may accept TCP before the application listens.
+          // Retry only pre-header startup transport failures within the original deadline.
+          retryTimer = setTimeout(attempt, Math.min(100, remaining));
           return;
         }
         fail(

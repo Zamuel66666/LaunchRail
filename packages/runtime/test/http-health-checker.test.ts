@@ -57,6 +57,49 @@ describe("checkHttpHealth", () => {
       await new Promise<void>((resolve) => broken.close(() => resolve()));
     }
   });
+  it("retries startup connection resets before headers without extending the health deadline", async () => {
+    let attempts = 0;
+    const starting = createServer((request, response) => {
+      if (++attempts < 3) request.socket.destroy();
+      else response.writeHead(200).end("ready");
+    });
+    await new Promise<void>((resolve) => starting.listen(0, "127.0.0.1", resolve));
+    const startingPort = (starting.address() as { port: number }).port;
+    try {
+      const result = await checkHttpHealth({
+        host: "127.0.0.1",
+        port: startingPort,
+        path: "/",
+        timeoutMs: 1000,
+      });
+      expect(result.statusCode).toBe(200);
+      expect(attempts).toBe(3);
+      expect(result.durationMs).toBeGreaterThanOrEqual(200);
+      expect(result.durationMs).toBeLessThan(1000);
+    } finally {
+      await new Promise<void>((resolve) => starting.close(() => resolve()));
+    }
+  });
+  it("times out continuously reset startup connections and never accepts an unhealthy HTTP status", async () => {
+    let returnStatus = false;
+    const starting = createServer((request, response) => {
+      if (returnStatus) response.writeHead(503).end("unhealthy");
+      else request.socket.destroy();
+    });
+    await new Promise<void>((resolve) => starting.listen(0, "127.0.0.1", resolve));
+    const startingPort = (starting.address() as { port: number }).port;
+    try {
+      await expect(
+        checkHttpHealth({ host: "127.0.0.1", port: startingPort, path: "/", timeoutMs: 250 }),
+      ).rejects.toMatchObject({ code: "health_timeout" });
+      returnStatus = true;
+      await expect(
+        checkHttpHealth({ host: "127.0.0.1", port: startingPort, path: "/", timeoutMs: 1000 }),
+      ).resolves.toMatchObject({ statusCode: 503 });
+    } finally {
+      await new Promise<void>((resolve) => starting.close(() => resolve()));
+    }
+  });
   it("rejects unsafe paths", async () => {
     await expect(
       checkHttpHealth({ host: "127.0.0.1", port, path: "//other", timeoutMs: 1000 }),

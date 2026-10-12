@@ -10,6 +10,8 @@ Published observability revision `22c6f5c478398bf71b00deac9c3db9e4deba0b63` pass
 
 ## Incremental keyboard and responsive review
 
+The browser-driven Node example initially failed `health_invalid_response` before its HTTP server started, preserving the previous active preview. The corrected adapter retries pre-header transport resets within its original timeout and successfully activated a real retry with `WORKER_HEALTH_GRACE_MS=0`; Docker output contained the Node startup message and health request. The unit suite passed 339 tests after adding startup-reset and bounded-failure regression cases. This is development verification, not clean-release proof.
+
 Four public/signed-out routes (`/`, `/demo`, `/sign-in`, `/projects`) passed axe-core WCAG 2 A/AA and WCAG 2.1 A/AA checks at 1280- and 390-pixel viewports with zero violations or horizontal overflow. Keyboard activation exposed a client-navigation skip link that left focus on the link; native fragment navigation now moves focus to the main landmark. Owner sign-in succeeded by submitting the real form with Enter. Signed-in project/control, viewer, and screenshot acceptance remain open.
 
 ## Observability implementation and development run

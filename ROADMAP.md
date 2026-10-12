@@ -221,6 +221,8 @@ Delivered:
 
 Implementation evidence: unit and PostgreSQL acceptance cases cover delayed checks, health classification, failed-candidate route preservation, and interrupted-grace cleanup. Run these suites and the constrained runtime acceptance before marking the phase Available.
 
+Browser-driven Node acceptance exposed a Docker published-port startup race: pre-header connection resets were classified as invalid responses. The checker now retries resets/refusals only before headers and within the original deadline; continuous startup resets time out, aborted response bodies still fail, and HTTP 503 remains unhealthy. Regression tests and a real Node retry with zero startup grace passed, retaining the prior release on the original failure.
+
 ### Phase 11 — Deployment controls
 
 **Status:** In progress — health-gated durable rollback implemented; broader race/failure-injection acceptance remains

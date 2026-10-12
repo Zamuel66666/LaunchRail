@@ -137,6 +137,8 @@ pnpm services:down
 
 See the [development guide](docs/development.md) for verification, configuration, cleanup, and troubleshooting.
 
+The [single-host operations guide](docs/operations.md) covers private PostgreSQL backups, non-destructive restore rehearsals, service interruptions, and recovery ownership. Do not run workers backed by different databases against the same Docker host.
+
 ## Documentation
 
 - [Product scope](docs/product-scope.md)

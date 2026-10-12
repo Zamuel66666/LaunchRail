@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "scenario": "deployment-to-healthy-release",
+  "startedAt": "2026-10-12T13:45:07.964Z",
+  "apiOrigin": "http://localhost:4100",
+  "projectId": "1f43d515-73fe-4136-9b1d-88092dde1839",
+  "sourceRevision": "d013bb47f0f684679963a710b89b2fa3df143061",
+  "requestedRuns": 1,
+  "outcomes": {
+    "active": 1,
+    "failed": 0,
+    "timeout": 0
+  },
+  "runs": [
+    {
+      "runNumber": 1,
+      "deploymentId": "0cf71016-3a7f-4b9b-93a0-dd00ed98e3e4",
+      "outcome": "active",
+      "finalState": "active",
+      "elapsedMs": 5871.9,
+      "stageTimingStatus": "available",
+      "stageDurationsMs": {
+        "queueWait": 42,
+        "sourcePreparation": 2795,
+        "imageBuild": 1904,
+        "runtimeStart": 767,
+        "healthAndPromotion": 102
+      }
+    }
+  ],
+  "stageSummaryMs": {
+    "queueWait": {
+      "samples": 1,
+      "medianMs": 42,
+      "p95Ms": 42
+    },
+    "sourcePreparation": {
+      "samples": 1,
+      "medianMs": 2795,
+      "p95Ms": 2795
+    },
+    "imageBuild": {
+      "samples": 1,
+      "medianMs": 1904,
+      "p95Ms": 1904
+    },
+    "runtimeStart": {
+      "samples": 1,
+      "medianMs": 767,
+      "p95Ms": 767
+    },
+    "healthAndPromotion": {
+      "samples": 1,
+      "medianMs": 102,
+      "p95Ms": 102
+    }
+  },
+  "timeoutMs": 900000,
+  "pollIntervalMs": 250,
+  "node": "v22.23.2",
+  "platform": "linux",
+  "architecture": "x64",
+  "environment": {
+    "launchRailCommit": "c43d5d832f90eb1c60fa06721a8be0efd3562297",
+    "workingTreeClean": true,
+    "operatingSystem": "Linux 6.18.49-1-MANJARO",
+    "architecture": "x64",
+    "processorModel": "Intel(R) Core(TM) i5-10300H CPU @ 2.50GHz",
+    "processorCount": 8,
+    "totalMemoryBytes": 16520802304
+  },
+  "sideEffects": [
+    "Creates 1 durable deployment(s) and associated build/runtime resources.",
+    "Each successful candidate may become active and replace the project's current active release.",
+    "The script does not cancel, stop, or delete created deployments or resources."
+  ],
+  "limitations": [
+    "Run only against a dedicated local demo project and an exact commit selected for benchmarking.",
+    "Sequential runs may have different cache state and replace the active release; record those conditions explicitly.",
+    "Stage intervals derive from persisted lifecycle timestamps, not isolated resource timers, and do not include host resource telemetry.",
+    "Record the LaunchRail commit, cache state, machine/service versions, and host load separately.",
+    "The session cookie is never included in output; protect the shell environment and stdout artifact."
+  ]
+}

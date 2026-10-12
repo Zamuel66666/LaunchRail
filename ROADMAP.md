@@ -278,6 +278,8 @@ The versioned `pnpm benchmark:api` and `pnpm benchmark:deployment` scenarios ret
 
 Exit gate: clean setup is independently reproducible, controlled results include methodology and environment, known limitations are current, and release notes describe user outcomes.
 
+Dispatch refinement: clean published revision `c43d5d8` passed a separate warm-up and five measured deployments of the same example/source revision and configured limits. All activated; the observed median was 2.696 seconds after removing periodic stage waits. Unedited reports and post-batch host/profile data are published. Cache/host differences and the five-sample limitation preclude a production speed-up or stable p95 claim.
+
 ## Change discipline
 
 Each session selects one incomplete milestone, preserves unrelated changes, adds behavior tests and documentation together, runs applicable gates, and publishes one to four coherent Conventional Commits. The roadmap is updated only when evidence changes a phase's status.

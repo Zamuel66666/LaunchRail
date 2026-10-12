@@ -1,0 +1,48 @@
+{
+  "scenario": "benchmark-host-profile",
+  "capturedAt": "2026-10-12T13:46:44.996Z",
+  "sampling": "After measured batch; runtime settings re-read from dedicated project API",
+  "environment": {
+    "launchRailCommit": "c43d5d832f90eb1c60fa06721a8be0efd3562297",
+    "workingTreeClean": true,
+    "operatingSystem": "Linux 6.18.49-1-MANJARO",
+    "architecture": "x64",
+    "processorModel": "Intel(R) Core(TM) i5-10300H CPU @ 2.50GHz",
+    "processorCount": 8,
+    "totalMemoryBytes": 16520802304
+  },
+  "profile": {
+    "apiPort": 4100,
+    "workerConcurrency": 2,
+    "workerHealthGraceMs": 0,
+    "workerReconciliationMs": 15000,
+    "workerHeartbeatMs": 10000,
+    "buildkitCpuLimit": 2,
+    "buildkitMemoryBytes": 2147483648,
+    "runtimeConfig": {
+      "processLimit": 128,
+      "cpuMillicores": 500,
+      "memoryMegabytes": 512,
+      "readOnlyRootFilesystem": true
+    },
+    "healthCheckPath": "/",
+    "healthCheckPort": 3000,
+    "sourceRevision": "d013bb47f0f684679963a710b89b2fa3df143061",
+    "telemetry": "INFO logs and OTLP enabled; local Prometheus/Grafana running",
+    "cache": "Existing BuildKit cache and one separate warm-up before five measured deployments"
+  },
+  "background": {
+    "otherContainers": 3,
+    "loadAverage": [
+      4.31,
+      5.98,
+      4.8
+    ],
+    "freeMemoryBytes": 4677705728
+  },
+  "limitations": [
+    "Shared laptop and warm-cache sample of five, not a population p95 or production-capacity claim",
+    "Source application and configured limits unchanged from d013 baseline, but cache/host load and LaunchRail pipeline revision differ",
+    "Host load captured after measurement, not sampled continuously"
+  ]
+}

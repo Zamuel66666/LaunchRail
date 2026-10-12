@@ -10,7 +10,7 @@ Current release verification also exercises real request-to-worker trace correla
 
 ## Observed local demo
 
-Exact-revision local [benchmark reports and methodology](docs/benchmarks.md) are now retained: five healthy warm-cache deployments and three repeat API-liveness runs passed. The measured deployment median was 44.467 seconds on the documented shared laptop; periodic stage dispatch remains a refinement target, and these results do not establish production capacity.
+Exact-revision local [benchmark reports and methodology](docs/benchmarks.md) are retained: five healthy warm-cache deployments and three repeat API-liveness runs passed. Immediate stage wake-ups reduced the observed five-run deployment median from 44.467 to 2.696 seconds in a follow-up on the same shared laptop and workload profile. Cache and host activity may differ; these local results do not establish production capacity.
 
 A browser-created Node deployment reached HTTP 200 and exposed its bounded runtime output after the startup and retry-readback corrections. This screenshot uses a synthetic acceptance project, not a production installation or release approval.
 

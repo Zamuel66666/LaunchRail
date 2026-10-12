@@ -1,0 +1,144 @@
+{
+  "schemaVersion": 1,
+  "scenario": "deployment-to-healthy-release",
+  "startedAt": "2026-10-12T13:45:13.927Z",
+  "apiOrigin": "http://localhost:4100",
+  "projectId": "1f43d515-73fe-4136-9b1d-88092dde1839",
+  "sourceRevision": "d013bb47f0f684679963a710b89b2fa3df143061",
+  "requestedRuns": 5,
+  "outcomes": {
+    "active": 5,
+    "failed": 0,
+    "timeout": 0
+  },
+  "runs": [
+    {
+      "runNumber": 1,
+      "deploymentId": "e7546867-11ea-426b-b8ed-71138131a944",
+      "outcome": "active",
+      "finalState": "active",
+      "elapsedMs": 4241.1,
+      "stageTimingStatus": "available",
+      "stageDurationsMs": {
+        "queueWait": 38,
+        "sourcePreparation": 2642,
+        "imageBuild": 846,
+        "runtimeStart": 446,
+        "healthAndPromotion": 36
+      }
+    },
+    {
+      "runNumber": 2,
+      "deploymentId": "6f90cabf-7bfa-4f87-98bf-6b071b182129",
+      "outcome": "active",
+      "finalState": "active",
+      "elapsedMs": 3276.6,
+      "stageTimingStatus": "available",
+      "stageDurationsMs": {
+        "queueWait": 40,
+        "sourcePreparation": 1474,
+        "imageBuild": 975,
+        "runtimeStart": 435,
+        "healthAndPromotion": 52
+      }
+    },
+    {
+      "runNumber": 3,
+      "deploymentId": "77c665c4-b58b-47b5-b9ac-a4b9402fe580",
+      "outcome": "active",
+      "finalState": "active",
+      "elapsedMs": 2696.2,
+      "stageTimingStatus": "available",
+      "stageDurationsMs": {
+        "queueWait": 21,
+        "sourcePreparation": 1298,
+        "imageBuild": 750,
+        "runtimeStart": 426,
+        "healthAndPromotion": 35
+      }
+    },
+    {
+      "runNumber": 4,
+      "deploymentId": "2f1e37a1-f683-4c2a-b037-88cc6d5ba202",
+      "outcome": "active",
+      "finalState": "active",
+      "elapsedMs": 2673.9,
+      "stageTimingStatus": "available",
+      "stageDurationsMs": {
+        "queueWait": 25,
+        "sourcePreparation": 1310,
+        "imageBuild": 765,
+        "runtimeStart": 344,
+        "healthAndPromotion": 24
+      }
+    },
+    {
+      "runNumber": 5,
+      "deploymentId": "86b114af-333c-42fe-ab06-bbfbec5d6ec0",
+      "outcome": "active",
+      "finalState": "active",
+      "elapsedMs": 2662.1,
+      "stageTimingStatus": "available",
+      "stageDurationsMs": {
+        "queueWait": 18,
+        "sourcePreparation": 1435,
+        "imageBuild": 814,
+        "runtimeStart": 334,
+        "healthAndPromotion": 20
+      }
+    }
+  ],
+  "stageSummaryMs": {
+    "queueWait": {
+      "samples": 5,
+      "medianMs": 25,
+      "p95Ms": 40
+    },
+    "sourcePreparation": {
+      "samples": 5,
+      "medianMs": 1435,
+      "p95Ms": 2642
+    },
+    "imageBuild": {
+      "samples": 5,
+      "medianMs": 814,
+      "p95Ms": 975
+    },
+    "runtimeStart": {
+      "samples": 5,
+      "medianMs": 426,
+      "p95Ms": 446
+    },
+    "healthAndPromotion": {
+      "samples": 5,
+      "medianMs": 35,
+      "p95Ms": 52
+    }
+  },
+  "timeoutMs": 900000,
+  "pollIntervalMs": 250,
+  "node": "v22.23.2",
+  "platform": "linux",
+  "architecture": "x64",
+  "environment": {
+    "launchRailCommit": "c43d5d832f90eb1c60fa06721a8be0efd3562297",
+    "workingTreeClean": true,
+    "operatingSystem": "Linux 6.18.49-1-MANJARO",
+    "architecture": "x64",
+    "processorModel": "Intel(R) Core(TM) i5-10300H CPU @ 2.50GHz",
+    "processorCount": 8,
+    "totalMemoryBytes": 16520802304
+  },
+  "sideEffects": [
+    "Creates 5 durable deployment(s) and associated build/runtime resources.",
+    "Each successful candidate may become active and replace the project's current active release.",
+    "The script does not cancel, stop, or delete created deployments or resources."
+  ],
+  "limitations": [
+    "Run only against a dedicated local demo project and an exact commit selected for benchmarking.",
+    "Sequential runs may have different cache state and replace the active release; record those conditions explicitly.",
+    "Stage intervals derive from persisted lifecycle timestamps, not isolated resource timers, and do not include host resource telemetry.",
+    "Record the LaunchRail commit, cache state, machine/service versions, and host load separately.",
+    "The session cookie is never included in output; protect the shell environment and stdout artifact."
+  ]
+}

@@ -43,7 +43,11 @@ async function readBoundedResponse(response: Response, maximumBytes: number): Pr
 
 async function main(): Promise<void> {
   const config = loadApiConfig();
-  const databaseClient = createDatabaseClient(config.DATABASE_URL);
+  const databaseClient = createDatabaseClient(config.DATABASE_URL, {
+    onInfrastructureEvent: (event) => {
+      process.stderr.write(`LaunchRail database ${event.component}: ${event.code}\n`);
+    },
+  });
   const metrics = new MetricsRegistry();
   const identityStore = traceDatabaseStore(
     new PostgresIdentityStore(databaseClient.db, {

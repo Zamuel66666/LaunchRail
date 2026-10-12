@@ -6,6 +6,8 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 
 ### Verification fixes
 
+- Prevented PostgreSQL idle-connection interruption from crashing API/worker processes through an unhandled pool error. Readiness remains unavailable while database queries fail; reconnection and diagnostics failure are handled safely without logging raw database errors.
+
 - Added a guarded, repeatable physical interruption acceptance command and a recoverable slow-build example. The command owns its test processes, validates scoped Compose targets, preserves volumes, and requires observed in-progress work before injecting a worker fault.
 
 - Updated and digest-pinned demonstration service/example images, added pin regression coverage, and recorded image vulnerability findings and residual risks. The dependency audit and image scan are distinct gates; current upstream images are not claimed vulnerability-free.

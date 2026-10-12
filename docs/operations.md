@@ -40,6 +40,7 @@ The 2026-10-12 rehearsal restored a private custom-format archive of the synthet
 - API interruption does not revoke accepted database intents; retry reads after API readiness recovers. Do not blindly repeat a mutation after an ambiguous connection failure.
 - Redis loss delays identifier-only wake-ups. PostgreSQL remains authoritative; worker reconciliation republishes eligible work after Redis recovers.
 - PostgreSQL loss fences authoritative work; do not promote a runtime or infer release state from Redis or proxy files alone.
+- Interrupted idle PostgreSQL connections are handled at the pool boundary rather than crashing the process. New queries reconnect or fail; `/ready` remains unavailable until its database check succeeds. Fixed infrastructure events omit raw connection errors and credentials. The API bounds connection acquisition; the worker retains its configured database/shutdown budgets.
 - Worker interruption leaves leases durable. Expired work is recovered within configured retry limits; pending cancellation and terminal cleanup remain in database state.
 - Proxy interruption temporarily removes preview availability, not the durable active-release pointer. Restart Traefik and verify the exact hostname returns the expected application.
 - Docker daemon recovery remains an operator action. Start Docker, verify worker readiness, and inspect runtime inventory. A missing active runtime is recorded as an actionable terminal failure, not silently reported healthy.

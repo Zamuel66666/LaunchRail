@@ -123,12 +123,26 @@ async function main(): Promise<void> {
         config.WORKER_JOB_TIMEOUT_MS,
         config.WORKER_SHUTDOWN_GRACE_MS,
       );
-      databaseClient = createDatabaseClient({
-        connectionString: config.DATABASE_URL,
-        connectionTimeoutMillis: Math.min(databaseOperationTimeoutMs, 5_000),
-        query_timeout: databaseOperationTimeoutMs,
-        statement_timeout: databaseOperationTimeoutMs,
-      });
+      databaseClient = createDatabaseClient(
+        {
+          connectionString: config.DATABASE_URL,
+          connectionTimeoutMillis: Math.min(databaseOperationTimeoutMs, 5_000),
+          query_timeout: databaseOperationTimeoutMs,
+          statement_timeout: databaseOperationTimeoutMs,
+        },
+        {
+          onInfrastructureEvent: (event) => {
+            logger.warn(
+              {
+                event: "database_connection_interrupted",
+                code: event.code,
+                component: event.component,
+              },
+              "Database connection interrupted; readiness will fail until recovery",
+            );
+          },
+        },
+      );
       if (shutdownRequested) {
         await finishShutdown();
         return;

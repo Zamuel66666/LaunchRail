@@ -373,9 +373,13 @@ try {
   await until("build-step-observed-before-worker-kill", async () => {
     const logs = (await request(`${base()}/deployments/${interrupted}/build-logs?limit=500`)).logs;
     const row = (await history()).find((x) => x.deploymentId === interrupted);
+    if (row?.state === "active")
+      throw new Error(
+        "The cold-cache build boundary was not observed; use a fresh dedicated builder cache",
+      );
     return (
       row?.state === "building" &&
-      logs?.some((x) => x.content.includes("RUN sleep 10") && !x.content.includes("CACHED"))
+      logs?.some((x) => x.content.includes("LAUNCHRAIL_INTERRUPTION_BUILD_BOUNDARY"))
     );
   });
   await sleep(500);
@@ -384,10 +388,8 @@ try {
   ).logs
     .map((x) => x.content)
     .join("");
-  const step = buildProof.match(/^#(\d+) \[[^\]]+\] RUN sleep 10$/mu)?.[1];
   if (
-    !step ||
-    new RegExp(`^#${step} (CACHED|DONE)`, "mu").test(buildProof) ||
+    !buildProof.includes("LAUNCHRAIL_INTERRUPTION_BUILD_BOUNDARY") ||
     !(await history()).some((x) => x.deploymentId === interrupted && x.state === "building")
   )
     throw new Error(

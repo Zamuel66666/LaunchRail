@@ -1,7 +1,20 @@
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 describe("physical interruption acceptance guards", () => {
+  it("uses application stdout for the build boundary rather than unretained progress vertex names", () => {
+    const fixture = readFileSync(
+      new URL("../../examples/apps/slow-build/Dockerfile", import.meta.url),
+      "utf8",
+    );
+    const harness = readFileSync(
+      new URL("../acceptance-interruptions.mjs", import.meta.url),
+      "utf8",
+    );
+    expect(fixture).toContain("RUN echo LAUNCHRAIL_INTERRUPTION_BUILD_BOUNDARY && sleep 10");
+    expect(harness).toContain('x.content.includes("LAUNCHRAIL_INTERRUPTION_BUILD_BOUNDARY")');
+  });
   const base = {
     ...process.env,
     LAUNCHRAIL_ACCEPTANCE_ALLOW_MUTATION: "DEDICATED_LOCAL_ACCEPTANCE",

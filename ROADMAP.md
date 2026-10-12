@@ -250,6 +250,8 @@ Exit gate: independently verify a full deployment/failure correlation across log
 
 Incremental evidence: the real 17-check lifecycle scenario correlates successful and failed work through HTTP, persistence, reconstructed queue stages, worker logs, and post-commit outcome metrics. Local collector canaries and failure injection passed; the bounded SDK export test preserves all 1,500 application operations while dropping excess spans. A real Prometheus receiver evaluated all 39 versioned dashboard queries, scraped API/worker successfully, and observed a recent worker heartbeat and activation outcomes; all seven starter alert rules pass `promtool` validation. Grafana provisioned all 34 panels and rendered real request/health data, with a retained screenshot. Exact-clean-release independent review remains.
 
+Request-boundary review removed raw URL/path/query/header/body data from automatic request logs. Real chunked HTTP regressions prove webhook raw capture rejects over-limit uploads before EOF, including URLs with query strings, without invoking a handler. Exact whitespace/Unicode byte preservation and safe HTTP error responses remain covered. Security documentation now accurately distinguishes implemented runtime controls from unsupported hostile-tenant isolation and secret injection.
+
 ### Phase 14 — Failure recovery
 
 **Status:** In progress — managed runtime orphan recovery implemented; broader interruption acceptance remains

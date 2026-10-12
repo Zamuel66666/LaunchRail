@@ -145,11 +145,31 @@ export function serviceLoggerOptions(service: string, level: LogLevel): LoggerOp
     base: { service },
     level,
     mixin: activeTraceLogFields,
+    serializers: {
+      req: safeRequestLogFields,
+      request: safeRequestLogFields,
+    },
     redact: {
       censor: "[REDACTED]",
       paths: [...redactPaths],
     },
   };
+}
+
+function safeRequestLogFields(value: unknown): Readonly<Record<string, string>> {
+  if (typeof value !== "object" || value === null) return {};
+  const request = value as { id?: unknown; method?: unknown; routeOptions?: { url?: unknown } };
+  const fields: Record<string, string> = {};
+  if (typeof request.id === "string" && request.id.length <= 128) fields.id = request.id;
+  if (
+    typeof request.method === "string" &&
+    /^(GET|HEAD|POST|PUT|PATCH|DELETE|OPTIONS)$/u.test(request.method)
+  )
+    fields.method = request.method;
+  const route = request.routeOptions?.url;
+  if (typeof route === "string" && route.length <= 256) fields.route = route;
+  // Never serialize raw URL/path/query, host, headers, body, or remote addresses.
+  return fields;
 }
 
 export function createServiceLogger(service: string, level: LogLevel): Logger {

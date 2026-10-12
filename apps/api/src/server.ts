@@ -94,10 +94,21 @@ export function buildServer({
     };
   });
   server.addHook("preParsing", async (request, _reply, payload) => {
-    if (request.url !== "/v1/webhooks/github") return payload;
+    if (request.routeOptions.url !== "/v1/webhooks/github") return payload;
     const chunks: Buffer[] = [];
-    for await (const chunk of payload)
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    let size = 0;
+    for await (const chunk of payload.iterator({ destroyOnReturn: false })) {
+      const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      size += bytes.length;
+      if (size > 131_072) {
+        payload.resume();
+        throw Object.assign(new Error("Request body exceeds the supported limit"), {
+          code: "FST_ERR_CTP_BODY_TOO_LARGE",
+          statusCode: 413,
+        });
+      }
+      chunks.push(bytes);
+    }
     const rawBody = Buffer.concat(chunks);
     (request as typeof request & { rawBody?: Uint8Array }).rawBody = rawBody;
     const replay = Readable.from(rawBody) as Readable & { receivedEncodedLength?: number };

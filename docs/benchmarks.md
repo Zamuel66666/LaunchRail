@@ -24,8 +24,6 @@ This is loopback `/health` performance only: it does not benchmark database read
 
 The baseline highlights periodic stage dispatch as a refinement target. Follow-up measurements must retain the same workload/profile and document any source, cache, host-load, or configuration differences; do not combine this baseline with a changed pipeline or fabricate aggregate results.
 
-## Principles
-
 ## Immediate stage dispatch — `c43d5d8`
 
 A separate [warm-up](benchmarks/deployment-warmup-c43d5d8.json) followed by [five measured deployments](benchmarks/deployment-c43d5d8.json) exercised clean published revision `c43d5d832f90eb1c60fa06721a8be0efd3562297`. All five activated without failures or timeouts. Client elapsed times were 4.241, 3.277, 2.696, 2.674, and 2.662 seconds: median 2.696 seconds. Event-derived medians were 25 ms queue wait, 1.435 seconds source preparation, 814 ms build, 426 ms runtime start, and 35 ms health/promotion. Immediate post-commit wake-ups remove periodic dispatch waits without changing the 15-second recovery reconciler.

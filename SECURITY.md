@@ -2,7 +2,13 @@
 
 ## Current security status
 
-LaunchRail has a runnable Phase 6 source-preparation foundation, but it is not production-ready and must not be exposed publicly or used to run untrusted workloads. It validates process/project/job/source configuration, rejects documented development credentials in production, binds development services to loopback, uses scrypt password hashes, stores only hashes of opaque sessions, enforces organization roles, and audits identity/project/deployment changes. Environment-variable values are encrypted with AES-256-GCM and never returned by read APIs or placed in Redis. BullMQ carries only a strict versioned kind and opaque PostgreSQL work-item ID; durable ownership, attempts, leases, safe errors, and dead letters remain in PostgreSQL. The source adapter accepts unauthenticated public GitHub repositories only, fixes every network request to GitHub-controlled origins, disables ambient Git credentials/configuration, verifies an exact commit/tree/blob manifest, and applies bounded filesystem and Dockerfile-containment checks. There is no deployment-start HTTP/UI path or image/container execution yet. Password recovery, invitations, MFA, SSO, private-repository authentication, deployment-time secret injection, and container execution controls are not implemented. `pnpm audit --prod` currently reports no known vulnerabilities for the lockfile, but recurring dependency and image scanning remain mandatory pre-production work.
+LaunchRail implements a public-GitHub deployment pipeline with restricted Docker runtimes, health-gated activation, preview routing, rollback, and authenticated operator controls. It is undergoing release acceptance for a trusted, loopback-only Linux demonstration, not production hosting or mutually hostile tenants. Password recovery, invitations, MFA, SSO, private-source authentication, and deployment-time secret injection are not implemented.
+
+Control-plane configuration is validated; development credentials are rejected in production. Passwords use scrypt, opaque sessions are hashed, organization roles are enforced, and security-relevant mutations are audited. Project variables use versioned AES-256-GCM envelopes and write-only APIs; they are not passed to builds or runtimes. Identifier-only queue payloads cannot supply authority: PostgreSQL owns immutable snapshots, attempts, leases, fencing, and dead letters. Public source resolution fixes GitHub origins, verifies exact commit/tree/blob identity, disables ambient credentials/configuration, and bounds checkout contents.
+
+Workloads use non-root users, dropped capabilities, no-new-privileges, bounded CPU/memory/process counts, loopback port bindings, read-only roots where configured, and no Docker socket. BuildKit remains privileged on the trusted host. These restrictions do not prevent every container escape or malicious workload network access. Operators must review repositories and Dockerfiles; public multi-tenant execution is unsupported.
+
+Automatic request logging keeps only bounded IDs, methods, and route templates; raw paths, query values, headers, bodies, hosts, and remote addresses are omitted. Raw webhook capture is bounded while streaming, including chunked requests and URLs with query strings, before persistence or trigger processing. Signature checks use exact bytes. Controlled telemetry canaries, scoped log APIs, strict job contracts, and immutable receipt tests provide evidence, not a universal guarantee against application-output secrets. Runtime and build output are application-controlled and must be treated as sensitive. Dependency/image reviews and the independent release checklist remain required.
 
 The first implementation will target a trusted operator on a local Docker host. Docker daemon access is effectively host-level privilege; container restrictions reduce workload risk but do not turn the initial design into a hardened hostile multi-tenant platform.
 
@@ -53,10 +59,10 @@ There are no released or supported versions yet. This table will be updated when
 - [x] Strict identifier-only queue contracts, PostgreSQL lease fencing, bounded retries/timeouts, and duplicate/malformed wake-up tests verified on clean PostgreSQL/Redis services.
 - [x] Fixed-origin public GitHub resolution with no redirects or ambient credentials, exact commit/tree validation, bounded response/tree data, and deterministic hostile-provider tests.
 - [x] Shell-free isolated Git checkout with process-tree cancellation, source limits, blob verification, special-file/LFS rejection, symlink containment, and Dockerfile hashing.
-- GitHub webhook HMAC verification using the raw request body and constant-time comparison.
-- Restricted build/runtime policies, timeouts, cancellation, and cleanup.
+- [x] GitHub webhook HMAC verification using bounded raw request bytes and constant-time comparison, scoped deduplication, and rejected-first recovery.
+- [x] Restricted build/runtime policies, timeouts, cancellation, and managed-resource cleanup implemented and adapter-tested; broad interruption acceptance remains open.
 - [x] Structured logger redaction for request values, passwords, tokens, cookies, authorization headers, and keyring fields.
-- Full canary redaction before future logs, events, metrics, traces, job payloads, images, and runtime output leave their boundary.
+- Control-plane secret-canary verification across logs and traces; arbitrary application output cannot be guaranteed secret-free.
 - Dependency and container-image scanning in documented quality gates.
 
 ## Secrets and test data

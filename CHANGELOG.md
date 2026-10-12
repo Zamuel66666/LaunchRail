@@ -6,6 +6,8 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 
 ### Verification fixes
 
+- Hardened automatic request logging against path/query and arbitrary-header/body leaks. Bounded webhook raw-byte buffering rejects oversized chunked uploads before completion and correctly covers query-string URLs. Updated outdated security documentation to reflect the implemented pipeline and its remaining trusted-host limitations.
+
 - Removed reconciliation-interval waits between committed deployment stages. Immediate wake-ups retain PostgreSQL authority, strict identifier-only payloads, and durable trace metadata; unavailable publishing falls back to reconciliation without reversing success. Retry requests now wake accepted work immediately too.
 
 - Fixed a retry acknowledgement/history mismatch that crashed the timeline while formatting missing timestamps. Creation and retry now load authoritative history, and failed readback clearly states the deployment was already accepted rather than suggesting another mutation. Verified a real Node retry, non-empty runtime logs, viewer restrictions, and current screenshots.

@@ -63,8 +63,34 @@ describe("service logger redaction", () => {
     const record = JSON.parse(output) as Readonly<Record<string, unknown>>;
     expect(record.safe).toBe("root-visible");
     expect(output).toContain("body-visible");
-    expect(output).toContain("request-visible");
-    expect(output).toContain("request-alias-visible");
+    expect(output).not.toContain("request-visible");
+    expect(output).not.toContain("request-alias-visible");
     expect(output).toContain("[REDACTED]");
+  });
+
+  it("retains only bounded request identity, method, and route template", () => {
+    let output = "";
+    const logger = pino(serviceLoggerOptions("api", "info"), {
+      write: (chunk: string) => {
+        output += chunk;
+      },
+    });
+    logger.info({
+      req: {
+        id: "req-1",
+        method: "GET",
+        routeOptions: { url: "/projects/:projectId" },
+        url: "/projects/PRIVATE_CANARY?token=PRIVATE_CANARY",
+        host: "PRIVATE_CANARY",
+        headers: { custom: "PRIVATE_CANARY" },
+        body: { arbitrary: "PRIVATE_CANARY" },
+      },
+    });
+    expect(output).not.toContain("PRIVATE_CANARY");
+    expect(JSON.parse(output).req).toEqual({
+      id: "req-1",
+      method: "GET",
+      route: "/projects/:projectId",
+    });
   });
 });

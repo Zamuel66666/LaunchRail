@@ -4,7 +4,7 @@
 
 LaunchRail handles unusually powerful operations: it downloads code, builds Dockerfiles, starts containers, stores application secrets, and changes network routes. A malicious repository or stolen account could therefore affect more than one deployment. The design treats source code and workloads as untrusted even though the first supported operator and host are trusted.
 
-This initial model identifies security requirements. Phases 1 through 6 implement foundational structured-log redaction, loopback-bound services, organization-scoped foreign keys, immutable deployment/source snapshots, health-gated active-release constraints, password authentication, hashed opaque sessions, organization role enforcement, request hardening, validated project input, authenticated environment-variable encryption, identity/project/deployment audit insertion, identifier-only fenced jobs, fixed-origin public GitHub resolution, and hardened exact-SHA checkout/containment. Password recovery/second factors, private-source authentication, deployment-time secret injection, image/workload isolation, and the remaining controls are not claimed as complete.
+This model identifies security requirements and residual risks for the trusted single-host demonstration. Implemented boundaries include loopback services, organization scope, immutable snapshots, health-gated activation, password/session security, encrypted write-only project variables, audit records, identifier-only fenced work, exact public-source verification, restricted builds/runtimes, and authenticated operator controls. Release acceptance is still underway. Password recovery/second factors, private-source authentication, deployment-time secret injection, and hostile-tenant isolation are not provided.
 
 ## Scope and assumptions
 
@@ -140,7 +140,7 @@ Runtime log reads are authorized against the caller's organization membership in
 - Treat Dockerfile directives and build output as untrusted; never convert them into shell commands or HTML.
 - Label images and containers with opaque LaunchRail IDs for reconciliation, not user-provided names.
 
-Phase 4 implements the offline project syntax boundary. Phase 6 implements the public GitHub provider, exact-SHA isolated checkout, provider/live-manifest integrity checks, source limits, symlink and Dockerfile containment, safe failure mapping, immutable portable metadata, and crash-safe adoption. It deliberately does not authenticate private repositories, support Git LFS/submodules, or build/execute the checkout. The deployment-start HTTP/UI boundary is also absent, so source work currently requires an internally persisted immutable deployment.
+The public GitHub adapter performs exact-SHA isolated checkout, provider/live-manifest integrity checks, source limits, symlink/Dockerfile containment, safe failure mapping, immutable metadata, and crash-safe adoption. Authenticated HTTP/UI creation persists intent before publishing wake-ups. BuildKit and Docker adapters then build and execute only the persisted snapshot, with health-gated activation and retained-image rollback. Private repositories, Git LFS, submodules, and hostile-tenant isolation are unsupported.
 
 ## Workload isolation baseline
 
@@ -162,8 +162,8 @@ Build isolation remains weaker than a hardened remote builder because BuildKit a
 1. Validate secret names and size at the API boundary.
 2. Encrypt values with AES-256-GCM, a fresh nonce/tag, and organization/project/name authenticated context.
 3. Store ciphertext, nonce, authentication tag, algorithm, and key version in PostgreSQL; store the keyring separately.
-4. Decrypt only in the worker immediately before runtime injection.
-5. Redact exact and encoded canary forms before emitting logs/events.
+4. Runtime injection is not implemented; no project-variable plaintext is supplied to builds or runtimes.
+5. Control-plane log/trace canaries exercise implemented boundaries; do not claim arbitrary build/runtime output is secret-free.
 6. Never return stored plaintext through read APIs.
 7. Audit create, update, delete, and access operations without recording the value.
 8. Support key rotation by version and re-encryption without changing the logical secret.

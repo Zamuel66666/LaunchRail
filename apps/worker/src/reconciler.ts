@@ -107,6 +107,33 @@ export class DeploymentJobReconciler {
 
   private async reconcile(): Promise<DeploymentJobReconciliationResult> {
     const recovered = await this.store.recoverExpired({ limit: this.batchSize });
+    let cancellationRecoveryFailures = 0;
+    if (this.store.listPendingCancellations !== undefined && this.transitionStore !== undefined) {
+      try {
+        const cancellations = await this.store.listPendingCancellations({ limit: this.batchSize });
+        for (const cancellation of cancellations) {
+          try {
+            await this.transitionStore.transition({
+              ...cancellation,
+              to: "cancelled",
+              idempotencyKey: `worker-cancelled-${cancellation.deploymentId}`,
+            });
+          } catch {
+            cancellationRecoveryFailures += 1;
+            this.logger.warn(
+              { event: "deployment_cancellation_completion_failed" },
+              "Deployment cancellation completion will be retried",
+            );
+          }
+        }
+      } catch {
+        cancellationRecoveryFailures += 1;
+        this.logger.warn(
+          { event: "pending_cancellation_inventory_failed" },
+          "Pending deployment cancellations will be retried",
+        );
+      }
+    }
     const ensured = await this.store.ensureMissing({
       limit: this.batchSize,
       maxAttempts: this.maxAttempts,
@@ -136,7 +163,7 @@ export class DeploymentJobReconciler {
     let filesystemCleanupFailures = 0;
     let orphanImagesRemoved = 0;
     let orphanImageCleanupFailures = 0;
-    let resourceRecoveryFailures = 0;
+    let resourceRecoveryFailures = cancellationRecoveryFailures;
     if (this.store.listWorkerResourceRecoveryState !== undefined) {
       try {
         const recoveryState = await this.store.listWorkerResourceRecoveryState();

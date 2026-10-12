@@ -19,6 +19,7 @@ import {
   auditEvents,
   deploymentCommands,
   deploymentEvents,
+  deploymentJobs,
   deployments,
   projects,
   previewRoutes,
@@ -173,6 +174,23 @@ export async function transitionDeploymentInTransaction(
   }
 
   assertDeploymentTransition(deployment.state, command.to);
+
+  if (command.to === "cancelled") {
+    const [leased] = await transaction
+      .select({ id: deploymentJobs.id })
+      .from(deploymentJobs)
+      .where(
+        and(
+          eq(deploymentJobs.deploymentId, deployment.id),
+          eq(deploymentJobs.organizationId, deployment.organizationId),
+          eq(deploymentJobs.status, "running"),
+          sql`${deploymentJobs.leaseExpiresAt} > clock_timestamp()`,
+        ),
+      )
+      .limit(1);
+    if (leased !== undefined)
+      throw new DeploymentPersistenceConflictError("Deployment work is still leased");
+  }
 
   if (
     deployment.state === "active" &&

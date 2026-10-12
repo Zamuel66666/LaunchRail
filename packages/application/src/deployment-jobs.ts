@@ -521,6 +521,12 @@ export interface ListWorkerHeartbeatsQuery {
 }
 
 export interface DeploymentJobStore {
+  listPendingCancellations?(query: { readonly limit: number }): Promise<
+    readonly {
+      readonly deploymentId: string;
+      readonly organizationId: string;
+    }[]
+  >;
   recordHealthCheck?: (command: {
     readonly deploymentId: string;
     readonly organizationId: string;

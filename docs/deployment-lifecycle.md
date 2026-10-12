@@ -54,7 +54,7 @@ stateDiagram-v2
     building --> cancelling: cancel requested
     deploying --> cancelling: cancel requested
     health_checking --> cancelling: cancel requested
-    cancelling --> cancelled: work stopped and cleanup recorded
+    cancelling --> cancelled: durable work leases drained
 
     active --> superseded: newer healthy release promoted
     active --> rolling_back: rollback requested
@@ -145,10 +145,10 @@ A clone, build, runtime-start, or health failure records the correct terminal st
 
 Cancellation is cooperative and safe at step boundaries:
 
-1. An authorized request transitions eligible work to `cancelling` and signals the queue/worker.
-2. The worker aborts clone/build/health operations using a bounded signal.
-3. Started candidate containers and temporary routes are removed.
-4. Cleanup results are persisted before `cancelled`.
+1. An authorized request transitions eligible work to `cancelling`. Further stage mutations are rejected by the deployment-state fence.
+2. Worker lease heartbeats observe that fence and abort bounded clone/build/health operations.
+3. Reconciliation selects cancelling deployments only when no unexpired work lease remains. The final transition rechecks that lease boundary and records `cancelled` with an idempotent command/event.
+4. Candidate containers, routes, and source checkouts are cleaned through durable resource reconciliation. Cleanup outcomes remain separate from the terminal deployment outcome and are retried on infrastructure failure.
 
 Once the activation transaction starts, cancellation loses the race and receives a conflict; the user may then stop or roll back the active release. Cleanup failures are tracked separately for reconciliation rather than leaving the deployment indefinitely in `cancelling`.
 

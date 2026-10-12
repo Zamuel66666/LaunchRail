@@ -42,6 +42,37 @@ function createStore(overrides: Partial<DeploymentJobStore> = {}): DeploymentJob
 }
 
 describe("DeploymentJobReconciler", () => {
+  it("finalizes drained cancellations and continues dispatch when a cancellation fails", async () => {
+    const cancellation = { deploymentId: workItemId, organizationId: sourceWorkItemId };
+    const transition = vi.fn(async () => {
+      throw new Error("fixture database unavailable");
+    });
+    const enqueue = vi.fn(async () => ({ jobId: workItemId }));
+    const store = createStore({
+      listPendingCancellations: vi.fn(async () => [cancellation]),
+      listDispatchable: vi.fn(async () => [
+        { id: workItemId, kind: "deployment.claim" as const, contractVersion: 1 as const },
+      ]),
+    });
+    const reconciler = new DeploymentJobReconciler({
+      batchSize: 10,
+      logger,
+      maxAttempts: 5,
+      publisher: { enqueue },
+      store,
+      transitionStore: { transition, promote: vi.fn() },
+    });
+    await expect(reconciler.runOnce()).resolves.toMatchObject({
+      dispatched: 1,
+      resourceRecoveryFailures: 1,
+    });
+    expect(transition).toHaveBeenCalledWith({
+      ...cancellation,
+      to: "cancelled",
+      idempotencyKey: `worker-cancelled-${workItemId}`,
+    });
+    expect(enqueue).toHaveBeenCalledOnce();
+  });
   it("recovers leases, creates missing work, and dispatches due identifiers", async () => {
     const store = createStore({
       ensureMissing: vi.fn(async () => [{ id: workItemId }] as never),

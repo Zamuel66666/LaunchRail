@@ -91,6 +91,12 @@ Phase 6's clean-service suites cover both identifier-only job kinds, transitions
 
 ## Example applications
 
+### Real control lifecycle
+
+`pnpm acceptance:lifecycle` creates a dedicated synthetic project against a running local API/worker/proxy stack. It deploys the healthy example, verifies an unhealthy candidate preserves the active preview, promotes a replacement, rolls back to the retained healthy release, cancels another intent, and stops the active release. Every expected state and proxy outcome has a bounded wait; the JSON report records each check and retains failures. It does not silently archive the project or erase failed evidence.
+
+Supply `LAUNCHRAIL_ACCEPTANCE_API_URL` (loopback HTTP origin), `WEB_ORIGIN` (the API's configured mutation origin), `LAUNCHRAIL_ACCEPTANCE_ORGANIZATION_ID`, `LAUNCHRAIL_ACCEPTANCE_SOURCE_REVISION` (full published SHA containing the example), and `LAUNCHRAIL_ACCEPTANCE_SESSION_COOKIE` (a dedicated owner/developer session). Explicitly opt in with `LAUNCHRAIL_ACCEPTANCE_ALLOW_MUTATION=DEDICATED_LOCAL_ACCEPTANCE`. `TRAEFIK_PORT` selects the local proxy port and `LAUNCHRAIL_ACCEPTANCE_TIMEOUT_MS` defaults to five minutes per wait. Never use a shared project or production account. Store stdout as an unedited artifact; session values are never included in the report.
+
 The `examples/` directory will contain small versioned fixtures for healthy Node.js, healthy Python, failed build, failed health, delayed startup, structured logs, and slow build behavior. Fixtures are product test inputs, not toy samples; integration and browser suites should reference them rather than reproducing behavior inline.
 
 ## Quality-gate policy
@@ -102,6 +108,10 @@ The current baseline is `pnpm test` for package/web unit tests (including fake-H
 ## Defect workflow
 
 Reproduce a defect at the lowest layer that captures the observable failure, add a regression test where practical, implement the focused correction, and run adjacent integration coverage. Do not weaken an invariant or assertion merely to make a failure disappear.
+
+### Cancellation convergence
+
+The cancellation persistence test covers a queued deployment and a deployment with a live durable lease. It proves only the drained deployment is eligible for completion, direct cancellation finalization cannot bypass a live lease, expired work becomes eligible, and repeated completion preserves idempotent events. The reconciler test proves cancellation failures are retained for retry without blocking unrelated queue dispatch. The real lifecycle acceptance checks that queued cancellation converges while the active preview continues serving.
 
 ### Deployment creation regressions
 

@@ -6,6 +6,8 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 
 ### Verification fixes
 
+- Cancelling deployments now converge to `cancelled` after durable leases drain or expire; the terminal transition independently fences live work. Added a real local control-lifecycle acceptance command covering failed-candidate preservation, replacement, rollback, cancellation, and stop.
+
 - Invalid, empty, oversized, or unsupported request bodies retain safe HTTP 400/413/415 responses instead of being reported as internal server errors. Webhook processing failures log fixed codes rather than raw exception payloads.
 
 - Deployment creation now commits a positive initial event sequence, immutable configuration, claim job, and audit record atomically; concurrent verified deliveries remain deduplicated.

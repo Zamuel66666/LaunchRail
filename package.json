@@ -10,6 +10,7 @@
     "pnpm": ">=11.9.0"
   },
   "scripts": {
+    "acceptance:lifecycle": "node scripts/acceptance-lifecycle.mjs",
     "auth:bootstrap": "pnpm build:packages && pnpm --filter @launchrail/database auth:bootstrap",
     "benchmark:api": "node scripts/benchmark-api.mjs",
     "benchmark:deployment": "node scripts/benchmark-deployment.mjs",

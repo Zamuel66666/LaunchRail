@@ -713,6 +713,47 @@ describeWithDatabase("PostgresDeploymentJobStore", () => {
     ).resolves.toHaveLength(1);
   });
 
+  it("completes cancellation only after live work leases drain or expire", async () => {
+    const queued = await seedDeployment();
+    await ensureClaim(queued, 3, new Date(0));
+    const running = await seedDeployment();
+    const job = await ensureClaim(running, 3, new Date(0));
+    const claimed = await claim(job.id, { leaseDurationMs: 60000 });
+    expect(claimed.kind).toBe("claimed");
+    for (const deployment of [queued, running]) {
+      await transitionStore.transition({
+        ...deployment,
+        idempotencyKey: `cancel-${deployment.deploymentId}`,
+        to: "cancelling",
+      });
+    }
+    expect(await store.listPendingCancellations({ limit: 10 })).toEqual([
+      {
+        deploymentId: queued.deploymentId,
+        organizationId: queued.organizationId,
+      },
+    ]);
+    await expect(
+      transitionStore.transition({
+        ...running,
+        idempotencyKey: "cancel-complete",
+        to: "cancelled",
+      }),
+    ).rejects.toThrow("Deployment work is still leased");
+    await expireLease(job.id);
+    expect(await store.listPendingCancellations({ limit: 10 })).toHaveLength(2);
+    const command = { ...running, idempotencyKey: "cancel-complete", to: "cancelled" as const };
+    await expect(transitionStore.transition(command)).resolves.toMatchObject({
+      to: "cancelled",
+      idempotentReplay: false,
+    });
+    await expect(transitionStore.transition(command)).resolves.toMatchObject({
+      to: "cancelled",
+      idempotentReplay: true,
+    });
+    expect(await store.listPendingCancellations({ limit: 10 })).toHaveLength(1);
+  });
+
   it("rejects an incompatible transition replay without completing the claim job", async () => {
     const deployment = await seedDeployment();
     const job = await ensureClaim(deployment, 3, new Date(0));

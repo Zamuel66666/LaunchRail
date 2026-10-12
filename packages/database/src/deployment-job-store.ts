@@ -905,6 +905,33 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
     });
   }
 
+  public async listPendingCancellations(query: { readonly limit: number }) {
+    assertBatchSize(query.limit);
+    return this.db
+      .select({ deploymentId: deployments.id, organizationId: deployments.organizationId })
+      .from(deployments)
+      .where(
+        and(
+          eq(deployments.state, "cancelling"),
+          notExists(
+            this.db
+              .select({ id: deploymentJobs.id })
+              .from(deploymentJobs)
+              .where(
+                and(
+                  eq(deploymentJobs.deploymentId, deployments.id),
+                  eq(deploymentJobs.organizationId, deployments.organizationId),
+                  eq(deploymentJobs.status, "running"),
+                  gt(deploymentJobs.leaseExpiresAt, sql`clock_timestamp()`),
+                ),
+              ),
+          ),
+        ),
+      )
+      .orderBy(asc(deployments.updatedAt), asc(deployments.id))
+      .limit(query.limit);
+  }
+
   public async listDispatchable(
     query: ListDispatchableDeploymentJobsQuery,
   ): Promise<readonly DispatchableDeploymentJob[]> {

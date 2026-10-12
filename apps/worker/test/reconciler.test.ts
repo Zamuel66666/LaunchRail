@@ -126,6 +126,31 @@ describe("DeploymentJobReconciler", () => {
       workItemId: sourceWorkItemId,
     });
   });
+  it("restores a durable trace anchor separately from identifier-only reconstructed job data", async () => {
+    const traceParent = "00-abcdefabcdefabcdefabcdefabcdefab-1234567890abcdef-01";
+    const store = createStore({
+      listDispatchable: vi.fn(async () => [
+        {
+          contractVersion: 1,
+          id: sourceWorkItemId,
+          kind: "deployment.prepare_source" as const,
+          traceParent,
+        },
+      ]),
+    });
+    const enqueue = vi.fn(async () => ({ jobId: "traced-job" }));
+    await new DeploymentJobReconciler({
+      batchSize: 10,
+      logger,
+      maxAttempts: 3,
+      publisher: { enqueue },
+      store,
+    }).runOnce();
+    expect(enqueue).toHaveBeenCalledWith(
+      { contractVersion: 1, kind: "deployment.prepare_source", workItemId: sourceWorkItemId },
+      { traceparent: traceParent },
+    );
+  });
 
   it("does not overlap reconciliation passes and preserves work after enqueue failure", async () => {
     let release: (() => void) | undefined;

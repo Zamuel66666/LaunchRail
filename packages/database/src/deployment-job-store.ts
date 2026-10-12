@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import type { MetricsRegistry } from "@launchrail/observability";
+import { recordDeploymentOutcome } from "./outcome-metrics.js";
 import {
   normalizeProjectConfiguration,
   ProjectValidationError,
@@ -577,6 +579,7 @@ function toWorkerSummary(
 }
 
 export interface PostgresDeploymentJobStoreOptions {
+  readonly metrics?: MetricsRegistry;
   readonly afterInitialBuildLeaseValidation?: () => Promise<void>;
   readonly afterInitialClaimLeaseValidation?: () => Promise<void>;
   readonly afterInitialSourceLeaseValidation?: () => Promise<void>;
@@ -584,6 +587,7 @@ export interface PostgresDeploymentJobStoreOptions {
 }
 
 export class PostgresDeploymentJobStore implements DeploymentJobStore {
+  private readonly metrics: MetricsRegistry | undefined;
   private readonly afterInitialBuildLeaseValidation: () => Promise<void>;
   private readonly afterInitialClaimLeaseValidation: () => Promise<void>;
   private readonly afterInitialSourceLeaseValidation: () => Promise<void>;
@@ -596,12 +600,14 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
       afterInitialClaimLeaseValidation = () => Promise.resolve(),
       afterInitialSourceLeaseValidation = () => Promise.resolve(),
       generateLeaseToken = randomUUID,
+      metrics,
     }: PostgresDeploymentJobStoreOptions = {},
   ) {
     this.afterInitialBuildLeaseValidation = afterInitialBuildLeaseValidation;
     this.afterInitialClaimLeaseValidation = afterInitialClaimLeaseValidation;
     this.afterInitialSourceLeaseValidation = afterInitialSourceLeaseValidation;
     this.generateLeaseToken = generateLeaseToken;
+    this.metrics = metrics;
   }
 
   public async recordHealthCheck(command: {
@@ -948,8 +954,16 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
         contractVersion: deploymentJobs.contractVersion,
         id: deploymentJobs.id,
         kind: deploymentJobs.kind,
+        traceParent: deployments.traceParent,
       })
       .from(deploymentJobs)
+      .innerJoin(
+        deployments,
+        and(
+          eq(deployments.id, deploymentJobs.deploymentId),
+          eq(deployments.organizationId, deploymentJobs.organizationId),
+        ),
+      )
       .where(
         and(
           inArray(deploymentJobs.status, ["pending", "retry_wait"]),
@@ -963,6 +977,7 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
           contractVersion: row.contractVersion,
           id: row.id,
           kind: assertDeploymentJobKind(row.kind),
+          ...(row.traceParent === null ? {} : { traceParent: row.traceParent }),
         })),
       );
   }
@@ -971,7 +986,8 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
     assertLeaseDuration(command.leaseDurationMs);
     assertWorkerId(command.workerId);
 
-    return this.db.transaction(async (transaction) => {
+    const committed: Parameters<typeof recordDeploymentOutcome>[2][] = [];
+    const result = await this.db.transaction<ClaimDeploymentJobResult>(async (transaction) => {
       const [job] = await transaction
         .select()
         .from(deploymentJobs)
@@ -1076,7 +1092,7 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
 
       if (job.attemptCount >= job.maxAttempts) {
         if (actualKind === deploymentPrepareSourceJobKind && deployment.state === "cloning") {
-          await transitionDeploymentInTransaction(transaction, {
+          const transition = await transitionDeploymentInTransaction(transaction, {
             deploymentId: job.deploymentId,
             failure: {
               category: "infrastructure_unavailable",
@@ -1086,8 +1102,9 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
             organizationId: job.organizationId,
             to: "build_failed",
           });
+          committed.push(transition);
         } else if (actualKind === deploymentBuildJobKind && deployment.state === "building") {
-          await transitionDeploymentInTransaction(transaction, {
+          const transition = await transitionDeploymentInTransaction(transaction, {
             deploymentId: job.deploymentId,
             failure: {
               category: "infrastructure_unavailable",
@@ -1097,11 +1114,12 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
             organizationId: job.organizationId,
             to: "build_failed",
           });
+          committed.push(transition);
         } else if (
           actualKind === deploymentStartRuntimeJobKind &&
           deployment.state === "deploying"
         ) {
-          await transitionDeploymentInTransaction(transaction, {
+          const transition = await transitionDeploymentInTransaction(transaction, {
             deploymentId: job.deploymentId,
             failure: {
               category: "infrastructure_unavailable",
@@ -1111,6 +1129,7 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
             organizationId: job.organizationId,
             to: "deployment_failed",
           });
+          committed.push(transition);
         }
         const deadLetterClock = transaction
           .select({ now: sql<Date>`clock_timestamp()`.as("now") })
@@ -1189,6 +1208,9 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
         },
       };
     });
+    for (const transition of committed)
+      await recordDeploymentOutcome(this.db, this.metrics, transition);
+    return result;
   }
 
   public async heartbeat(
@@ -2127,7 +2149,7 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
     assertBuildFailure(command);
 
     try {
-      return await this.db.transaction(async (transaction) => {
+      const result = await this.db.transaction<FailDeploymentBuildResult>(async (transaction) => {
         const [job] = await transaction
           .select()
           .from(deploymentJobs)
@@ -2239,6 +2261,9 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
         }
         return { attemptCount: job.attemptCount, kind: "dead_lettered", transition };
       });
+      if (result.kind === "dead_lettered")
+        await recordDeploymentOutcome(this.db, this.metrics, result.transition);
+      return result;
     } catch (error) {
       if (error instanceof AtomicLeaseFailure) {
         return error.result;
@@ -2396,7 +2421,7 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
   ): Promise<FailDeploymentRuntimeResult> {
     assertRuntimeFailure(command);
     try {
-      return await this.db.transaction(async (transaction) => {
+      const result = await this.db.transaction<FailDeploymentRuntimeResult>(async (transaction) => {
         const [job] = await transaction
           .select()
           .from(deploymentJobs)
@@ -2493,6 +2518,9 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
         if (updated === undefined) throw new AtomicLeaseFailure({ kind: "lease_expired" });
         return { attemptCount: job.attemptCount, kind: "dead_lettered", transition };
       });
+      if (result.kind === "dead_lettered")
+        await recordDeploymentOutcome(this.db, this.metrics, result.transition);
+      return result;
     } catch (error) {
       if (error instanceof AtomicLeaseFailure) return error.result;
       throw error;
@@ -2505,43 +2533,84 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
     assertSourcePreparationFailure(command);
 
     try {
-      return await this.db.transaction(async (transaction) => {
-        const [job] = await transaction
-          .select()
-          .from(deploymentJobs)
-          .where(eq(deploymentJobs.id, command.workItemId))
-          .for("update");
-        if (job === undefined) {
-          return { kind: "not_found" };
-        }
-        const actualKind = assertDeploymentJobKind(job.kind);
-        if (actualKind !== deploymentPrepareSourceJobKind) {
-          return { actualKind, kind: "kind_mismatch" };
-        }
-        if (job.status !== "running") {
-          return { kind: "not_running", status: job.status };
-        }
-        if (job.leaseToken !== command.leaseToken) {
-          return { kind: "lease_mismatch" };
-        }
+      const result = await this.db.transaction<FailDeploymentSourcePreparationResult>(
+        async (transaction) => {
+          const [job] = await transaction
+            .select()
+            .from(deploymentJobs)
+            .where(eq(deploymentJobs.id, command.workItemId))
+            .for("update");
+          if (job === undefined) {
+            return { kind: "not_found" };
+          }
+          const actualKind = assertDeploymentJobKind(job.kind);
+          if (actualKind !== deploymentPrepareSourceJobKind) {
+            return { actualKind, kind: "kind_mismatch" };
+          }
+          if (job.status !== "running") {
+            return { kind: "not_running", status: job.status };
+          }
+          if (job.leaseToken !== command.leaseToken) {
+            return { kind: "lease_mismatch" };
+          }
 
-        const terminal = !command.retryable || job.attemptCount >= job.maxAttempts;
-        const failureClock = transaction
-          .select({ now: sql<Date>`clock_timestamp()`.as("now") })
-          .from(sql`(select 1) as clock_source`)
-          .as("source_failure_clock");
-        if (!terminal) {
-          const [failed] = await transaction
+          const terminal = !command.retryable || job.attemptCount >= job.maxAttempts;
+          const failureClock = transaction
+            .select({ now: sql<Date>`clock_timestamp()`.as("now") })
+            .from(sql`(select 1) as clock_source`)
+            .as("source_failure_clock");
+          if (!terminal) {
+            const [failed] = await transaction
+              .update(deploymentJobs)
+              .set({
+                availableAt: sql<Date>`${failureClock.now} + (${command.retryDelayMs}::bigint * interval '1 millisecond')`,
+                deadLetteredAt: null,
+                heartbeatAt: null,
+                lastErrorCode: command.failure.category,
+                lastErrorMessage: command.failure.message,
+                leaseExpiresAt: null,
+                leaseToken: null,
+                status: "retry_wait",
+                updatedAt: sql<Date>`${failureClock.now}`,
+                workerId: null,
+              })
+              .from(failureClock)
+              .where(
+                and(
+                  eq(deploymentJobs.id, command.workItemId),
+                  eq(deploymentJobs.status, "running"),
+                  eq(deploymentJobs.leaseToken, command.leaseToken),
+                  gt(deploymentJobs.leaseExpiresAt, failureClock.now),
+                ),
+              )
+              .returning({ availableAt: deploymentJobs.availableAt });
+            return failed === undefined
+              ? { kind: "lease_expired" }
+              : {
+                  attemptCount: job.attemptCount,
+                  availableAt: failed.availableAt,
+                  kind: "retry_scheduled",
+                };
+          }
+
+          const transition = await transitionDeploymentInTransaction(transaction, {
+            deploymentId: job.deploymentId,
+            failure: command.failure,
+            idempotencyKey: createDeploymentSourceFailureIdempotencyKey(job.id),
+            organizationId: job.organizationId,
+            to: "build_failed",
+          });
+          const [deadLettered] = await transaction
             .update(deploymentJobs)
             .set({
-              availableAt: sql<Date>`${failureClock.now} + (${command.retryDelayMs}::bigint * interval '1 millisecond')`,
-              deadLetteredAt: null,
+              availableAt: sql<Date>`${failureClock.now}`,
+              deadLetteredAt: sql<Date>`${failureClock.now}`,
               heartbeatAt: null,
               lastErrorCode: command.failure.category,
               lastErrorMessage: command.failure.message,
               leaseExpiresAt: null,
               leaseToken: null,
-              status: "retry_wait",
+              status: "dead_lettered",
               updatedAt: sql<Date>`${failureClock.now}`,
               workerId: null,
             })
@@ -2554,52 +2623,16 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
                 gt(deploymentJobs.leaseExpiresAt, failureClock.now),
               ),
             )
-            .returning({ availableAt: deploymentJobs.availableAt });
-          return failed === undefined
-            ? { kind: "lease_expired" }
-            : {
-                attemptCount: job.attemptCount,
-                availableAt: failed.availableAt,
-                kind: "retry_scheduled",
-              };
-        }
-
-        const transition = await transitionDeploymentInTransaction(transaction, {
-          deploymentId: job.deploymentId,
-          failure: command.failure,
-          idempotencyKey: createDeploymentSourceFailureIdempotencyKey(job.id),
-          organizationId: job.organizationId,
-          to: "build_failed",
-        });
-        const [deadLettered] = await transaction
-          .update(deploymentJobs)
-          .set({
-            availableAt: sql<Date>`${failureClock.now}`,
-            deadLetteredAt: sql<Date>`${failureClock.now}`,
-            heartbeatAt: null,
-            lastErrorCode: command.failure.category,
-            lastErrorMessage: command.failure.message,
-            leaseExpiresAt: null,
-            leaseToken: null,
-            status: "dead_lettered",
-            updatedAt: sql<Date>`${failureClock.now}`,
-            workerId: null,
-          })
-          .from(failureClock)
-          .where(
-            and(
-              eq(deploymentJobs.id, command.workItemId),
-              eq(deploymentJobs.status, "running"),
-              eq(deploymentJobs.leaseToken, command.leaseToken),
-              gt(deploymentJobs.leaseExpiresAt, failureClock.now),
-            ),
-          )
-          .returning({ id: deploymentJobs.id });
-        if (deadLettered === undefined) {
-          throw new AtomicLeaseFailure({ kind: "lease_expired" });
-        }
-        return { attemptCount: job.attemptCount, kind: "dead_lettered", transition };
-      });
+            .returning({ id: deploymentJobs.id });
+          if (deadLettered === undefined) {
+            throw new AtomicLeaseFailure({ kind: "lease_expired" });
+          }
+          return { attemptCount: job.attemptCount, kind: "dead_lettered", transition };
+        },
+      );
+      if (result.kind === "dead_lettered")
+        await recordDeploymentOutcome(this.db, this.metrics, result.transition);
+      return result;
     } catch (error) {
       if (error instanceof AtomicLeaseFailure) {
         return error.result;
@@ -2677,91 +2710,99 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
   ): Promise<readonly RecoveredDeploymentJob[]> {
     assertBatchSize(command.limit);
 
-    return this.db.transaction(async (transaction) => {
-      const expired = await transaction
-        .select()
-        .from(deploymentJobs)
-        .where(
-          and(
-            eq(deploymentJobs.status, "running"),
-            lte(deploymentJobs.leaseExpiresAt, sql`clock_timestamp()`),
-          ),
-        )
-        .orderBy(asc(deploymentJobs.leaseExpiresAt), asc(deploymentJobs.id))
-        .limit(command.limit)
-        .for("update", { skipLocked: true });
+    const committed: Parameters<typeof recordDeploymentOutcome>[2][] = [];
+    const result = await this.db.transaction<readonly RecoveredDeploymentJob[]>(
+      async (transaction) => {
+        const expired = await transaction
+          .select()
+          .from(deploymentJobs)
+          .where(
+            and(
+              eq(deploymentJobs.status, "running"),
+              lte(deploymentJobs.leaseExpiresAt, sql`clock_timestamp()`),
+            ),
+          )
+          .orderBy(asc(deploymentJobs.leaseExpiresAt), asc(deploymentJobs.id))
+          .limit(command.limit)
+          .for("update", { skipLocked: true });
 
-      const recovered: RecoveredDeploymentJob[] = [];
-      for (const job of expired) {
-        const deadLettered = job.attemptCount >= job.maxAttempts;
-        const status = deadLettered ? "dead_lettered" : "retry_wait";
-        const jobKind = assertDeploymentJobKind(job.kind);
-        if (
-          deadLettered &&
-          (jobKind === deploymentPrepareSourceJobKind ||
-            jobKind === deploymentBuildJobKind ||
-            jobKind === deploymentStartRuntimeJobKind)
-        ) {
-          const [deployment] = await transaction
-            .select({ state: deployments.state })
-            .from(deployments)
-            .where(
-              and(
-                eq(deployments.id, job.deploymentId),
-                eq(deployments.organizationId, job.organizationId),
-              ),
-            );
+        const recovered: RecoveredDeploymentJob[] = [];
+        for (const job of expired) {
+          const deadLettered = job.attemptCount >= job.maxAttempts;
+          const status = deadLettered ? "dead_lettered" : "retry_wait";
+          const jobKind = assertDeploymentJobKind(job.kind);
           if (
-            (jobKind === deploymentPrepareSourceJobKind && deployment?.state === "cloning") ||
-            (jobKind === deploymentBuildJobKind && deployment?.state === "building") ||
-            (jobKind === deploymentStartRuntimeJobKind && deployment?.state === "deploying")
+            deadLettered &&
+            (jobKind === deploymentPrepareSourceJobKind ||
+              jobKind === deploymentBuildJobKind ||
+              jobKind === deploymentStartRuntimeJobKind)
           ) {
-            await transitionDeploymentInTransaction(transaction, {
-              deploymentId: job.deploymentId,
-              failure: {
-                category: "infrastructure_unavailable",
-                message:
+            const [deployment] = await transaction
+              .select({ state: deployments.state })
+              .from(deployments)
+              .where(
+                and(
+                  eq(deployments.id, job.deploymentId),
+                  eq(deployments.organizationId, job.organizationId),
+                ),
+              );
+            if (
+              (jobKind === deploymentPrepareSourceJobKind && deployment?.state === "cloning") ||
+              (jobKind === deploymentBuildJobKind && deployment?.state === "building") ||
+              (jobKind === deploymentStartRuntimeJobKind && deployment?.state === "deploying")
+            ) {
+              const transition = await transitionDeploymentInTransaction(transaction, {
+                deploymentId: job.deploymentId,
+                failure: {
+                  category: "infrastructure_unavailable",
+                  message:
+                    jobKind === deploymentPrepareSourceJobKind
+                      ? "Source preparation stopped before it could complete"
+                      : jobKind === deploymentBuildJobKind
+                        ? "Image build stopped before it could complete"
+                        : "Runtime start stopped before it could complete",
+                },
+                idempotencyKey:
                   jobKind === deploymentPrepareSourceJobKind
-                    ? "Source preparation stopped before it could complete"
+                    ? createDeploymentSourceFailureIdempotencyKey(job.id)
                     : jobKind === deploymentBuildJobKind
-                      ? "Image build stopped before it could complete"
-                      : "Runtime start stopped before it could complete",
-              },
-              idempotencyKey:
-                jobKind === deploymentPrepareSourceJobKind
-                  ? createDeploymentSourceFailureIdempotencyKey(job.id)
-                  : jobKind === deploymentBuildJobKind
-                    ? createDeploymentBuildFailureIdempotencyKey(job.id)
-                    : createDeploymentRuntimeFailureIdempotencyKey(job.id),
-              organizationId: job.organizationId,
-              to: jobKind === deploymentStartRuntimeJobKind ? "deployment_failed" : "build_failed",
-            });
+                      ? createDeploymentBuildFailureIdempotencyKey(job.id)
+                      : createDeploymentRuntimeFailureIdempotencyKey(job.id),
+                organizationId: job.organizationId,
+                to:
+                  jobKind === deploymentStartRuntimeJobKind ? "deployment_failed" : "build_failed",
+              });
+              committed.push(transition);
+            }
           }
+          const recoveryClock = transaction
+            .select({ now: sql<Date>`clock_timestamp()`.as("now") })
+            .from(sql`(select 1) as clock_source`)
+            .as("recovery_clock");
+          await transaction
+            .update(deploymentJobs)
+            .set({
+              availableAt: sql<Date>`${recoveryClock.now}`,
+              deadLetteredAt: deadLettered ? sql<Date>`${recoveryClock.now}` : null,
+              heartbeatAt: null,
+              lastErrorCode: "worker_lease_expired",
+              lastErrorMessage: "Worker lease expired before the job completed",
+              leaseExpiresAt: null,
+              leaseToken: null,
+              status,
+              updatedAt: sql<Date>`${recoveryClock.now}`,
+              workerId: null,
+            })
+            .from(recoveryClock)
+            .where(eq(deploymentJobs.id, job.id));
+          recovered.push({ id: job.id, status });
         }
-        const recoveryClock = transaction
-          .select({ now: sql<Date>`clock_timestamp()`.as("now") })
-          .from(sql`(select 1) as clock_source`)
-          .as("recovery_clock");
-        await transaction
-          .update(deploymentJobs)
-          .set({
-            availableAt: sql<Date>`${recoveryClock.now}`,
-            deadLetteredAt: deadLettered ? sql<Date>`${recoveryClock.now}` : null,
-            heartbeatAt: null,
-            lastErrorCode: "worker_lease_expired",
-            lastErrorMessage: "Worker lease expired before the job completed",
-            leaseExpiresAt: null,
-            leaseToken: null,
-            status,
-            updatedAt: sql<Date>`${recoveryClock.now}`,
-            workerId: null,
-          })
-          .from(recoveryClock)
-          .where(eq(deploymentJobs.id, job.id));
-        recovered.push({ id: job.id, status });
-      }
-      return recovered;
-    });
+        return recovered;
+      },
+    );
+    for (const transition of committed)
+      await recordDeploymentOutcome(this.db, this.metrics, transition);
+    return result;
   }
 
   public async recordWorkerHeartbeat(

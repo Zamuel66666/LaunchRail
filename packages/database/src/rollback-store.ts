@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import type { MetricsRegistry } from "@launchrail/observability";
+import { recordDeploymentOutcome } from "./outcome-metrics.js";
 import type {
   DeploymentRollbackLease,
   DeploymentRollbackStore,
@@ -27,6 +29,13 @@ import {
 type Transaction = Parameters<Parameters<LaunchRailDatabase["transaction"]>[0]>[0];
 type Request = typeof rollbackRequests.$inferSelect;
 type Result = Parameters<DeploymentRollbackStore["finish"]>[0]["result"];
+type RollbackObservation = {
+  sourceDeploymentId: string;
+  targetDeploymentId: string;
+  organizationId: string;
+  succeeded: boolean;
+  durationSeconds: number;
+};
 
 function validateLeaseDuration(value: number) {
   if (!Number.isSafeInteger(value) || value < 1000 || value > 600000)
@@ -34,7 +43,45 @@ function validateLeaseDuration(value: number) {
 }
 
 export class PostgresRollbackStore implements DeploymentRollbackStore {
-  public constructor(private readonly db: LaunchRailDatabase) {}
+  public constructor(
+    private readonly db: LaunchRailDatabase,
+    private readonly metrics?: MetricsRegistry,
+  ) {}
+
+  private async observeCommitted(observations: readonly RollbackObservation[]) {
+    for (const observation of observations) {
+      if (observation.succeeded) {
+        await recordDeploymentOutcome(
+          this.db,
+          this.metrics,
+          {
+            deploymentId: observation.sourceDeploymentId,
+            to: "rolled_back",
+            idempotentReplay: false,
+          },
+          observation.organizationId,
+        );
+        await recordDeploymentOutcome(
+          this.db,
+          this.metrics,
+          { deploymentId: observation.targetDeploymentId, to: "active", idempotentReplay: false },
+          observation.organizationId,
+        );
+      }
+      try {
+        const outcome = observation.succeeded ? "completed" : "failed";
+        this.metrics?.increment("launchrail_rollbacks_total", { outcome });
+        this.metrics?.observe(
+          "launchrail_rollback_duration_seconds",
+          observation.durationSeconds,
+          { outcome },
+          [1, 5, 15, 30, 60, 120, 300, 600],
+        );
+      } catch {
+        /* Telemetry cannot change committed release state. */
+      }
+    }
+  }
 
   public async request(command: RollbackDeploymentCommand): Promise<DeploymentTransitionResult> {
     if (!command.idempotencyKey.trim() || command.idempotencyKey.length > 256)
@@ -158,7 +205,8 @@ export class PostgresRollbackStore implements DeploymentRollbackStore {
     validateLeaseDuration(command.leaseDurationMs);
     if (!command.workerId || command.workerId.length > 256)
       throw new RangeError("Invalid rollback worker identity");
-    return this.db.transaction(async (tx) => {
+    const observations: RollbackObservation[] = [];
+    const result = await this.db.transaction<DeploymentRollbackLease | null>(async (tx) => {
       const [request] = await tx
         .select()
         .from(rollbackRequests)
@@ -176,7 +224,13 @@ export class PostgresRollbackStore implements DeploymentRollbackStore {
         .for("update", { skipLocked: true });
       if (!request) return null;
       if (request.attemptCount >= 3) {
-        await this.settle(tx, request, { errorCode: "rollback_lease_exhausted" });
+        await this.settle(
+          tx,
+          request,
+          { errorCode: "rollback_lease_exhausted" },
+          false,
+          observations,
+        );
         return null;
       }
       const leaseToken = randomUUID();
@@ -209,7 +263,13 @@ export class PostgresRollbackStore implements DeploymentRollbackStore {
           ),
         );
       if (!target || target.state !== "superseded" || !artifact || !runtimeJob) {
-        await this.settle(tx, request, { errorCode: "rollback_invalid_snapshot" });
+        await this.settle(
+          tx,
+          request,
+          { errorCode: "rollback_invalid_snapshot" },
+          false,
+          observations,
+        );
         return null;
       }
       let config;
@@ -224,7 +284,13 @@ export class PostgresRollbackStore implements DeploymentRollbackStore {
           runtimeConfig: target.configurationSnapshot.runtimeConfig as ProjectRuntimeConfig,
         });
       } catch {
-        await this.settle(tx, request, { errorCode: "rollback_invalid_snapshot" });
+        await this.settle(
+          tx,
+          request,
+          { errorCode: "rollback_invalid_snapshot" },
+          false,
+          observations,
+        );
         return null;
       }
       return {
@@ -246,6 +312,8 @@ export class PostgresRollbackStore implements DeploymentRollbackStore {
         },
       };
     });
+    await this.observeCommitted(observations);
+    return result;
   }
 
   public async heartbeat(command: {
@@ -273,7 +341,8 @@ export class PostgresRollbackStore implements DeploymentRollbackStore {
   }
 
   public async finish(command: Parameters<DeploymentRollbackStore["finish"]>[0]): Promise<boolean> {
-    return this.db.transaction(async (tx) => {
+    const observations: RollbackObservation[] = [];
+    const result = await this.db.transaction(async (tx) => {
       const [request] = await tx
         .select()
         .from(rollbackRequests)
@@ -287,8 +356,10 @@ export class PostgresRollbackStore implements DeploymentRollbackStore {
         )
         .for("update");
       if (!request) return false;
-      return this.settle(tx, request, command.result, true);
+      return this.settle(tx, request, command.result, true, observations);
     });
+    await this.observeCommitted(observations);
+    return result;
   }
 
   private async settle(
@@ -296,6 +367,7 @@ export class PostgresRollbackStore implements DeploymentRollbackStore {
     request: Request,
     result: Result | { errorCode: "rollback_lease_exhausted" },
     requireLease = false,
+    observations: RollbackObservation[] = [],
   ) {
     await tx.select().from(projects).where(eq(projects.id, request.projectId)).for("update");
     const [current] = await tx
@@ -385,7 +457,7 @@ export class PostgresRollbackStore implements DeploymentRollbackStore {
             : []),
         ),
       )
-      .returning({ id: rollbackRequests.id });
+      .returning({ id: rollbackRequests.id, updatedAt: rollbackRequests.updatedAt });
     if (settled.length === 0) return false;
     if (currentOwned && current && target) {
       const state = succeeded ? ("rolled_back" as const) : ("active" as const);
@@ -505,6 +577,14 @@ export class PostgresRollbackStore implements DeploymentRollbackStore {
         targetDeploymentId: request.targetDeploymentId,
         ...(errorCode === null ? {} : { errorCode }),
       },
+    });
+    observations.push({
+      sourceDeploymentId: request.sourceDeploymentId,
+      targetDeploymentId: request.targetDeploymentId,
+      organizationId: request.organizationId,
+      succeeded,
+      durationSeconds:
+        Math.max(0, settled[0]!.updatedAt.getTime() - request.createdAt.getTime()) / 1000,
     });
     return currentOwned;
   }

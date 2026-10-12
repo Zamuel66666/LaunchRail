@@ -4,6 +4,7 @@ import {
   finishHttpServerTrace,
   startHttpServerTrace,
   traceHeadersFromContext,
+  withHttpServerTrace,
   type RequestTrace,
   type TraceHeaders,
 } from "@launchrail/observability";
@@ -38,4 +39,9 @@ export function endRequestTrace(
 export function getRequestTraceHeaders(request: FastifyRequest): TraceHeaders | undefined {
   const state = requests.get(request);
   return state === undefined ? undefined : traceHeadersFromContext(state.trace.context);
+}
+
+export function withRequestTrace<T>(request: FastifyRequest, operation: () => T): T {
+  const state = requests.get(request);
+  return state === undefined ? operation() : withHttpServerTrace(state.trace, operation);
 }

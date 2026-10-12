@@ -1,4 +1,5 @@
 import pino, { type Logger, type LoggerOptions } from "pino";
+import { activeTraceLogFields } from "./tracing.js";
 
 export {
   createBullMqTelemetryBridge,
@@ -143,6 +144,7 @@ export function serviceLoggerOptions(service: string, level: LogLevel): LoggerOp
   return {
     base: { service },
     level,
+    mixin: activeTraceLogFields,
     redact: {
       censor: "[REDACTED]",
       paths: [...redactPaths],
@@ -153,3 +155,4 @@ export function serviceLoggerOptions(service: string, level: LogLevel): LoggerOp
 export function createServiceLogger(service: string, level: LogLevel): Logger {
   return pino(serviceLoggerOptions(service, level));
 }
+export { withHttpServerTrace } from "./tracing.js";

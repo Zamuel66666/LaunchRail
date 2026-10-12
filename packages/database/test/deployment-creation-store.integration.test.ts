@@ -5,7 +5,12 @@ import { eq, sql } from "drizzle-orm";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import { createDatabaseClient, PostgresDeploymentCreationStore, schema } from "../src/index.js";
+import {
+  createDatabaseClient,
+  PostgresDeploymentCreationStore,
+  PostgresDeploymentJobStore,
+  schema,
+} from "../src/index.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 const withDatabase = databaseUrl === undefined ? describe.skip : describe;
@@ -95,6 +100,42 @@ withDatabase("deployment creation transactions", () => {
       organizationId: input.organizationId,
     });
     expect(audits).toHaveLength(1);
+  });
+  it("retains only validated immutable trace context for reconstructed stage wake-ups", async () => {
+    const input = await project();
+    const traceParent = "00-abcdefabcdefabcdefabcdefabcdefab-1234567890abcdef-01";
+    const created = await store.createDeployment({ ...input, traceParent });
+    const jobStore = new PostgresDeploymentJobStore(client.db);
+    const jobs = await jobStore.listDispatchable({ limit: 10 });
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]?.traceParent).toBe(traceParent);
+    const claimed = await jobStore.claim({
+      workItemId: jobs[0]!.id,
+      expectedKind: "deployment.claim",
+      workerId: "trace-acceptance",
+      leaseDurationMs: 60000,
+    });
+    if (claimed.kind !== "claimed") throw new Error("Expected claim lease");
+    await jobStore.completeClaimTransition({
+      workItemId: claimed.lease.workItemId,
+      leaseToken: claimed.lease.leaseToken,
+    });
+    expect(await jobStore.listDispatchable({ limit: 10 })).toEqual([
+      expect.objectContaining({ kind: "deployment.prepare_source", traceParent }),
+    ]);
+    await expect(
+      client.db
+        .update(schema.deployments)
+        .set({ traceParent: null })
+        .where(eq(schema.deployments.id, created.deploymentId)),
+    ).rejects.toThrow();
+    await expect(
+      store.createDeployment({ ...input, traceParent: "CANARY_secret_context" }),
+    ).rejects.toThrow("Invalid deployment trace context");
+    await expect(
+      store.createDeployment({ ...input, traceParent: `00-${"0".repeat(32)}-1234567890abcdef-01` }),
+    ).rejects.toThrow("Invalid deployment trace context");
+    expect(await client.db.select().from(schema.deployments)).toHaveLength(1);
   });
 
   it("coalesces concurrent verified delivery retries into one deployment and claim", async () => {

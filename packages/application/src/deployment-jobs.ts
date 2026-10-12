@@ -78,6 +78,7 @@ export interface ListDispatchableDeploymentJobsQuery {
 }
 
 export interface DispatchableDeploymentJob {
+  readonly traceParent?: string;
   readonly contractVersion: number;
   readonly id: string;
   readonly kind: DeploymentJobKind;

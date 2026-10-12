@@ -24,6 +24,13 @@ export class PostgresDeploymentCreationStore implements DeploymentCreationStore 
   ) {}
 
   public async createDeployment(command: CreateDeploymentCommand): Promise<CreatedDeployment> {
+    if (
+      command.traceParent !== undefined &&
+      (!/^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/u.test(command.traceParent) ||
+        command.traceParent.slice(3, 35) === "0".repeat(32) ||
+        command.traceParent.slice(36, 52) === "0".repeat(16))
+    )
+      throw new DeploymentPersistenceConflictError("Invalid deployment trace context");
     const maxAttempts = command.maxAttempts ?? this.defaultMaxAttempts;
     if (!Number.isSafeInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 20)
       throw new RangeError("Deployment attempts must be between 1 and 20");
@@ -140,6 +147,7 @@ export class PostgresDeploymentCreationStore implements DeploymentCreationStore 
           projectId,
           retryOfDeploymentId: command.retryOfDeploymentId,
           sourceRevision,
+          traceParent: command.traceParent,
           sourceSnapshot: {
             contractVersion: 1,
             dockerfilePath: project.dockerfilePath,

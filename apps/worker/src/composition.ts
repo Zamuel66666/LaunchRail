@@ -75,7 +75,10 @@ export function createDeploymentWorkerComponents({
   version,
   workerId,
 }: CreateDeploymentWorkerComponentsOptions): DeploymentWorkerComponents {
-  const store = traceDatabaseStore(new PostgresDeploymentJobStore(database), "deployment_jobs");
+  const store = traceDatabaseStore(
+    new PostgresDeploymentJobStore(database, metrics === undefined ? {} : { metrics }),
+    "deployment_jobs",
+  );
   const transitionStore = traceDatabaseStore(
     new PostgresDeploymentTransitionStore(database, metrics),
     "deployment_transitions",
@@ -201,7 +204,7 @@ export function createDeploymentWorkerComponents({
     workerId,
   });
   const rollbackProcessor = new DeploymentRollbackProcessor({
-    store: new PostgresRollbackStore(database),
+    store: traceDatabaseStore(new PostgresRollbackStore(database, metrics), "rollbacks"),
     runtimeManager: deploymentRuntimeManager,
     healthCheck: checkHttpHealth,
     workerId,

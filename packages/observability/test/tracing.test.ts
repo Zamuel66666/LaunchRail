@@ -10,6 +10,7 @@ import {
   initializeTracing,
   startHttpServerTrace,
   traceHeadersFromContext,
+  activeTraceLogFields,
   withTraceSpan,
   type TracingRuntime,
 } from "../src/tracing.js";
@@ -128,6 +129,50 @@ describe("W3C tracing and the real OTLP export boundary", () => {
     const first = runtime.shutdown();
     expect(runtime.shutdown()).toBe(first);
     await first.catch(() => undefined);
+  });
+  it("bounds the export queue and drops excess telemetry without dropping application work", async () => {
+    let exported = 0;
+    server = createServer(async (request, response) => {
+      const chunks: Buffer[] = [];
+      for await (const chunk of request) chunks.push(Buffer.from(chunk));
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      exported += body.resourceSpans.reduce(
+        (sum: number, resource: { scopeSpans: { spans: unknown[] }[] }) =>
+          sum + resource.scopeSpans.reduce((n, scope) => n + scope.spans.length, 0),
+        0,
+      );
+      response.end("{}");
+    });
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("Missing collector port");
+    runtime = initializeTracing({
+      endpoint: `http://127.0.0.1:${address.port}`,
+      serviceName: "launchrail-worker",
+      version: "test",
+    });
+    let completed = 0;
+    for (let index = 0; index < 1500; index++)
+      await withTraceSpan("launchrail.acceptance.bounded_export", {}, async () => {
+        completed++;
+      });
+    await runtime.shutdown();
+    expect(completed).toBe(1500);
+    expect(exported).toBeGreaterThan(0);
+    expect(exported).toBeLessThan(1500);
+    expect(exported).toBeLessThanOrEqual(1280);
+  });
+  it("provides only validated active trace and span IDs for structured logs", async () => {
+    runtime = initializeTracing({ serviceName: "launchrail-api", version: "test" });
+    expect(activeTraceLogFields()).toEqual({});
+    await withTraceSpan("launchrail.acceptance.log_context", {}, async () => {
+      expect(activeTraceLogFields()).toEqual({
+        traceId: expect.stringMatching(/^[0-9a-f]{32}$/u),
+        spanId: expect.stringMatching(/^[0-9a-f]{16}$/u),
+      });
+    });
+    expect(activeTraceLogFields()).toEqual({});
   });
 
   it("rejects unsafe collector URLs before registering global tracing", () => {

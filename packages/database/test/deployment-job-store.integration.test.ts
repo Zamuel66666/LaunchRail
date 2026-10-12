@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { MetricsRegistry } from "@launchrail/observability";
 import { fileURLToPath } from "node:url";
 
 import { eq, inArray, sql } from "drizzle-orm";
@@ -56,7 +57,8 @@ describeWithDatabase("PostgresDeploymentJobStore", () => {
   }
 
   const client = createDatabaseClient(databaseUrl);
-  const store = new PostgresDeploymentJobStore(client.db);
+  let metrics = new MetricsRegistry();
+  let store = new PostgresDeploymentJobStore(client.db, { metrics });
   const transitionStore = new PostgresDeploymentTransitionStore(client.db);
 
   beforeAll(async () => {
@@ -66,6 +68,8 @@ describeWithDatabase("PostgresDeploymentJobStore", () => {
   });
 
   beforeEach(async () => {
+    metrics = new MetricsRegistry();
+    store = new PostgresDeploymentJobStore(client.db, { metrics });
     await client.db.execute(sql`truncate table users, organizations, worker_heartbeats cascade`);
   });
 
@@ -1272,6 +1276,9 @@ describeWithDatabase("PostgresDeploymentJobStore", () => {
       failureCategory: "dockerfile_missing",
       state: "build_failed",
     });
+    expect(metrics.renderPrometheus()).toContain(
+      'launchrail_deployment_final_outcomes_total{outcome="build_failed"} 1',
+    );
   });
 
   it("retries transient source failures and fails an exhausted expired lease atomically", async () => {
@@ -1293,6 +1300,7 @@ describeWithDatabase("PostgresDeploymentJobStore", () => {
         workItemId: sourceJob.id,
       }),
     ).resolves.toMatchObject({ attemptCount: 1, kind: "retry_scheduled" });
+    expect(metrics.renderPrometheus()).not.toContain("launchrail_deployment_final_outcomes_total");
     await makeAvailable(sourceJob.id);
     const second = await claim(sourceJob.id, { expectedKind: "deployment.prepare_source" });
     if (second.kind !== "claimed") {
@@ -1317,6 +1325,9 @@ describeWithDatabase("PostgresDeploymentJobStore", () => {
       failureCategory: "infrastructure_unavailable",
       state: "build_failed",
     });
+    expect(metrics.renderPrometheus()).toContain(
+      'launchrail_deployment_final_outcomes_total{outcome="build_failed"} 1',
+    );
   });
 
   it("terminally fails an exhausted source lease when a duplicate wake-up wins recovery", async () => {
@@ -1641,6 +1652,9 @@ describeWithDatabase("PostgresDeploymentJobStore", () => {
         .from(schema.deploymentJobs)
         .where(eq(schema.deploymentJobs.id, runtimeJob.id)),
     ).resolves.toEqual([{ lastErrorCode: "health_timeout", status: "dead_lettered" }]);
+    expect(metrics.renderPrometheus()).toContain(
+      'launchrail_deployment_final_outcomes_total{outcome="deployment_failed"} 1',
+    );
   });
 
   it("rolls back image metadata and deployment transition when the final build fence expires", async () => {

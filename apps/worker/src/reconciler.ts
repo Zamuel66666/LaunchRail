@@ -14,7 +14,10 @@ import type { WorkerEventLogger } from "./processor.js";
 import type { RouteManager } from "@launchrail/routing";
 
 export interface DeploymentJobPublisher {
-  enqueue(job: DeploymentJob): Promise<Readonly<{ jobId: string }>>;
+  enqueue(
+    job: DeploymentJob,
+    traceHeaders?: { readonly traceparent?: string },
+  ): Promise<Readonly<{ jobId: string }>>;
 }
 
 export interface DeploymentJobReconcilerOptions {
@@ -398,13 +401,13 @@ export class DeploymentJobReconciler {
 
     for (const job of dispatchable) {
       try {
-        await this.publisher.enqueue(
-          parseDeploymentJob({
-            contractVersion: job.contractVersion,
-            kind: job.kind,
-            workItemId: job.id,
-          }),
-        );
+        const wakeup = parseDeploymentJob({
+          contractVersion: job.contractVersion,
+          kind: job.kind,
+          workItemId: job.id,
+        });
+        if (job.traceParent === undefined) await this.publisher.enqueue(wakeup);
+        else await this.publisher.enqueue(wakeup, { traceparent: job.traceParent });
         dispatched += 1;
       } catch {
         dispatchFailed += 1;

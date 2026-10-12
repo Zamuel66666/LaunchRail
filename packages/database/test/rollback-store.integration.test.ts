@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { MetricsRegistry } from "@launchrail/observability";
 import { fileURLToPath } from "node:url";
 import { eq, sql } from "drizzle-orm";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
@@ -15,7 +16,8 @@ const databaseUrl = process.env.DATABASE_URL;
 (databaseUrl ? describe : describe.skip)("Durable health-gated rollback", () => {
   if (!databaseUrl) return;
   const client = createDatabaseClient(databaseUrl);
-  const store = new PostgresRollbackStore(client.db);
+  let metrics = new MetricsRegistry();
+  let store = new PostgresRollbackStore(client.db, metrics);
   const jobs = new PostgresDeploymentJobStore(client.db);
   let organizationId: string;
   let projectId: string;
@@ -59,6 +61,8 @@ const databaseUrl = process.env.DATABASE_URL;
     });
   });
   beforeEach(async () => {
+    metrics = new MetricsRegistry();
+    store = new PostgresRollbackStore(client.db, metrics);
     await client.db.execute(sql`truncate users, organizations cascade`);
     organizationId = randomUUID();
     projectId = randomUUID();
@@ -209,6 +213,16 @@ const databaseUrl = process.env.DATABASE_URL;
     expect(resources.leasedWorkItemIds).toContain(runtimeJobId);
     expect(await store.finish({ ...lease, result: success() })).toBe(true);
     expect(await store.finish({ ...lease, result: success() })).toBe(false);
+    expect(metrics.renderPrometheus()).toContain(
+      'launchrail_deployment_final_outcomes_total{outcome="rolled_back"} 1',
+    );
+    expect(metrics.renderPrometheus()).toContain(
+      'launchrail_deployment_final_outcomes_total{outcome="active"} 1',
+    );
+    expect(metrics.renderPrometheus()).toContain(
+      'launchrail_rollbacks_total{outcome="completed"} 1',
+    );
+    expect(metrics.renderPrometheus()).not.toContain(sourceId);
     expect((await client.db.select().from(schema.activeReleases))[0]?.deploymentId).toBe(targetId);
     expect((await client.db.select().from(schema.healthCheckAttempts))[0]?.statusCode).toBe(204);
     expect(
@@ -250,6 +264,8 @@ const databaseUrl = process.env.DATABASE_URL;
       status: "failed",
       errorCode: "rollback_unhealthy",
     });
+    expect(metrics.renderPrometheus()).toContain('launchrail_rollbacks_total{outcome="failed"} 1');
+    expect(metrics.renderPrometheus()).not.toContain("launchrail_deployment_final_outcomes_total");
   });
   it("fences a stale completion and reclaims interrupted preparation", async () => {
     await store.request(command());
@@ -261,6 +277,7 @@ const databaseUrl = process.env.DATABASE_URL;
     expect(second.leaseToken).not.toBe(first.leaseToken);
     expect(await store.heartbeat({ ...first, leaseDurationMs: 30000 })).toBe(false);
     expect(await store.finish({ ...first, result: success() })).toBe(false);
+    expect(metrics.renderPrometheus()).not.toContain("launchrail_rollbacks_total");
     expect(await store.finish({ ...second, result: success() })).toBe(true);
   });
   it("restores the current release after bounded lease exhaustion", async () => {
@@ -275,6 +292,7 @@ const databaseUrl = process.env.DATABASE_URL;
       errorCode: "rollback_lease_exhausted",
       attemptCount: 3,
     });
+    expect(metrics.renderPrometheus()).toContain('launchrail_rollbacks_total{outcome="failed"} 1');
     expect(
       (
         await client.db.select().from(schema.deployments).where(eq(schema.deployments.id, sourceId))
@@ -315,6 +333,7 @@ const databaseUrl = process.env.DATABASE_URL;
         result: { ...success(), runtime: { ...runtime, imageDigest: `sha256:${"d".repeat(64)}` } },
       }),
     ).rejects.toThrow("image identity");
+    expect(metrics.renderPrometheus()).toBe("");
     expect((await client.db.select().from(schema.activeReleases))[0]?.deploymentId).toBe(sourceId);
     expect(await store.finish({ ...lease, result: success() })).toBe(true);
   });

@@ -54,6 +54,9 @@ export function createGitHubWebhookDeploymentTrigger({
         }
         const deployment = await deploymentCreationStore.createDeployment({
           maxAttempts,
+          ...(event.traceHeaders?.traceparent === undefined
+            ? {}
+            : { traceParent: event.traceHeaders.traceparent }),
           organizationId: event.organizationId,
           projectId: project.id,
           sourceEvent: { deliveryId: event.deliveryId, provider: "github" },

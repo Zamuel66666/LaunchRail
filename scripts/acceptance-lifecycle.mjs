@@ -40,6 +40,9 @@ if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 1800000)
 const base = `/v1/organizations/${organizationId}`;
 const startedAt = new Date().toISOString();
 const evidence = [];
+const traceParent = process.env.LAUNCHRAIL_ACCEPTANCE_TRACE_PARENT;
+if (traceParent !== undefined && !/^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/u.test(traceParent))
+  throw new Error("Invalid acceptance trace parent");
 const rollbackFault = process.env.LAUNCHRAIL_ACCEPTANCE_ROLLBACK_FAULT ?? "none";
 if (!["none", "missing", "paused"].includes(rollbackFault))
   throw new Error("Invalid rollback fault mode");
@@ -56,6 +59,13 @@ async function request(path, options = {}) {
     headers: {
       cookie,
       origin: origin.origin,
+      ...(traceParent === undefined ? {} : { traceparent: traceParent }),
+      ...(process.env.LAUNCHRAIL_ACCEPTANCE_TRACE_CANARY === undefined
+        ? {}
+        : {
+            "x-acceptance-canary": process.env.LAUNCHRAIL_ACCEPTANCE_TRACE_CANARY,
+            tracestate: `acceptance=${process.env.LAUNCHRAIL_ACCEPTANCE_TRACE_CANARY}`,
+          }),
       ...(options.body === undefined ? {} : { "content-type": "application/json" }),
       ...options.headers,
     },

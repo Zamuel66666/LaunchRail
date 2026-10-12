@@ -19,7 +19,12 @@ import rateLimit from "@fastify/rate-limit";
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from "fastify";
 
 import { registerAuthRoutes } from "./auth-routes.js";
-import { endRequestTrace, getRequestTraceHeaders, startRequestTrace } from "./trace-context.js";
+import {
+  endRequestTrace,
+  getRequestTraceHeaders,
+  startRequestTrace,
+  withRequestTrace,
+} from "./trace-context.js";
 
 interface BuildServerOptions {
   readonly cookieName?: string;
@@ -82,6 +87,12 @@ export function buildServer({
     logger,
   });
   const metrics = suppliedMetrics ?? new MetricsRegistry();
+  server.addHook("onRoute", (route) => {
+    const handler = route.handler;
+    route.handler = function (request, reply) {
+      return withRequestTrace(request, () => handler.call(this, request, reply));
+    };
+  });
   server.addHook("preParsing", async (request, _reply, payload) => {
     if (request.url !== "/v1/webhooks/github") return payload;
     const chunks: Buffer[] = [];
@@ -99,6 +110,16 @@ export function buildServer({
     startRequestTrace(request);
   });
   server.addHook("onResponse", async (request, reply) => {
+    withRequestTrace(request, () =>
+      request.log.info(
+        {
+          event: "api_request_completed",
+          route: request.routeOptions.url ?? "unknown",
+          statusCode: reply.statusCode,
+        },
+        "API request completed",
+      ),
+    );
     const startedAt = (request as typeof request & { startedAt?: number }).startedAt;
     metrics.increment("launchrail_http_requests_total", {
       method: request.method,

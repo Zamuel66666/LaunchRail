@@ -249,6 +249,7 @@ export const deployments = pgTable(
     projectId: uuid("project_id").notNull(),
     retryOfDeploymentId: uuid("retry_of_deployment_id"),
     sourceRevision: text("source_revision").notNull(),
+    traceParent: text("trace_parent"),
     sourceSnapshot: jsonb("source_snapshot").$type<Readonly<Record<string, unknown>>>().notNull(),
     configurationSnapshot: jsonb("configuration_snapshot")
       .$type<Readonly<Record<string, unknown>>>()
@@ -293,6 +294,10 @@ export const deployments = pgTable(
     check("deployments_attempt_nonnegative", sql`${table.attempt} >= 0`),
     check("deployments_version_positive", sql`${table.version} > 0`),
     check("deployments_event_sequence_nonnegative", sql`${table.eventSequence} >= 0`),
+    check(
+      "deployments_trace_parent",
+      sql`${table.traceParent} is null or (${table.traceParent} ~ '^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$' and substring(${table.traceParent} from 4 for 32) <> repeat('0', 32) and substring(${table.traceParent} from 37 for 16) <> repeat('0', 16))`,
+    ),
     check(
       "deployments_source_revision_git_hash",
       sql`${table.sourceRevision} ~ '^[0-9a-f]{40}([0-9a-f]{24})?$'`,

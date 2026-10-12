@@ -1,4 +1,5 @@
 export interface CreateDeploymentCommand {
+  readonly traceParent?: string;
   readonly actorUserId?: string;
   readonly maxAttempts?: number;
   readonly organizationId: string;

@@ -160,6 +160,23 @@ export function traceHeadersFromContext(traceContext: Context): TraceHeaders {
   };
 }
 
+export function withHttpServerTrace<T>(requestTrace: RequestTrace, operation: () => T): T {
+  return context.with(requestTrace.context, operation);
+}
+
+export function activeTraceLogFields(): Readonly<Record<string, string>> {
+  const span = trace.getActiveSpan()?.spanContext();
+  if (
+    !span ||
+    !/^[0-9a-f]{32}$/u.test(span.traceId) ||
+    span.traceId === "0".repeat(32) ||
+    !/^[0-9a-f]{16}$/u.test(span.spanId) ||
+    span.spanId === "0".repeat(16)
+  )
+    return {};
+  return { traceId: span.traceId, spanId: span.spanId };
+}
+
 const queueOperations = new Set([
   "add",
   "addBulk",

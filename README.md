@@ -6,6 +6,8 @@
 
 Exact-revision rollback and cleanup proof is retained in the [acceptance evidence](docs/acceptance-evidence.md), including unedited missing-container and unhealthy-container reports.
 
+Current release verification also exercises real request-to-worker trace correlation and success/failure outcome metrics. A dedicated collector checks secret boundaries and export failure; bounded telemetry dropping does not discard deployment work. Dashboard review and the remaining whole-release gates are still open.
+
 ## What LaunchRail does
 
 LaunchRail can build a public GitHub revision, run it in a restricted container, gate activation on an HTTP health check, and expose a local preview URL. Deployment creation is available through the project workspace for exact commit SHAs or through a configured signed push webhook.

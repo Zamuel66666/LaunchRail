@@ -13,6 +13,7 @@ import {
 import type { MetricsRegistry } from "@launchrail/observability";
 import { and, eq, sql } from "drizzle-orm";
 import { PostgresRollbackStore } from "./rollback-store.js";
+import { recordDeploymentOutcome } from "./outcome-metrics.js";
 
 import type { LaunchRailDatabase } from "./client.js";
 import {
@@ -303,34 +304,12 @@ export class PostgresDeploymentTransitionStore implements DeploymentTransitionSt
     organizationId: string,
     outcome: FinalDeploymentOutcome,
   ): Promise<void> {
-    if (this.metrics === undefined) return;
-    this.metrics.increment("launchrail_deployment_final_outcomes_total", { outcome });
-    try {
-      const [deployment] = await this.db
-        .select({
-          createdAt: deployments.createdAt,
-          finishedAt: deployments.finishedAt,
-          healthCheckedAt: deployments.healthCheckedAt,
-          updatedAt: deployments.updatedAt,
-        })
-        .from(deployments)
-        .where(
-          and(eq(deployments.id, deploymentId), eq(deployments.organizationId, organizationId)),
-        );
-      if (deployment === undefined) return;
-      const completedAt =
-        outcome === "active"
-          ? (deployment.healthCheckedAt ?? deployment.updatedAt)
-          : (deployment.finishedAt ?? deployment.updatedAt);
-      this.metrics.observe(
-        "launchrail_deployment_lifecycle_duration_seconds",
-        Math.max(0, completedAt.getTime() - deployment.createdAt.getTime()) / 1_000,
-        { outcome },
-        [1, 5, 15, 30, 60, 120, 300, 600, 1_200, 3_600],
-      );
-    } catch {
-      this.metrics.increment("launchrail_deployment_metric_recording_failures_total");
-    }
+    await recordDeploymentOutcome(
+      this.db,
+      this.metrics,
+      { deploymentId, to: outcome, idempotentReplay: false },
+      organizationId,
+    );
   }
 
   public async transition(

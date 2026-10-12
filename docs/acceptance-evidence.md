@@ -2,6 +2,12 @@
 
 This is an incremental verification record, not a release approval. Remaining gates are tracked in the [release checklist](release-checklist.md).
 
+## Observability correlation verification
+
+The next verification pass corrected lost asynchronous API context, missing trace anchors when durable work reconstructs later stage wake-ups, and omitted final-outcome metrics in direct failure and rollback transactions. It passed 336 unit tests, 95 PostgreSQL/service tests, 19 HTTP integration tests, 15 queue/restart tests, full type checks, and the application build. A dedicated loopback collector test verifies bounded requests, secret rejection without retention, and injected HTTP 503 behavior; SDK tests prove collector failure and excess telemetry dropping do not discard application work.
+
+A real dedicated lifecycle run passed all 17 checks, including healthy activation, unhealthy-candidate preservation, replacement, rollback, cancellation, stop, and preview responses. Its injected trace reached both API and worker services, HTTP handlers, persistence adapters, BullMQ producer/consumer operations, and reconstructed source/build/runtime stages. Structured API completion and worker stage logs carried that trace ID. The collector rejected zero secret-bearing payloads and tolerated one injected export failure; configured synthetic, credential, and keyring canaries were absent from inspected logs. Worker metrics recorded three activations (including restoration), one failed deployment, one cancellation, one rolled-back source, and one completed rollback. These are dirty-development acceptance results, not exact-clean-release or benchmark evidence. Dashboard query validation and independent review remain open.
+
 ## Durable rollback verification — 2026-10-12
 
 The previously identified rollback preparation gap is now implemented. PostgreSQL acceptance covers retained-route preparation, immutable settings, fresh-health and image identity validation, stale-owner fencing, post-lock expiry, target-stop races, bounded interrupted-work reclamation, failed-target cleanup intent, idempotent requests, and concurrent claims. All 328 unit tests, 94 PostgreSQL/service tests, 15 queue/restart tests, and 18 HTTP integration tests passed locally, along with formatting, lint, documentation checks, full type checks, the application build, and process-health smoke checks. The production dependency audit reported no known vulnerabilities.

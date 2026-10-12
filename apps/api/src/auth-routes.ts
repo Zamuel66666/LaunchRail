@@ -969,6 +969,9 @@ export function registerAuthRoutes(
           organizationId: request.params.organizationId,
           projectId: request.body.projectId,
           sourceRevision: request.body.sourceRevision,
+          ...(getRequestTraceHeaders(request)?.traceparent === undefined
+            ? {}
+            : { traceParent: getRequestTraceHeaders(request)!.traceparent! }),
         });
         if (deployment === undefined)
           return reply
@@ -1013,6 +1016,9 @@ export function registerAuthRoutes(
             actorUserId: authorization.principal.userId,
             organizationId: request.params.organizationId,
             retryOfDeploymentId: request.params.deploymentId,
+            ...(getRequestTraceHeaders(request)?.traceparent === undefined
+              ? {}
+              : { traceParent: getRequestTraceHeaders(request)!.traceparent! }),
           }),
         };
       },

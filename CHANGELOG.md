@@ -6,6 +6,9 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 
 ### Verification fixes
 
+- Preserved request trace context through asynchronous API handlers and durable reconstruction of deployment stages without adding data to queue payloads. Structured completion logs include trace/span IDs. Added real export, secret-canary, collector-failure, and bounded telemetry-drop checks.
+- Corrected missing final-outcome metrics for direct stage failures, exhausted work, and health-gated rollback. Metrics are emitted after commit only; replayed or fenced operations do not count, and instrumentation cannot reverse committed state.
+
 - Removed decorative success checkmarks from deployment, health, and activity history so failed outcomes are not visually presented as successful checks. Verified the actual browser styles and automated accessibility checks after the change.
 
 - Rollback now prepares or recreates the previous runtime from its retained image and immutable configuration, then requires fresh health before switching. Durable leases fence stale workers; failed preparation retains the current release, records actionable history, and schedules failed-target cleanup. Added explicit missing-container and paused-container lifecycle fault scenarios.

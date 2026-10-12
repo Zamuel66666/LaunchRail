@@ -261,6 +261,10 @@ describeWithServices("deployment worker restart recovery", () => {
       workerId: "worker-after-crash",
     });
     runtimes.push(components.runtime);
+    expect(components.runtimeProcessor).toHaveProperty(
+      "options.jobTimeoutMs",
+      config.WORKER_JOB_TIMEOUT_MS,
+    );
 
     // Redis has never seen this job. Startup reconciliation must rebuild the wake-up from PG.
     await components.runtime.start();

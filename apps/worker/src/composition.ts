@@ -184,7 +184,7 @@ export function createDeploymentWorkerComponents({
     backoffBaseMs: config.WORKER_BACKOFF_BASE_MS,
     backoffCapMs: config.WORKER_BACKOFF_CAP_MS,
     heartbeatIntervalMs: config.WORKER_HEARTBEAT_INTERVAL_MS,
-    jobTimeoutMs: config.WORKER_RUNTIME_TIMEOUT_MS,
+    jobTimeoutMs: config.WORKER_JOB_TIMEOUT_MS,
     leaseDurationMs: config.WORKER_LEASE_MS,
     logger,
     ...(metrics === undefined ? {} : { metrics }),

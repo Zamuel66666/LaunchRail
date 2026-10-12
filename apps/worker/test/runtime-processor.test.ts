@@ -46,6 +46,7 @@ function createProcessor(
   healthCheck: () => Promise<{ durationMs: number; statusCode: number }>,
   healthGraceMs = 0,
   applyRoute: () => Promise<void> = async () => undefined,
+  jobTimeoutMs = 10000,
 ) {
   const check = vi.fn(healthCheck);
   const recordHealthCheck = vi.fn(async () => undefined);
@@ -68,7 +69,7 @@ function createProcessor(
     heartbeatIntervalMs: 60_000,
     healthCheck: check as never,
     healthGraceMs,
-    jobTimeoutMs: 10_000,
+    jobTimeoutMs,
     leaseDurationMs: 60_000,
     logger: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
     metrics,
@@ -98,6 +99,19 @@ function createProcessor(
 }
 
 describe("DeploymentRuntimeProcessor health gate", () => {
+  it("keeps the total job budget available for startup grace and health", async () => {
+    const { processor, check, promote } = createProcessor(
+      async () => ({ durationMs: 1, statusCode: 200 }),
+      60,
+      async () => undefined,
+      200,
+    );
+    const started = performance.now();
+    await expect(processor.process(job, new AbortController().signal)).resolves.toBe("completed");
+    expect(performance.now() - started).toBeGreaterThanOrEqual(50);
+    expect(check).toHaveBeenCalledOnce();
+    expect(promote).toHaveBeenCalledOnce();
+  });
   it("records unhealthy HTTP responses, stops the candidate, and fails without retry", async () => {
     const { failRuntime, processor, promote, recordHealthCheck, stop } = createProcessor(
       async () => ({ durationMs: 12, statusCode: 503 }),

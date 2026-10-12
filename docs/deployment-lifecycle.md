@@ -143,6 +143,8 @@ A clone, build, runtime-start, or health failure records the correct terminal st
 
 ## Cancellation
 
+The total runtime job deadline is `WORKER_JOB_TIMEOUT_MS`; `WORKER_RUNTIME_TIMEOUT_MS` bounds individual Docker adapter commands. Startup grace and the health window consume the total job budget, not the shorter Docker command budget.
+
 Cancellation is cooperative and safe at step boundaries:
 
 1. An authorized request transitions eligible work to `cancelling`. Further stage mutations are rejected by the deployment-state fence.

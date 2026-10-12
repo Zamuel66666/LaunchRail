@@ -67,12 +67,24 @@ it.each(["healthy", "node", "python", "unhealthy"] as const)(
         signal: new AbortController().signal,
       });
       containerId = runtime.containerId;
+      const readinessStarted = performance.now();
+      const readinessBudgetMs = 30000;
       let response: Response | undefined;
-      for (let attempt = 0; attempt < 50; attempt++) {
+      while (performance.now() - readinessStarted < readinessBudgetMs) {
         try {
           response = await fetch(
             `http://127.0.0.1:${runtime.hostPort}${example === "unhealthy" ? "/missing-health" : "/"}`,
-            { signal: AbortSignal.timeout(1000) },
+            {
+              signal: AbortSignal.timeout(
+                Math.max(
+                  1,
+                  Math.min(
+                    1000,
+                    Math.ceil(readinessBudgetMs - (performance.now() - readinessStarted)),
+                  ),
+                ),
+              ),
+            },
           );
           break;
         } catch {
@@ -102,6 +114,15 @@ it.each(["healthy", "node", "python", "unhealthy"] as const)(
         );
       }
       expect(response?.status).toBe(example === "unhealthy" ? 404 : 200);
+      expect(performance.now() - readinessStarted).toBeLessThanOrEqual(readinessBudgetMs);
+      process.stdout.write(
+        `${JSON.stringify({
+          scenario: "example-runtime-readiness",
+          example,
+          durationMs: performance.now() - readinessStarted,
+          readinessBudgetMs,
+        })}\n`,
+      );
       const body = await response?.text();
       if (example === "node" || example === "python")
         expect(JSON.parse(body ?? "")).toMatchObject({ healthy: true });

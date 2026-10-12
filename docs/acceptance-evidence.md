@@ -2,6 +2,16 @@
 
 This is an incremental verification record, not a release approval. Remaining gates are tracked in the [release checklist](release-checklist.md).
 
+## Clean-clone physical service recovery — `7aa190a`
+
+The [unedited 39-check report](acceptance/interruptions-7aa190a.json) records clean published source `7aa190ac81ba32dc3aac381c9ceb4aa55455fc04`. Its [three CI jobs passed](https://github.com/Zamuel66666/LaunchRail/actions/runs/38265367894). A separate clone installed with the frozen lockfile, generated a new private `.env` and keyring, migrated a newly created database through all 15 migrations, bootstrapped a synthetic owner, and built the applications. Earlier failed acceptance attempts were retained, then the fixed committed services were rebuilt and the complete matrix repeated against a new scenario project.
+
+Host-sharing adjustments used API 4100/web 3100, a distinct queue prefix, private clone-local source/build/route directories, and a separate cold BuildKit 0.34 daemon with two CPUs/two GiB. PostgreSQL/Redis remained the existing loopback Compose dependencies; the original database/volumes and unrelated services were preserved. The proxy was Traefik 3.7.14. Default worker lease, heartbeat, and reconciliation intervals were 60, 10, and 15 seconds. This demonstrates a generated clean-clone installation on the supported host, not independent reproduction on a second host or a cold operating-system install.
+
+An accepted queued intent survived API `SIGKILL`. A worker `SIGKILL` after persisted build stdout recovered to one activation. Redis loss preserved a newly accepted queued intent and prior preview. PostgreSQL stop kept both processes alive with HTTP 503 readiness, preserved preview availability, then permitted new work after reconnecting. Proxy stop/restart retained database-active authority and restored the exact preview. Every activated deployment had exactly one activation event, and durable stop/reconciliation left zero scenario runtimes. The report SHA-256 is `547df82e500504ca1d90b6099e9a8079277bc90d10e57e0ff036918ba337888c`.
+
+The PostgreSQL case originally exposed unhandled idle-pool errors in both processes; regression coverage and the repeated real outage now pass. Current local gates are 368 unit, 98 PostgreSQL/service, 23 HTTP integration, and 15 queue tests, with lint, types, formatting, docs, and API/worker builds passing. Earlier updated-image runtime, routing, and BuildKit gates passed separately. No production availability, every possible crash boundary, or image-vulnerability freedom is claimed.
+
 ## Observability correlation verification
 
 The dedicated real Prometheus instance evaluated all 39 versioned dashboard target expressions, including new rollback preparation outcome/duration panels. Both service scrapes were up, the worker heartbeat was recent, and activation counters were present. Twenty-six query results contained samples; unexercised failure-specific series remain explicitly empty. `promtool check rules` validated all seven starter alert rules. The repeatable `pnpm acceptance:dashboard` command also rejects stale-heartbeat fixtures, and the full unit suite now passes 337 tests. Grafana rendering and externally delivered notifications are not established by query validation.

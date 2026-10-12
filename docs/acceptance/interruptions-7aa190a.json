@@ -1,0 +1,186 @@
+{
+  "schemaVersion": 1,
+  "scenario": "physical-single-host-interruption-acceptance",
+  "environment": {
+    "launchRailCommit": "7aa190ac81ba32dc3aac381c9ceb4aa55455fc04",
+    "workingTreeClean": true,
+    "operatingSystem": "Linux 6.18.49-1-MANJARO",
+    "architecture": "x64",
+    "processorModel": "Intel(R) Core(TM) i5-10300H CPU @ 2.50GHz",
+    "processorCount": 8,
+    "totalMemoryBytes": 16520802304
+  },
+  "sourceRevision": "7aa190ac81ba32dc3aac381c9ceb4aa55455fc04",
+  "database": "launchrail_clean_release_20261012",
+  "organizationId": "0702f6f3-eeb1-4334-814d-514596222212",
+  "projectId": "6effe34f-6437-4c60-adc4-92acfc35a0a7",
+  "profile": {
+    "workerLeaseMs": 60000,
+    "workerHeartbeatMs": 10000,
+    "workerReconciliationMs": 15000
+  },
+  "checks": [
+    {
+      "check": "api-readiness-true",
+      "durationMs": 1063.4
+    },
+    {
+      "check": "deployment-queued",
+      "durationMs": 10.6
+    },
+    {
+      "check": "api-readiness-true",
+      "durationMs": 1045.6
+    },
+    {
+      "check": "deployment-queued",
+      "durationMs": 33.1
+    },
+    {
+      "check": "worker-readiness-true",
+      "durationMs": 2073.3
+    },
+    {
+      "check": "deployment-active",
+      "durationMs": 5474.8
+    },
+    {
+      "check": "preview-200",
+      "durationMs": 108.3
+    },
+    {
+      "check": "unique-activation-event",
+      "deploymentId": "1dbf847e-a3a4-4c81-a0b6-53925d3c1192"
+    },
+    {
+      "check": "api-abrupt-exit-preserved-accepted-intent",
+      "deploymentId": "1dbf847e-a3a4-4c81-a0b6-53925d3c1192"
+    },
+    {
+      "check": "build-step-observed-before-worker-kill",
+      "durationMs": 1896.7
+    },
+    {
+      "check": "uncached-build-step-still-running-at-worker-fault",
+      "deploymentId": "144f16a9-6d77-47ab-8124-6235c4b7d952"
+    },
+    {
+      "check": "worker-readiness-true",
+      "durationMs": 1953.5
+    },
+    {
+      "check": "deployment-active",
+      "durationMs": 61703.4
+    },
+    {
+      "check": "preview-200",
+      "durationMs": 1413.3
+    },
+    {
+      "check": "unique-activation-event",
+      "deploymentId": "144f16a9-6d77-47ab-8124-6235c4b7d952"
+    },
+    {
+      "check": "worker-abrupt-exit-during-observed-build-recovered",
+      "deploymentId": "144f16a9-6d77-47ab-8124-6235c4b7d952"
+    },
+    {
+      "check": "worker-readiness-false",
+      "durationMs": 3.1
+    },
+    {
+      "check": "deployment-queued",
+      "durationMs": 5.2
+    },
+    {
+      "check": "preview-200",
+      "durationMs": 1.5
+    },
+    {
+      "check": "worker-readiness-true",
+      "durationMs": 1132.7
+    },
+    {
+      "check": "deployment-active",
+      "durationMs": 14343.4
+    },
+    {
+      "check": "preview-200",
+      "durationMs": 1011.9
+    },
+    {
+      "check": "unique-activation-event",
+      "deploymentId": "9336f667-7a6b-4052-94f3-fc69fbeafa5a"
+    },
+    {
+      "check": "redis-outage-preserved-accepted-intent-and-prior-preview",
+      "deploymentId": "9336f667-7a6b-4052-94f3-fc69fbeafa5a"
+    },
+    {
+      "check": "api-readiness-false",
+      "durationMs": 4.7
+    },
+    {
+      "check": "worker-readiness-false",
+      "durationMs": 2.6
+    },
+    {
+      "check": "preview-200",
+      "durationMs": 1.4
+    },
+    {
+      "check": "api-readiness-true",
+      "durationMs": 133.5
+    },
+    {
+      "check": "worker-readiness-true",
+      "durationMs": 8.2
+    },
+    {
+      "check": "deployment-active",
+      "durationMs": 2283.3
+    },
+    {
+      "check": "preview-200",
+      "durationMs": 2013.1
+    },
+    {
+      "check": "unique-activation-event",
+      "deploymentId": "921e67f5-4953-46cb-a39b-589272adc35d"
+    },
+    {
+      "check": "postgres-outage-fenced-readiness-and-recovered-new-work",
+      "deploymentId": "921e67f5-4953-46cb-a39b-589272adc35d"
+    },
+    {
+      "check": "preview-0",
+      "durationMs": 1.8
+    },
+    {
+      "check": "deployment-active",
+      "durationMs": 5.9
+    },
+    {
+      "check": "preview-200",
+      "durationMs": 203.5
+    },
+    {
+      "check": "deployment-active",
+      "durationMs": 8.5
+    },
+    {
+      "check": "proxy-outage-preserved-active-authority-and-restored-exact-route",
+      "deploymentId": "921e67f5-4953-46cb-a39b-589272adc35d"
+    },
+    {
+      "check": "project-runtime-inventory-converged",
+      "durationMs": 20723.2
+    }
+  ],
+  "limitations": [
+    "One documented boundary per component, not every possible crash point or simultaneous outage",
+    "Worker fault is injected after an observed uncached sleep build step; physical Docker-daemon loss is not injected",
+    "Local Compose service stops preserve volumes; cleanup removes only scenario runtimes through durable control/reconciliation",
+    "Unrelated services and original acceptance database are not deleted or reinitialized"
+  ]
+}

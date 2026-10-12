@@ -3,6 +3,7 @@ coverage
 dist
 node_modules
 pnpm-lock.yaml
-# Retain raw, unedited benchmark stdout; formatting would change the evidence bytes.
+# Retain generated evidence bytes; formatting would change their recorded hashes.
 docs/benchmarks/*.json
 docs/security/*.json
+docs/acceptance/*.json

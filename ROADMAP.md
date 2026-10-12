@@ -254,13 +254,15 @@ Request-boundary review removed raw URL/path/query/header/body data from automat
 
 ### Phase 14 — Failure recovery
 
-**Status:** In progress — managed runtime orphan recovery implemented; broader interruption acceptance remains
+**Status:** In progress — documented physical service matrix passed; final review and broader crash boundaries remain
 
 A guarded physical interruption scenario now owns its test processes and checks inspected Compose targets without deleting volumes. It covers accepted-intent API loss, observed in-flight build worker loss, Redis/database/proxy outages, readiness, exact-route recovery, activation-event uniqueness, and durable resource convergence. Unsafe-input guards are tested; real clean-clone execution remains an acceptance gate, not claimed complete merely by adding the command.
 
 The first clean-clone run verified accepted queued intent across an actual API `SIGKILL`, followed by one activation and the expected preview. It then rejected the driver's incomplete project-update body. The driver now sends the full versioned configuration, with regression coverage excluding response metadata; the full physical matrix remains pending until a successful report is retained.
 
 Physical worker loss during an observed uncached build and Redis outage both recovered to unique activations while retaining prior preview availability. PostgreSQL interruption then exposed unhandled idle-pool errors crashing both services. The shared client now handles these events without raw-error diagnostics and keeps readiness/database authority fail-closed; connection acquisition is bounded. Deterministic pool-error/recovery regressions pass; the complete physical matrix must be repeated before this gate closes.
+
+The repeat on clean published revision `7aa190a` passed all 39 checks: API loss after accepted intent, worker loss during observed build output, Redis loss during acceptance, PostgreSQL readiness fencing/reconnection with preserved preview, proxy restart with retained active authority, four unique activations, and zero remaining scenario runtimes. The unedited [physical report](docs/acceptance/interruptions-7aa190a.json) and clean-clone methodology are retained. All three CI jobs passed for that exact revision. This is one documented boundary per component, not every crash point or a production availability guarantee; host-wide Docker shutdown was not injected into unrelated services.
 
 Queue acceptance reliability: CI exposed a fixture deadlock when its deliberately held runtime occupied the only handler slot before duplicate wake-ups. The fixture now deterministically holds one of two supported slots and verifies duplicate processing in the other, preserving all assertions and deadlines. Two consecutive local runs passed all 15 queue/restart tests; physical interruption coverage remains a separate open gate.
 

@@ -49,6 +49,8 @@ After each interruption, check API and worker `/ready`, deployment history/event
 
 ## Physical interruption acceptance
 
+The [clean-revision 39-check matrix](acceptance/interruptions-7aa190a.json) passed all five documented service boundaries and scenario-runtime convergence after correcting idle PostgreSQL connection handling. See [acceptance methodology](acceptance-evidence.md) for configuration, clean-clone scope, and limitations.
+
 `pnpm acceptance:interruptions` owns its API/worker child processes and tests five documented boundaries on the dedicated Linux demonstration: API abrupt exit after accepted queued intent, worker abrupt exit during an observed uncached build step, Redis loss while accepting queued work, PostgreSQL loss while a prior preview is active, and proxy loss while database authority remains active. It verifies readiness, eventual activation, one activation event, exact preview content, and scenario-container cleanup through durable stop/reconciliation. It stops and restarts only inspected `launchrail` Compose service containers; volumes are never deleted.
 
 Start from a clean committed clone with a **new acceptance database**, fresh generated private configuration, synthetic `@launchrail.test` owner bootstrap, no LaunchRail-managed containers, no other worker, and free API/worker ports. The database name must use a `launchrail_` acceptance/release name. The API and worker must bind to `127.0.0.1`. Keep the original database and a private backup. Use a fresh dedicated BuildKit cache: a cached sleep step is rejected rather than misreported as an in-progress build fault. Do not clear unrelated caches to satisfy this requirement.

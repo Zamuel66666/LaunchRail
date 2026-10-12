@@ -20,7 +20,7 @@ The current [image dependency review](docs/image-review.md) records scanner find
 
 Do not publish exploit details, credentials, personal data, or live secrets in a GitHub issue.
 
-Use GitHub's private vulnerability-reporting feature for this repository when it is available. Include:
+GitHub private vulnerability reporting is enabled and was verified on 2026-10-12. Use the repository's **Security → Report a vulnerability** channel for confidential maintainer contact. Include:
 
 - The affected revision or release.
 - Preconditions and a minimal reproduction.
@@ -28,7 +28,7 @@ Use GitHub's private vulnerability-reporting feature for this repository when it
 - Any suggested mitigation.
 - Whether the issue is already public or actively exploited.
 
-If private vulnerability reporting is unavailable, open a public issue containing only a request for a private maintainer contact and no sensitive technical details. A dedicated security contact will be added before the first runnable release.
+If that private channel becomes unavailable, open a public issue containing only a request for a private maintainer contact and no sensitive technical details. Do not post credentials or exploit details publicly.
 
 Non-sensitive hardening suggestions and dependency-maintenance work may use ordinary issues and pull requests.
 

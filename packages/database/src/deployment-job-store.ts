@@ -982,6 +982,63 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
       );
   }
 
+  public async listFollowupDispatchable(
+    workItemId: string,
+  ): Promise<readonly DispatchableDeploymentJob[]> {
+    const [parent] = await this.db
+      .select({
+        deploymentId: deploymentJobs.deploymentId,
+        organizationId: deploymentJobs.organizationId,
+        kind: deploymentJobs.kind,
+        status: deploymentJobs.status,
+      })
+      .from(deploymentJobs)
+      .where(eq(deploymentJobs.id, workItemId))
+      .limit(1);
+    if (parent?.status !== "completed") return [];
+    const next =
+      parent.kind === "deployment.claim"
+        ? ({ kind: "deployment.prepare_source", state: "cloning" } as const)
+        : parent.kind === "deployment.prepare_source"
+          ? ({ kind: "deployment.build", state: "building" } as const)
+          : parent.kind === "deployment.build"
+            ? ({ kind: "deployment.start_runtime", state: "deploying" } as const)
+            : undefined;
+    if (next === undefined) return [];
+    const rows = await this.db
+      .select({
+        contractVersion: deploymentJobs.contractVersion,
+        id: deploymentJobs.id,
+        kind: deploymentJobs.kind,
+        traceParent: deployments.traceParent,
+      })
+      .from(deploymentJobs)
+      .innerJoin(
+        deployments,
+        and(
+          eq(deployments.id, deploymentJobs.deploymentId),
+          eq(deployments.organizationId, deploymentJobs.organizationId),
+        ),
+      )
+      .where(
+        and(
+          eq(deploymentJobs.deploymentId, parent.deploymentId),
+          eq(deploymentJobs.organizationId, parent.organizationId),
+          eq(deploymentJobs.kind, next.kind),
+          eq(deployments.state, next.state),
+          inArray(deploymentJobs.status, ["pending", "retry_wait"]),
+          lte(deploymentJobs.availableAt, sql`clock_timestamp()`),
+        ),
+      )
+      .limit(1);
+    return rows.map((row) => ({
+      contractVersion: row.contractVersion,
+      id: row.id,
+      kind: assertDeploymentJobKind(row.kind),
+      ...(row.traceParent === null ? {} : { traceParent: row.traceParent }),
+    }));
+  }
+
   public async claim(command: ClaimDeploymentJobCommand): Promise<ClaimDeploymentJobResult> {
     assertLeaseDuration(command.leaseDurationMs);
     assertWorkerId(command.workerId);

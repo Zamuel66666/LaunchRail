@@ -6,6 +6,8 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 
 ### Verification fixes
 
+- Removed reconciliation-interval waits between committed deployment stages. Immediate wake-ups retain PostgreSQL authority, strict identifier-only payloads, and durable trace metadata; unavailable publishing falls back to reconciliation without reversing success. Retry requests now wake accepted work immediately too.
+
 - Fixed a retry acknowledgement/history mismatch that crashed the timeline while formatting missing timestamps. Creation and retry now load authoritative history, and failed readback clearly states the deployment was already accepted rather than suggesting another mutation. Verified a real Node retry, non-empty runtime logs, viewer restrictions, and current screenshots.
 
 - Removed a scheduling-dependent deadlock in queue recovery acceptance by explicitly occupying one of two handler slots before duplicate wake-ups. Duplicate-effect, drain, and lease assertions and timeouts are unchanged; no production queue behavior was altered.

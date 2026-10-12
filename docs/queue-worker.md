@@ -22,12 +22,14 @@ BullMQ receives a strict, runtime-validated version 1 payload:
 
 No other field is accepted. In particular, Redis receives no organization/deployment authority, correlation metadata, repository/configuration data, environment-variable value, ciphertext, or key metadata. The worker uses `workItemId` to reload the deployment and organization through PostgreSQL.
 
-The only supported kinds are `deployment.claim` and `deployment.prepare_source`. Stable identifiers are derived from their kind and UUID:
+Supported kinds are `deployment.claim`, `deployment.prepare_source`, `deployment.build`, and `deployment.start_runtime`. Stable identifiers are derived from their kind and UUID:
 
 - Claim BullMQ/transition IDs: `deployment-claim-v1-<workItemId>` and `worker-claim-v1-<workItemId>`
 - Source BullMQ/success/failure IDs: `deployment-prepare-source-v1-<workItemId>`, `worker-source-ready-v1-<workItemId>`, and `worker-source-failure-v1-<workItemId>`
 
 The BullMQ ID intentionally contains no colon. Re-publishing the same work item therefore addresses the same wake-up rather than creating a new logical operation.
+
+After a stage commits completion, the worker reads only its eligible next work item from PostgreSQL and attempts an immediate wake-up. The read requires the same deployment and organization, the expected deployment state, pending/retry-wait status, and a due timestamp. Trace context remains separate broker metadata. A stale wake-up still has to pass normal claim fencing. Database/publisher failure, shutdown, or diagnostics failure cannot reverse committed completion; the periodic reconciler remains the fallback. The `launchrail_worker_stage_handoffs_total` counter uses the completed parent kind and `published`/`deferred` outcome, not deployment IDs. Manual creation and retry use the same best-effort acceptance boundary.
 
 ## Durable work-item lifecycle
 

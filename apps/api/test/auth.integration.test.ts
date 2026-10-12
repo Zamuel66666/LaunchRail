@@ -356,7 +356,12 @@ describe("deployment health history", () => {
         ];
       },
     } as unknown as DeploymentTransitionStore;
+    const retryWakeups: string[] = [];
     const server = buildServer({
+      deploymentWakeup: async (deployment) => {
+        retryWakeups.push(deployment.deploymentId);
+        if (retryWakeups.length > 1) throw new Error("PRIVATE_WAKEUP_CANARY");
+      },
       deploymentCreationStore: {
         async createDeployment(command: { organizationId: string; retryOfDeploymentId?: string }) {
           return {
@@ -397,6 +402,16 @@ describe("deployment health history", () => {
     });
     expect(retry.statusCode).toBe(200);
     expect(retry.json()).toMatchObject({ deployment: { sourceRevision: "a".repeat(40) } });
+    expect(retryWakeups).toEqual(["44444444-4444-4444-8444-444444444444"]);
+    const deferredRetry = await server.inject({
+      cookies: { launchrail_session: "session-token" },
+      headers: { origin: "http://localhost:3000" },
+      method: "POST",
+      url: `/v1/organizations/${organizationId}/deployments/${deploymentId}/retry`,
+    });
+    expect(deferredRetry.statusCode).toBe(200);
+    expect(deferredRetry.json()).toMatchObject({ deployment: { sourceRevision: "a".repeat(40) } });
+    expect(deferredRetry.body).not.toContain("PRIVATE_WAKEUP_CANARY");
     const rollback = await server.inject({
       cookies: { launchrail_session: "session-token" },
       headers: { origin: "http://localhost:3000" },

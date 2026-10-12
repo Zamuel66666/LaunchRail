@@ -31,6 +31,7 @@ import { DeploymentJobProcessor } from "./job-processor.js";
 import { DeploymentBuildProcessor } from "./build-processor.js";
 import { DeploymentClaimProcessor, type WorkerEventLogger } from "./processor.js";
 import { DeploymentJobReconciler } from "./reconciler.js";
+import { createStageHandoffHandler } from "./stage-handoff.js";
 import { DeploymentWorkerRuntime } from "./runtime.js";
 import { DeploymentSourceProcessor } from "./source-processor.js";
 import { DeploymentRuntimeProcessor } from "./runtime-processor.js";
@@ -225,7 +226,13 @@ export function createDeploymentWorkerComponents({
   const consumer = new BullMqDeploymentQueueConsumer({
     ...queueOptions,
     concurrency: config.WORKER_CONCURRENCY,
-    handler: (job, signal) => processor.process(job, signal).then(() => undefined),
+    handler: createStageHandoffHandler({
+      processor,
+      store,
+      publisher,
+      logger,
+      ...(metrics === undefined ? {} : { metrics }),
+    }),
     ...(metrics === undefined ? {} : { metrics }),
   });
   const reconciler = new DeploymentJobReconciler({

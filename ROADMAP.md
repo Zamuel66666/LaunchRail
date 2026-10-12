@@ -144,6 +144,7 @@ Delivered:
 - BullMQ used as an at-least-once wake-up channel while workers re-read PostgreSQL ownership and state before acting.
 - Deterministic capped exponential backoff, bounded job execution, durable retry exhaustion, and PostgreSQL-authoritative dead-letter handling.
 - Reconciliation for missing queued work, due work absent from Redis, and expired leases, without claiming exactly-once delivery.
+- Best-effort immediate stage wake-ups after committed completion, scoped to the eligible next PostgreSQL work item. Creation and retry also wake accepted work immediately; publisher failure preserves acceptance and leaves periodic reconciliation as the recovery path. Regression coverage includes stale/foreign/future work, cancellation, shutdown, and failed diagnostics.
 - An atomic, lease-fenced `queued` to `cloning` transition plus work-item completion, periodic operational heartbeat, and bounded graceful shutdown that stops new claims before draining active work.
 
 Exit evidence: [GitHub Actions run 31408251857](https://github.com/Zamuel66666/LaunchRail/actions/runs/31408251857) passed the strict-contract and worker unit checks, clean PostgreSQL migrations and transaction tests, and the disposable PostgreSQL/Redis suite for duplicate delivery, retries, timeout, fencing, dead letters, missing/expired work, operational heartbeats, graceful draining, and restart behavior. Duplicate jobs preserve authoritative state and append the demonstrated claim transition once.

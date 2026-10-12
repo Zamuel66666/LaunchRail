@@ -2,6 +2,7 @@ import {
   MembershipUpdateConflictError,
   ProjectNotFoundError,
   type DeploymentCreationStore,
+  type CreatedDeployment,
   type DeploymentJobStore,
   type DeploymentTransitionStore,
   type IdentityStore,
@@ -105,6 +106,28 @@ export function registerAuthRoutes(
   server: FastifyInstance,
   options: RegisterAuthRoutesOptions,
 ): void {
+  const wakeAcceptedDeployment = async (
+    request: FastifyRequest,
+    deployment: CreatedDeployment,
+    traceHeaders: TraceHeaders | undefined,
+  ): Promise<void> => {
+    try {
+      await options.deploymentWakeup?.({
+        ...deployment,
+        ...(traceHeaders === undefined ? {} : { traceHeaders }),
+      });
+    } catch {
+      // The intent is already committed. Reconciliation can restore its wake-up.
+      try {
+        request.log.warn({
+          event: "deployment_wakeup_deferred",
+          deploymentId: deployment.deploymentId,
+        });
+      } catch {
+        // Diagnostics must not turn an accepted intent into an HTTP failure.
+      }
+    }
+  };
   const authenticate = async (
     request: FastifyRequest,
     reply: FastifyReply,
@@ -978,10 +1001,7 @@ export function registerAuthRoutes(
             .code(503)
             .send(errorBody("deployment_unavailable", "Deployment creation is unavailable"));
         const traceHeaders = getRequestTraceHeaders(request);
-        await options.deploymentWakeup({
-          ...deployment,
-          ...(traceHeaders === undefined ? {} : { traceHeaders }),
-        });
+        await wakeAcceptedDeployment(request, deployment, traceHeaders);
         return reply.code(202).send({ deployment });
       },
     );
@@ -1011,16 +1031,21 @@ export function registerAuthRoutes(
           "deployment:control",
         );
         if (authorization === null) return;
-        return {
-          deployment: await options.deploymentCreationStore?.createDeployment({
-            actorUserId: authorization.principal.userId,
-            organizationId: request.params.organizationId,
-            retryOfDeploymentId: request.params.deploymentId,
-            ...(getRequestTraceHeaders(request)?.traceparent === undefined
-              ? {}
-              : { traceParent: getRequestTraceHeaders(request)!.traceparent! }),
-          }),
-        };
+        const deployment = await options.deploymentCreationStore?.createDeployment({
+          actorUserId: authorization.principal.userId,
+          organizationId: request.params.organizationId,
+          retryOfDeploymentId: request.params.deploymentId,
+          ...(getRequestTraceHeaders(request)?.traceparent === undefined
+            ? {}
+            : { traceParent: getRequestTraceHeaders(request)!.traceparent! }),
+        });
+        if (deployment === undefined)
+          return reply
+            .code(503)
+            .send(errorBody("deployment_unavailable", "Deployment creation is unavailable"));
+        const traceHeaders = getRequestTraceHeaders(request);
+        await wakeAcceptedDeployment(request, deployment, traceHeaders);
+        return { deployment };
       },
     );
   }

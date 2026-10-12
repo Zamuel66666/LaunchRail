@@ -82,6 +82,7 @@ describeWithDatabase("PostgresDeploymentJobStore", () => {
       readonly organizationId?: string;
       readonly projectId?: string;
       readonly state?: (typeof schema.deploymentState.enumValues)[number];
+      readonly traceParent?: string;
     } = {},
   ) {
     const organizationId = options.organizationId ?? randomUUID();
@@ -132,6 +133,7 @@ describeWithDatabase("PostgresDeploymentJobStore", () => {
         ? new Date()
         : null,
       id: deploymentId,
+      traceParent: options.traceParent,
       organizationId,
       projectId,
       sourceRevision,
@@ -296,6 +298,81 @@ describeWithDatabase("PostgresDeploymentJobStore", () => {
       })
       .where(eq(schema.deploymentJobs.id, workItemId));
   }
+
+  it.each([
+    ["deployment.claim", "deployment.prepare_source", "cloning"],
+    ["deployment.prepare_source", "deployment.build", "building"],
+    ["deployment.build", "deployment.start_runtime", "deploying"],
+  ] as const)(
+    "selects only eligible committed %s follow-ups with durable trace context",
+    async (parentKind, childKind, state) => {
+      const traceParent = "00-1234567890abcdef1234567890abcdef-1234567890abcdef-01";
+      const deployment = await seedDeployment({ state, traceParent });
+      const [parent] = await client.db
+        .insert(schema.deploymentJobs)
+        .values({
+          deploymentId: deployment.deploymentId,
+          organizationId: deployment.organizationId,
+          kind: parentKind,
+          maxAttempts: 3,
+          availableAt: new Date(0),
+        })
+        .returning();
+      const [child] = await client.db
+        .insert(schema.deploymentJobs)
+        .values({
+          deploymentId: deployment.deploymentId,
+          organizationId: deployment.organizationId,
+          kind: childKind,
+          maxAttempts: 3,
+          availableAt: new Date(0),
+        })
+        .returning();
+      expect(await store.listFollowupDispatchable(parent!.id)).toEqual([]);
+      await client.db
+        .update(schema.deploymentJobs)
+        .set({ status: "completed", attemptCount: 1, completedAt: sql`clock_timestamp()` })
+        .where(eq(schema.deploymentJobs.id, parent!.id));
+      const foreign = await seedDeployment({ state });
+      await client.db.insert(schema.deploymentJobs).values({
+        deploymentId: foreign.deploymentId,
+        organizationId: foreign.organizationId,
+        kind: childKind,
+        maxAttempts: 3,
+        availableAt: new Date(0),
+      });
+      expect(await store.listFollowupDispatchable(parent!.id)).toEqual([
+        { contractVersion: 1, id: child!.id, kind: childKind, traceParent },
+      ]);
+      expect(await store.listFollowupDispatchable(randomUUID())).toEqual([]);
+      await client.db
+        .update(schema.deploymentJobs)
+        .set({ availableAt: sql`clock_timestamp() + interval '1 hour'` })
+        .where(eq(schema.deploymentJobs.id, child!.id));
+      expect(await store.listFollowupDispatchable(parent!.id)).toEqual([]);
+      await client.db
+        .update(schema.deploymentJobs)
+        .set({ availableAt: new Date(0) })
+        .where(eq(schema.deploymentJobs.id, child!.id));
+      await client.db
+        .update(schema.deployments)
+        .set({ state: "cancelling" })
+        .where(eq(schema.deployments.id, deployment.deploymentId));
+      expect(await store.listFollowupDispatchable(parent!.id)).toEqual([]);
+      await client.db
+        .update(schema.deployments)
+        .set({ state })
+        .where(eq(schema.deployments.id, deployment.deploymentId));
+      const running = await store.claim({
+        expectedKind: childKind,
+        workItemId: child!.id,
+        workerId: "handoff-test",
+        leaseDurationMs: 60000,
+      });
+      expect(running.kind).toBe("claimed");
+      expect(await store.listFollowupDispatchable(parent!.id)).toEqual([]);
+    },
+  );
 
   it("idempotently ensures scoped claim work and discovers only missing queued deployments", async () => {
     const first = await seedDeployment();

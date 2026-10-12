@@ -12,7 +12,6 @@ Phase 2 implements the state model and transactional active-release promotion. L
 
 - **Deployment:** an immutable attempt for a project, repository revision, and configuration snapshot.
 
-Runtime startup reads health configuration and resource limits from that deployment snapshot, not the project's subsequently edited settings. The snapshot is validated before starting a container; missing or invalid historical snapshots fail explicitly rather than silently adopting current settings.
 - **Candidate:** a deployment that has not yet been promoted.
 - **Release:** a deployment that reached `active` at least once.
 - **Active release:** the single deployment a project's primary preview route is intended to serve.
@@ -21,6 +20,8 @@ Runtime startup reads health configuration and resource limits from that deploym
 - **Attempt:** one worker execution of the same persisted deployment, not a new deployment record.
 - **Work item:** PostgreSQL's durable record that a deployment step is pending, running, waiting to retry, completed, or dead-lettered.
 - **Lease:** an expiring exclusive claim fenced by a unique token; stale workers cannot heartbeat, complete, or fail work after ownership changes.
+
+Runtime startup reads health configuration and resource limits from that deployment snapshot, not the project's subsequently edited settings. The snapshot is validated before starting a container; missing or invalid historical snapshots fail explicitly rather than silently adopting current settings.
 
 ## State groups
 

@@ -7,6 +7,7 @@ import { request as httpRequest } from "node:http";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { benchmarkEnvironment } from "./benchmark-environment.mjs";
+import { acceptanceProjectUpdate } from "./acceptance-project-update.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
@@ -222,7 +223,7 @@ async function deploy() {
 async function setDockerfile(path) {
   const r = await request(`${base()}/projects/${project.id}`, {
     method: "PATCH",
-    body: JSON.stringify({ expectedVersion: project.version, dockerfilePath: path }),
+    body: JSON.stringify(acceptanceProjectUpdate(project, { dockerfilePath: path })),
   });
   project = r.project;
 }
@@ -238,7 +239,13 @@ async function preview(id, expected = 200) {
             response.setEncoding("utf8");
             response.on("data", (chunk) => {
               body += chunk;
+              if (Buffer.byteLength(body) > 65_536) {
+                response.destroy();
+                resolve(false);
+              }
             });
+            response.on("error", () => resolve(false));
+            response.on("aborted", () => resolve(false));
             response.on("end", () =>
               resolve(
                 response.statusCode === expected &&

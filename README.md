@@ -8,6 +8,14 @@ Exact-revision rollback and cleanup proof is retained in the [acceptance evidenc
 
 Current release verification also exercises real request-to-worker trace correlation and success/failure outcome metrics. A dedicated collector checks secret boundaries and export failure; bounded telemetry dropping does not discard deployment work. Dashboard review and the remaining whole-release gates are still open.
 
+### Observed local demo
+
+A browser-created Node deployment reached HTTP 200 and exposed its bounded runtime output after the startup and retry-readback corrections. This screenshot uses a synthetic acceptance project, not a production installation or release approval.
+
+![Active Node release with recorded health and runtime output](docs/assets/deployment-runtime-log.png)
+
+The [observed operations dashboard](docs/assets/operations-dashboard.png) renders real API and health-check data. Unexercised webhook series are visibly empty; the screenshot does not claim those paths were tested through Grafana.
+
 ## What LaunchRail does
 
 LaunchRail can build a public GitHub revision, run it in a restricted container, gate activation on an HTTP health check, and expose a local preview URL. Deployment creation is available through the project workspace for exact commit SHAs or through a configured signed push webhook.

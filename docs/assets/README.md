@@ -14,3 +14,5 @@ Before committing an asset:
 ## Current assets
 
 - `foundation-status-page.jpg` — Phase 1 web foundation page showing the available platform base and next milestone.
+- `deployment-runtime-log.png` — Real synthetic Node release after retry, showing recorded HTTP 200 and bounded runtime output. Captured from the actual viewport, without editing the image or hiding application controls.
+- `operations-dashboard.png` — Provisioned Grafana dashboard rendering local API and health-check observations; unexercised webhook series remain visibly empty. Incremental acceptance, not production or release approval.

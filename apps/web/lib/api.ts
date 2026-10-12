@@ -251,12 +251,31 @@ export async function createDeployment(
     body: JSON.stringify({ projectId, sourceRevision }),
     method: "POST",
   });
-  const deployments = await listDeployments(organizationId, projectId);
-  const deployment = deployments.find(
-    (item) => item.deploymentId === response.deployment.deploymentId,
-  );
-  if (deployment === undefined) throw new Error("The queued deployment is not visible yet");
-  return deployment;
+  return readAcceptedDeployment(organizationId, projectId, response.deployment.deploymentId);
+}
+
+export class DeploymentReadbackError extends Error {
+  public constructor() {
+    super(
+      "The deployment was accepted. Reopen the timeline to inspect it before issuing another request.",
+    );
+    this.name = "DeploymentReadbackError";
+  }
+}
+
+async function readAcceptedDeployment(
+  organizationId: string,
+  projectId: string,
+  deploymentId: string,
+): Promise<DeploymentHistorySummary> {
+  try {
+    const history = await listDeployments(organizationId, projectId);
+    const deployment = history.find((item) => item.deploymentId === deploymentId);
+    if (deployment !== undefined) return deployment;
+  } catch {
+    // Creation already committed; never imply that blindly repeating it is safe.
+  }
+  throw new DeploymentReadbackError();
 }
 
 export async function listDeploymentEvents(
@@ -350,11 +369,17 @@ export async function retryDeployment(
   organizationId: string,
   deploymentId: string,
 ): Promise<DeploymentHistorySummary> {
-  const response = await apiRequest<{ readonly deployment: DeploymentHistorySummary }>(
+  const response = await apiRequest<{
+    readonly deployment: { readonly deploymentId: string; readonly projectId: string };
+  }>(
     `/v1/organizations/${encodeURIComponent(organizationId)}/deployments/${encodeURIComponent(deploymentId)}/retry`,
     { method: "POST" },
   );
-  return response.deployment;
+  return readAcceptedDeployment(
+    organizationId,
+    response.deployment.projectId,
+    response.deployment.deploymentId,
+  );
 }
 
 export async function controlDeployment(

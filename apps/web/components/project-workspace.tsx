@@ -22,6 +22,7 @@ import {
   listAuditEvents,
   listWebhookDeliveries,
   retryDeployment,
+  DeploymentReadbackError,
   retryWebhookDelivery,
   controlDeployment,
   signOut,
@@ -73,6 +74,7 @@ function safeRepositoryUrl(value: string): string | null {
 }
 
 function actionError(error: unknown, fallback: string): string {
+  if (error instanceof DeploymentReadbackError) return error.message;
   if (error instanceof ApiError && error.status >= 400 && error.status < 500) {
     return error.message;
   }

@@ -6,6 +6,8 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 
 ### Verification fixes
 
+- Fixed a retry acknowledgement/history mismatch that crashed the timeline while formatting missing timestamps. Creation and retry now load authoritative history, and failed readback clearly states the deployment was already accepted rather than suggesting another mutation. Verified a real Node retry, non-empty runtime logs, viewer restrictions, and current screenshots.
+
 - Removed a scheduling-dependent deadlock in queue recovery acceptance by explicitly occupying one of two handler slots before duplicate wake-ups. Duplicate-effect, drain, and lease assertions and timeouts are unchanged; no production queue behavior was altered.
 
 - Health checks now tolerate Docker's pre-header connection-reset startup race within the existing deadline. A real Node example that failed before listening now activates with zero startup grace; continuous resets, aborted bodies, and unhealthy HTTP statuses remain failures.

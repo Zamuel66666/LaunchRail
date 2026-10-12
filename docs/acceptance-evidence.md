@@ -12,6 +12,8 @@ Both fault scenarios were then repeated without code changes against clean publi
 
 The production browser build connected to the real API and displayed the recorded rollback-failure guidance in deployment activity. Chromium axe-core WCAG 2 A/AA and WCAG 2.1 A/AA checks reported zero violations at the 390-pixel viewport, with no horizontal overflow. This is incremental regression evidence, not the complete keyboard/onboarding review.
 
+Visual inspection also exposed landing-page success checkmarks leaking into every history entry, including failed deployments and failed health. The history-specific style now removes those decorative marks while retaining explicit outcome text and ordered chronology. The rebuilt browser reported `content: none` for failed, cancelled, stopped, active, and rolled-back history entries; desktop automated accessibility checks remained free of WCAG A/AA violations. All 328 unit tests, lint, web type checking, formatting, documentation lint, and the production web build passed after the style correction. Full first-run and keyboard review remains open.
+
 Runtime snapshot acceptance additionally edits a project after an image is built and verifies runtime startup retains the deployment's original health path, port, CPU, memory, PID limit, and read-only policy. Invalid snapshots are dead-lettered before starting or probing a container. After this correction, 319 unit tests, 84 PostgreSQL/service tests, and 15 queue/restart tests passed. The rollback audit found a remaining implementation gap: prior runtime preparation and fresh health validation are not yet performed; the healthy retained-container scenario does not establish those requirements.
 
 ## 2026-10-11 verification

@@ -997,6 +997,14 @@ button:disabled {
   border-top: 1px solid #29465b;
 }
 
+.project-details li {
+  padding-left: 0;
+}
+
+.project-details li::before {
+  content: none;
+}
+
 .deployment-create-form {
   display: grid;
   gap: 0.55rem;

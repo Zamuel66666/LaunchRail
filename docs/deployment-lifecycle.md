@@ -11,6 +11,8 @@ Phase 2 implements the state model and transactional active-release promotion. L
 ## Terms
 
 - **Deployment:** an immutable attempt for a project, repository revision, and configuration snapshot.
+
+Runtime startup reads health configuration and resource limits from that deployment snapshot, not the project's subsequently edited settings. The snapshot is validated before starting a container; missing or invalid historical snapshots fail explicitly rather than silently adopting current settings.
 - **Candidate:** a deployment that has not yet been promoted.
 - **Release:** a deployment that reached `active` at least once.
 - **Active release:** the single deployment a project's primary preview route is intended to serve.
@@ -155,6 +157,8 @@ Cancellation is cooperative and safe at step boundaries:
 Once the activation transaction starts, cancellation loses the race and receives a conflict; the user may then stop or roll back the active release. Cleanup failures are tracked separately for reconciliation rather than leaving the deployment indefinitely in `cancelling`.
 
 ## Rollback
+
+Acceptance gap: the current rollback implementation atomically restores the latest superseded release records and route intent, but does not yet implement the runtime preparation and fresh health check described below. The passing lifecycle scenario used an already-running prior container; it does not prove missing or unhealthy target recovery. This remains an implementation requirement, not merely a documentation or test gate.
 
 Rollback accepts only a previously healthy `superseded` release belonging to the same project. LaunchRail verifies that its image and configuration are still available, starts or checks its runtime if necessary, and health-checks it before changing route intent.
 

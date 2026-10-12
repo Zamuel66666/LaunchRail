@@ -1,4 +1,9 @@
 import { randomUUID } from "node:crypto";
+import {
+  normalizeProjectConfiguration,
+  ProjectValidationError,
+  type ProjectRuntimeConfig,
+} from "@launchrail/domain";
 
 import type {
   AppendDeploymentBuildLogsCommand,
@@ -1541,19 +1546,34 @@ export class PostgresDeploymentJobStore implements DeploymentJobStore {
         )
         .for("update");
       if (project === undefined || artifact === undefined) return { kind: "build_not_ready" };
+      let configuration;
+      try {
+        configuration = normalizeProjectConfiguration({
+          name: "Deployment snapshot",
+          repositoryUrl: "https://github.com/launchrail/snapshot",
+          defaultBranch: deployment.configurationSnapshot.defaultBranch as string,
+          dockerfilePath: deployment.configurationSnapshot.dockerfilePath as string,
+          healthCheckPath: deployment.configurationSnapshot.healthCheckPath as string,
+          healthCheckPort: deployment.configurationSnapshot.healthCheckPort as number,
+          runtimeConfig: deployment.configurationSnapshot.runtimeConfig as ProjectRuntimeConfig,
+        });
+      } catch (error) {
+        if (error instanceof ProjectValidationError) return { kind: "invalid_runtime_snapshot" };
+        throw error;
+      }
       return {
         kind: "loaded",
         runtime: {
           deploymentId: deployment.id,
-          healthCheckPath: project.healthCheckPath,
-          healthCheckPort: project.healthCheckPort,
+          healthCheckPath: configuration.healthCheckPath,
+          healthCheckPort: configuration.healthCheckPort,
           imageId: artifact.imageId,
           imageReference: artifact.imageReference,
           manifestDigest: artifact.manifestDigest,
           organizationId: deployment.organizationId,
           platform: artifact.platform,
           projectId: project.id,
-          runtimeConfig: project.runtimeConfig,
+          runtimeConfig: configuration.runtimeConfig,
           workItemId: job.id,
         },
       };

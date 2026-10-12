@@ -349,7 +349,7 @@ export interface LoadDeploymentRuntimeInputCommand {
 
 export type LoadDeploymentRuntimeInputResult =
   | { readonly kind: "loaded"; readonly runtime: DeploymentRuntimeInput }
-  | { readonly kind: "build_not_ready" }
+  | { readonly kind: "build_not_ready" | "invalid_runtime_snapshot" }
   | { readonly kind: "state_mismatch"; readonly state: DeploymentState }
   | LeaseMutationFailure;
 

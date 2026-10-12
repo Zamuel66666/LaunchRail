@@ -2,6 +2,8 @@
 
 This is an incremental verification record, not a release approval. Remaining gates are tracked in the [release checklist](release-checklist.md).
 
+Runtime snapshot acceptance additionally edits a project after an image is built and verifies runtime startup retains the deployment's original health path, port, CPU, memory, PID limit, and read-only policy. Invalid snapshots are dead-lettered before starting or probing a container. After this correction, 319 unit tests, 84 PostgreSQL/service tests, and 15 queue/restart tests passed. The rollback audit found a remaining implementation gap: prior runtime preparation and fresh health validation are not yet performed; the healthy retained-container scenario does not establish those requirements.
+
 ## 2026-10-11 verification
 
 The supported Linux host ran Node 22.23.2, pnpm 11.9.0, Docker Engine 29.7.2, Buildx 0.36.1, pinned BuildKit 0.32.2, PostgreSQL 18, Redis 8, and pinned Traefik 3.3.6. A separate `launchrail_release_acceptance` database held synthetic identities and deployment history; normal database suites used the disposable development database.

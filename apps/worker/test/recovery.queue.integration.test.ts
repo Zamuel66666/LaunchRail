@@ -115,7 +115,19 @@ describeWithServices("deployment worker restart recovery", () => {
     });
     const sourceRevision = randomUUID().replaceAll("-", "").padEnd(40, "0");
     await client.db.insert(schema.deployments).values({
-      configurationSnapshot: { environment: [] },
+      configurationSnapshot: {
+        environment: [],
+        defaultBranch: "main",
+        dockerfilePath: "Dockerfile",
+        healthCheckPath: "/",
+        healthCheckPort: 3000,
+        runtimeConfig: {
+          cpuMillicores: 500,
+          memoryMegabytes: 512,
+          processLimit: 128,
+          readOnlyRootFilesystem: true,
+        },
+      },
       id: deploymentId,
       organizationId,
       projectId,

@@ -111,7 +111,19 @@ describeWithDatabase("PostgresDeploymentJobStore", () => {
     }
 
     await client.db.insert(schema.deployments).values({
-      configurationSnapshot: { projectVersion: 1 },
+      configurationSnapshot: {
+        projectVersion: 1,
+        defaultBranch: "main",
+        dockerfilePath: "Dockerfile",
+        healthCheckPath: "/",
+        healthCheckPort: 3000,
+        runtimeConfig: {
+          cpuMillicores: 500,
+          memoryMegabytes: 512,
+          processLimit: 128,
+          readOnlyRootFilesystem: true,
+        },
+      },
       healthCheckedAt: ["active", "superseded", "rolled_back"].includes(options.state ?? "queued")
         ? new Date()
         : null,
@@ -1462,6 +1474,19 @@ describeWithDatabase("PostgresDeploymentJobStore", () => {
     if (runtimeJob === undefined) throw new Error("Expected runtime start work");
     const runtimeClaim = await claim(runtimeJob.id, { expectedKind: "deployment.start_runtime" });
     if (runtimeClaim.kind !== "claimed") throw new Error("Expected runtime work lease");
+    await client.db
+      .update(schema.projects)
+      .set({
+        healthCheckPath: "/changed",
+        healthCheckPort: 4000,
+        runtimeConfig: {
+          cpuMillicores: 1000,
+          memoryMegabytes: 1024,
+          processLimit: 256,
+          readOnlyRootFilesystem: false,
+        },
+      })
+      .where(eq(schema.projects.id, deployment.projectId));
     await expect(
       store.loadRuntimeInput({
         leaseToken: runtimeClaim.lease.leaseToken,
@@ -1473,6 +1498,14 @@ describeWithDatabase("PostgresDeploymentJobStore", () => {
         deploymentId: deployment.deploymentId,
         imageId: image.imageId,
         manifestDigest: image.manifestDigest,
+        healthCheckPath: "/",
+        healthCheckPort: 3000,
+        runtimeConfig: {
+          cpuMillicores: 500,
+          memoryMegabytes: 512,
+          processLimit: 128,
+          readOnlyRootFilesystem: true,
+        },
       },
     });
     await expect(

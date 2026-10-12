@@ -47,6 +47,7 @@ function createProcessor(
   healthGraceMs = 0,
   applyRoute: () => Promise<void> = async () => undefined,
   jobTimeoutMs = 10000,
+  invalidSnapshot = false,
 ) {
   const check = vi.fn(healthCheck);
   const recordHealthCheck = vi.fn(async () => undefined);
@@ -86,7 +87,11 @@ function createProcessor(
         transition: {} as never,
       })),
       failRuntime,
-      loadRuntimeInput: vi.fn(async () => ({ kind: "loaded" as const, runtime })),
+      loadRuntimeInput: vi.fn(async () =>
+        invalidSnapshot
+          ? { kind: "invalid_runtime_snapshot" as const }
+          : { kind: "loaded" as const, runtime },
+      ),
       recordHealthCheck,
     } as never,
     transitionStore: {
@@ -99,6 +104,30 @@ function createProcessor(
 }
 
 describe("DeploymentRuntimeProcessor health gate", () => {
+  it("dead-letters an invalid immutable snapshot without starting or probing a runtime", async () => {
+    const { processor, start, check, failRuntime, promote } = createProcessor(
+      async () => ({ durationMs: 1, statusCode: 200 }),
+      0,
+      async () => undefined,
+      10000,
+      true,
+    );
+    await expect(processor.process(job, new AbortController().signal)).resolves.toBe(
+      "dead_lettered",
+    );
+    expect(start).not.toHaveBeenCalled();
+    expect(check).not.toHaveBeenCalled();
+    expect(promote).not.toHaveBeenCalled();
+    expect(failRuntime).toHaveBeenCalledWith(
+      expect.objectContaining({
+        retryable: false,
+        failure: {
+          category: "internal_invariant_violation",
+          message: "The deployment runtime snapshot is invalid",
+        },
+      }),
+    );
+  });
   it("keeps the total job budget available for startup grace and health", async () => {
     const { processor, check, promote } = createProcessor(
       async () => ({ durationMs: 1, statusCode: 200 }),

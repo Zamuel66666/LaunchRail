@@ -158,12 +158,15 @@ export class DeploymentRuntimeProcessor {
         leaseToken: lease.leaseToken,
         workItemId: lease.workItemId,
       });
-      if (loaded.kind === "build_not_ready")
+      if (loaded.kind === "build_not_ready" || loaded.kind === "invalid_runtime_snapshot")
         return await this.persistFailure(
           lease,
           {
             category: "internal_invariant_violation",
-            message: "The deployment image is not ready to run",
+            message:
+              loaded.kind === "invalid_runtime_snapshot"
+                ? "The deployment runtime snapshot is invalid"
+                : "The deployment image is not ready to run",
             retryable: false,
           },
           signal,

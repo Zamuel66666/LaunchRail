@@ -13,7 +13,7 @@ describe("reviewed demonstration image references", () => {
         expect(line.trim()).toMatch(/^image: [a-z0-9./_-]+:[a-z0-9._-]+@sha256:[0-9a-f]{64}$/u);
     },
   );
-  it.each(["healthy", "unhealthy", "node", "python"])(
+  it.each(["healthy", "unhealthy", "node", "python", "slow-build"])(
     "pins the %s example base by digest",
     (name) => {
       const dockerfile = readFileSync(

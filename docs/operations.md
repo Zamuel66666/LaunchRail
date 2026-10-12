@@ -46,6 +46,22 @@ The 2026-10-12 rehearsal restored a private custom-format archive of the synthet
 
 After each interruption, check API and worker `/ready`, deployment history/events, queue/reconciliation metrics, and the exact preview hostname. `/health` proves process liveness only. Readiness does not prove proxy availability or correct application content.
 
+## Physical interruption acceptance
+
+`pnpm acceptance:interruptions` owns its API/worker child processes and tests five documented boundaries on the dedicated Linux demonstration: API abrupt exit after accepted queued intent, worker abrupt exit during an observed uncached build step, Redis loss while accepting queued work, PostgreSQL loss while a prior preview is active, and proxy loss while database authority remains active. It verifies readiness, eventual activation, one activation event, exact preview content, and scenario-container cleanup through durable stop/reconciliation. It stops and restarts only inspected `launchrail` Compose service containers; volumes are never deleted.
+
+Start from a clean committed clone with a **new acceptance database**, fresh generated private configuration, synthetic `@launchrail.test` owner bootstrap, no LaunchRail-managed containers, no other worker, and free API/worker ports. The database name must use a `launchrail_` acceptance/release name. The API and worker must bind to `127.0.0.1`. Keep the original database and a private backup. Use a fresh dedicated BuildKit cache: a cached sleep step is rejected rather than misreported as an in-progress build fault. Do not clear unrelated caches to satisfy this requirement.
+
+After installing, setting up services, migrating, bootstrapping the owner, and building the clone:
+
+```bash
+LAUNCHRAIL_ACCEPTANCE_ALLOW_MUTATION=DEDICATED_LOCAL_ACCEPTANCE \
+LAUNCHRAIL_ACCEPTANCE_SOURCE_REVISION=FULL_PUBLISHED_COMMIT_SHA \
+  pnpm acceptance:interruptions > /absolute/private/interruption-report.json
+```
+
+The command reads `.env` but never publishes passwords/cookies/key material. Child logs live in a private generated `output/interruptions-*` directory; successful stdout is a machine-readable report. It restores scoped stopped services and drains its processes even on failure. Failed-scenario records/resources are preserved for diagnosis; inspect them before repeating. One boundary per component is not proof of every crash point, simultaneous outages, physical Docker-host loss, or an availability SLA.
+
 ## Alerts and recovery ownership
 
 The optional [observability stack](observability.md) includes starter worker-availability/heartbeat, queue backlog, dead-letter, runtime-orphan, route-drift, and deployment-failure alerts. They are local operator aids, not externally delivered incident notifications. Review alert labels and thresholds against the configured heartbeat/reconciliation intervals. Keep the Docker host and privileged BuildKit daemon trusted, inventory managed resources before cleanup, and preserve unrelated containers.

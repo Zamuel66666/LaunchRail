@@ -1,0 +1,114 @@
+{
+  "schemaVersion": 1,
+  "scenario": "real-deployment-control-lifecycle",
+  "rollbackFault": "paused",
+  "startedAt": "2026-10-12T06:00:33.585Z",
+  "environment": {
+    "launchRailCommit": "a674b29c74764af34a1e7556407824b6bbdca3fd",
+    "workingTreeClean": true,
+    "operatingSystem": "Linux 6.18.49-1-MANJARO",
+    "architecture": "x64",
+    "processorModel": "Intel(R) Core(TM) i5-10300H CPU @ 2.50GHz",
+    "processorCount": 8,
+    "totalMemoryBytes": 16520802304
+  },
+  "projectId": "954b8e3a-8813-40eb-a2f3-32a9065f0fa2",
+  "sourceRevision": "a674b29c74764af34a1e7556407824b6bbdca3fd",
+  "deployments": {
+    "first": "a2c4cee8-cbcf-4d9f-aa54-f7a01c07d81c",
+    "unhealthy": "29001956-f0ae-4fe4-9d8f-84cd8a46aa3d",
+    "second": "f620e984-e50a-47cd-9024-f496e3ebda1a",
+    "cancelled": "f3a9c81a-2584-4e88-9fa2-cf7ea06acbe7"
+  },
+  "evidence": [
+    {
+      "check": "a2c4cee8-cbcf-4d9f-aa54-f7a01c07d81c:active",
+      "durationMs": 42233.14707399999
+    },
+    {
+      "check": "a2c4cee8-cbcf-4d9f-aa54-f7a01c07d81c:preview-http-200",
+      "durationMs": 1766.714651000002
+    },
+    {
+      "check": "29001956-f0ae-4fe4-9d8f-84cd8a46aa3d:deployment_failed",
+      "durationMs": 47434.238733000006
+    },
+    {
+      "check": "a2c4cee8-cbcf-4d9f-aa54-f7a01c07d81c:active",
+      "durationMs": 8.330401999992318
+    },
+    {
+      "check": "a2c4cee8-cbcf-4d9f-aa54-f7a01c07d81c:preview-http-200",
+      "durationMs": 2.4552870000043185
+    },
+    {
+      "check": "f620e984-e50a-47cd-9024-f496e3ebda1a:active",
+      "durationMs": 55598.107415000006
+    },
+    {
+      "check": "a2c4cee8-cbcf-4d9f-aa54-f7a01c07d81c:superseded",
+      "durationMs": 7.294701000006171
+    },
+    {
+      "check": "f620e984-e50a-47cd-9024-f496e3ebda1a:preview-http-200",
+      "durationMs": 2005.4773639999912
+    },
+    {
+      "check": "rollback-target-paused",
+      "deploymentId": "a2c4cee8-cbcf-4d9f-aa54-f7a01c07d81c"
+    },
+    {
+      "check": "rollback-unhealthy-retains-current",
+      "durationMs": 17753.18066099999
+    },
+    {
+      "check": "f620e984-e50a-47cd-9024-f496e3ebda1a:active",
+      "durationMs": 8.381514000007883
+    },
+    {
+      "check": "f620e984-e50a-47cd-9024-f496e3ebda1a:preview-http-200",
+      "durationMs": 2.341606000001775
+    },
+    {
+      "check": "f620e984-e50a-47cd-9024-f496e3ebda1a:rolled_back",
+      "durationMs": 29308.79647999999
+    },
+    {
+      "check": "a2c4cee8-cbcf-4d9f-aa54-f7a01c07d81c:active",
+      "durationMs": 6.091520999994827
+    },
+    {
+      "check": "a2c4cee8-cbcf-4d9f-aa54-f7a01c07d81c:preview-http-200",
+      "durationMs": 6773.580789
+    },
+    {
+      "check": "f620e984-e50a-47cd-9024-f496e3ebda1a:preview-http-404",
+      "durationMs": 0.29207100000348873
+    },
+    {
+      "check": "f3a9c81a-2584-4e88-9fa2-cf7ea06acbe7:cancelled",
+      "durationMs": 8498.481391000008
+    },
+    {
+      "check": "a2c4cee8-cbcf-4d9f-aa54-f7a01c07d81c:active",
+      "durationMs": 9.197810000012396
+    },
+    {
+      "check": "a2c4cee8-cbcf-4d9f-aa54-f7a01c07d81c:preview-http-200",
+      "durationMs": 2.223280000005616
+    },
+    {
+      "check": "a2c4cee8-cbcf-4d9f-aa54-f7a01c07d81c:stopped",
+      "durationMs": 10.025754999980563
+    },
+    {
+      "check": "a2c4cee8-cbcf-4d9f-aa54-f7a01c07d81c:preview-http-404",
+      "durationMs": 2517.9798890000093
+    },
+    {
+      "check": "dedicated-project-runtime-cleanup",
+      "durationMs": 16775.25476499999
+    }
+  ],
+  "outcome": "passed"
+}

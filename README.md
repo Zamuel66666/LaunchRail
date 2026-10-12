@@ -4,6 +4,8 @@
 
 > **Phases 0–9 are Available; Phases 10–16 are undergoing release acceptance.** The core public-GitHub deployment pipeline has been exercised against real PostgreSQL, Redis, BuildKit, Docker, and Traefik. Verification fixed atomic deployment creation, immutable runtime settings, non-root image permissions, startup readiness, source cleanup, and loopback routing. Durable rollback now recreates missing prior containers and rejects unhealthy targets while retaining the current release. Broad interruption recovery, complete accessible onboarding, controlled benchmark results, and final release evidence remain; this is a single-host demonstration, not a production hosting service.
 
+Exact-revision rollback and cleanup proof is retained in the [acceptance evidence](docs/acceptance-evidence.md), including unedited missing-container and unhealthy-container reports.
+
 ## What LaunchRail does
 
 LaunchRail can build a public GitHub revision, run it in a restricted container, gate activation on an HTTP health check, and expose a local preview URL. Deployment creation is available through the project workspace for exact commit SHAs or through a configured signed push webhook.

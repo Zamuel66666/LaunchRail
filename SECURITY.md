@@ -12,6 +12,10 @@ Automatic request logging keeps only bounded IDs, methods, and route templates; 
 
 The first implementation will target a trusted operator on a local Docker host. Docker daemon access is effectively host-level privilege; container restrictions reduce workload risk but do not turn the initial design into a hardened hostile multi-tenant platform.
 
+## Image dependency review
+
+The current [image dependency review](docs/image-review.md) records scanner findings, updates, and residual risk requiring release-owner review. Package/module matches are not proof of exploit reachability; they are not silently dismissed either.
+
 ## Reporting a vulnerability
 
 Do not publish exploit details, credentials, personal data, or live secrets in a GitHub issue.

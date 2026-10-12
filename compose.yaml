@@ -4,7 +4,7 @@ services:
   buildkit:
     profiles: [build]
     container_name: launchrail-buildkit
-    image: moby/buildkit:v0.32.2@sha256:28a898719c18a33f4e8000685287fa36fd0dd9560c6440227d3a732d79bb41d8
+    image: moby/buildkit:v0.34.0@sha256:b059f8d7226d0b326bc871af489a5dddf65e36af4d20d14251b072974d9ee87c
     privileged: true
     mem_limit: 2g
     memswap_limit: 2g
@@ -16,7 +16,7 @@ services:
     restart: unless-stopped
 
   postgres:
-    image: postgres:18-alpine
+    image: postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-launchrail}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-launchrail_dev_only}
@@ -36,7 +36,7 @@ services:
       - postgres-data:/var/lib/postgresql
 
   redis:
-    image: redis:8-alpine
+    image: redis:8-alpine@sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0
     command:
       - redis-server
       - --appendonly
@@ -59,7 +59,7 @@ services:
       - redis-data:/data
 
   traefik:
-    image: traefik:v3.3.6@sha256:5809533c5b3fdfd961aa20af1cfbbc7d0e8ce3c4c3b1ee9acb0da00b7871c53b
+    image: traefik:v3.7.14@sha256:575fa15b135078fe5e50aa847987d96dbddd7b093c172429618404df73f3fa7c
     command:
       - --providers.file.directory=/etc/traefik/dynamic
       - --providers.file.watch=true

@@ -6,6 +6,8 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 
 ### Verification fixes
 
+- Updated and digest-pinned demonstration service/example images, added pin regression coverage, and recorded image vulnerability findings and residual risks. The dependency audit and image scan are distinct gates; current upstream images are not claimed vulnerability-free.
+
 - Hardened automatic request logging against path/query and arbitrary-header/body leaks. Bounded webhook raw-byte buffering rejects oversized chunked uploads before completion and correctly covers query-string URLs. Updated outdated security documentation to reflect the implemented pipeline and its remaining trusted-host limitations.
 
 - Removed reconciliation-interval waits between committed deployment stages. Immediate wake-ups retain PostgreSQL authority, strict identifier-only payloads, and durable trace metadata; unavailable publishing falls back to reconciliation without reversing success. Retry requests now wake accepted work immediately too.

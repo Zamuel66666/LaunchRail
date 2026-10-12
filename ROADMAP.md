@@ -282,6 +282,8 @@ Exit gate: clean setup is independently reproducible, controlled results include
 
 Dispatch refinement: clean published revision `c43d5d8` passed a separate warm-up and five measured deployments of the same example/source revision and configured limits. All activated; the observed median was 2.696 seconds after removing periodic stage waits. Unedited reports and post-batch host/profile data are published. Cache/host differences and the five-sample limitation preclude a production speed-up or stable p95 claim.
 
+Image review: all Compose/example images are digest-pinned. Current stable Traefik, BuildKit, Grafana, Node, and Python updates reduce observed advisories; upgraded proxy routing and eight BuildKit acceptance cases passed. The generated [image review](docs/image-review.md) retains every HIGH/CRITICAL finding and explicitly leaves residual-risk review/owner acceptance open. Scanner results are not represented as vulnerability-free.
+
 ## Change discipline
 
 Each session selects one incomplete milestone, preserves unrelated changes, adds behavior tests and documentation together, runs applicable gates, and publishes one to four coherent Conventional Commits. The roadmap is updated only when evidence changes a phase's status.

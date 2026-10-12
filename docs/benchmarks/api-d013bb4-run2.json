@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "scenario": "api-health-latency",
+  "startedAt": "2026-10-12T13:01:42.858Z",
+  "target": "http://127.0.0.1:4100/health",
+  "node": "v22.23.2",
+  "platform": "linux",
+  "architecture": "x64",
+  "environment": {
+    "launchRailCommit": "d013bb47f0f684679963a710b89b2fa3df143061",
+    "workingTreeClean": true,
+    "operatingSystem": "Linux 6.18.49-1-MANJARO",
+    "architecture": "x64",
+    "processorModel": "Intel(R) Core(TM) i5-10300H CPU @ 2.50GHz",
+    "processorCount": 8,
+    "totalMemoryBytes": 16520802304
+  },
+  "warmupRequests": 100,
+  "measuredRequests": 1000,
+  "concurrency": 10,
+  "elapsedSeconds": 0.837,
+  "requestsPerSecond": 1195.24,
+  "latencyMs": {
+    "min": 2.602,
+    "median": 7.934,
+    "p95": 15.265,
+    "max": 22.458
+  },
+  "non2xxResponses": 0,
+  "invalidOrFailedResponses": 0,
+  "warmupInvalidOrFailedResponses": 0,
+  "statusCounts": {
+    "200": 1000
+  },
+  "limitations": [
+    "Measures loopback process liveness only; it does not measure queue or database readiness.",
+    "Record host load and LaunchRail commit separately; do not compare uncontrolled environments."
+  ]
+}

@@ -1,0 +1,60 @@
+{
+  "scenario": "benchmark-host-profile",
+  "capturedAt": "2026-10-12T12:58:21.312Z",
+  "sampling": "At measured-batch start; runtime settings read from the dedicated project API",
+  "environment": {
+    "launchRailCommit": "d013bb47f0f684679963a710b89b2fa3df143061",
+    "workingTreeClean": true,
+    "operatingSystem": "Linux 6.18.49-1-MANJARO",
+    "architecture": "x64",
+    "processorModel": "Intel(R) Core(TM) i5-10300H CPU @ 2.50GHz",
+    "processorCount": 8,
+    "totalMemoryBytes": 16520802304
+  },
+  "versions": {
+    "node": "v22.23.2",
+    "pnpm": "11.9.0",
+    "docker": "29.7.2",
+    "buildx": "github.com/docker/buildx v0.36.1 1d8dde89b8aba914e05e45366770736fea1fd690",
+    "buildkitImage": "moby/buildkit:v0.32.2@sha256:28a898719c18a33f4e8000685287fa36fd0dd9560c6440227d3a732d79bb41d8",
+    "postgres": "postgres (PostgreSQL) 18.6",
+    "redis": "Redis server v=8.10.2 sha=00000000:1 malloc=jemalloc-5.3.0 bits=64 build=6583f6419e33bdeb",
+    "traefik": "Version:      3.3.6\nCodename:     saintnectaire\nGo version:   go1.23.8\nBuilt:        2025-04-18T09:18:47Z\nOS/Arch:      linux/amd64"
+  },
+  "storage": "NVMe SSD; observed non-rotational local filesystem",
+  "profile": {
+    "apiPort": 4100,
+    "workerConcurrency": 2,
+    "workerHealthGraceMs": 0,
+    "workerReconciliationMs": 15000,
+    "workerHeartbeatMs": 10000,
+    "buildkitCpuLimit": 2,
+    "buildkitMemoryBytes": 2147483648,
+    "runtimeConfig": {
+      "processLimit": 128,
+      "cpuMillicores": 500,
+      "memoryMegabytes": 512,
+      "readOnlyRootFilesystem": true
+    },
+    "healthCheckPath": "/",
+    "healthCheckPort": 3000,
+    "telemetry": "INFO structured logs, OTLP enabled; local Prometheus/Grafana running",
+    "cache": "Existing BuildKit base/layer cache; one unmeasured exact-revision warm-up before five sequential measured deployments",
+    "source": "Public GitHub exact commit; each deployment resolves and clones independently"
+  },
+  "background": {
+    "otherContainers": 3,
+    "description": "Unrelated user services left running; no concurrent local tests or deployment workloads during the measured batch",
+    "loadAverage": [
+      3.02,
+      2.61,
+      2.36
+    ],
+    "freeMemoryBytes": 5069197312
+  },
+  "limitations": [
+    "Shared development laptop, not a dedicated production or saturation host",
+    "Five deployment samples cannot establish a stable population p95; nearest-rank p95 is the maximum sample",
+    "Cache not cleared; no cold-build performance claim"
+  ]
+}

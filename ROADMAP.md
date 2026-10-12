@@ -271,9 +271,9 @@ Incremental browser evidence: landing, walkthrough, sign-in, signed-out workspac
 
 ### Phase 16 — Benchmarks and public release
 
-**Status:** In progress — benchmark tooling and release checklist implemented; controlled results and release evidence remain
+**Status:** In progress — exact-revision local API/deployment baselines published; isolated scenarios and clean-release evidence remain
 
-The versioned `pnpm benchmark:api` scenario reports loopback health latency, throughput, status counts, and environment metadata as JSON. `pnpm benchmark:deployment` can measure 1–10 sequential exact-SHA attempts on an explicitly opted-in dedicated local project, reports event-derived queue/source/build/runtime/health stage durations and median/p95 summaries, and records every outcome. Reports include the current commit when available, working-tree cleanliness, OS, CPU model/count, and memory. Each run creates durable records and may replace the active release; it deliberately does not auto-clean resources. The public release checklist defines clean-clone, integration, recovery, benchmark, security, review, and publishing gates. Repeated isolated queue/build/recovery scenarios and all measured results remain absent until run on a controlled host.
+The versioned `pnpm benchmark:api` and `pnpm benchmark:deployment` scenarios retain raw correctness and timing reports. Clean published revision `d013bb4` passed five sequential warm-cache deployments and three 1,000-request API runs after separate warm-ups; unedited reports, exact service/resource settings, host load, cache conditions, and sample-size limitations are published in [benchmark methodology](docs/benchmarks.md). The deployment median was 44.467 seconds, with periodic durable stage waits dominating the intervals. Each run creates durable records and may replace the active release; it deliberately does not auto-clean resources. The public release checklist still requires full clean-clone, recovery, security, independent review, and publishing evidence. Repeated isolated queue/build/recovery scenarios remain open; these shared-host local baselines are not production-capacity evidence.
 
 Exit gate: clean setup is independently reproducible, controlled results include methodology and environment, known limitations are current, and release notes describe user outcomes.
 

@@ -2,9 +2,27 @@
 
 ## Current status
 
-No benchmarks have been run and LaunchRail publishes no performance results. Versioned API liveness and opt-in end-to-end deployment benchmark scripts are available; the deployment report derives stage durations from persisted lifecycle event timestamps. Repeated stage-isolated queue, build/recovery, webhook, and resource scenarios remain planned. Do not treat a script or its output as production-capacity evidence.
+Initial exact-revision API liveness and warm-cache deployment baselines are retained below. They establish measured local behavior, not production capacity or a stable service-level objective. Repeated stage-isolated queue, build/recovery, webhook, and resource scenarios remain planned.
 
 This document prevents unsupported claims by defining how results must be collected and reported.
+
+## Published local baseline — `d013bb4`
+
+All reports record clean published revision `d013bb47f0f684679963a710b89b2fa3df143061`, whose [three CI jobs passed](https://github.com/Zamuel66666/LaunchRail/actions/runs/38251914782). The host was a shared Linux development laptop, not a dedicated production host: eight logical i5-10300H CPUs, approximately 16 GiB RAM, and NVMe storage. Three unrelated user containers remained running. No local test suites or other deployment workloads ran during the measured batch; normal metrics, JSON logging, OTLP, and local dashboard services remained enabled. The [host/profile record](benchmarks/host-d013bb4.json) retains exact service versions, resource settings, observed load/memory, and limitations.
+
+One [unmeasured exact-revision deployment](benchmarks/deployment-warmup-d013bb4.json) warmed the existing BuildKit cache, followed by [five sequential measured deployments](benchmarks/deployment-d013bb4.json) of the repository's healthy example, with two configured worker slots, a 15-second reconciliation interval, zero startup grace, 500-millicore/512-MiB/128-process read-only runtimes, and a pinned two-CPU/two-GiB BuildKit daemon. All five activated, with no failed or timed-out runs. Observed client elapsed time ranged from 36.393 to 45.548 seconds; the median was 44.467 seconds. Event-derived stage medians were 20 ms initial queue wait, 16.261 seconds source interval, 13.556 seconds build interval, 14.677 seconds runtime interval, and 22 ms health/promotion. These intervals include durable stage dispatch waits, not just adapter execution. With five samples, the nearest-rank p95 is the maximum, not a stable population estimate.
+
+Three separate API runs each used 100 warm-up and 1,000 measured requests with ten concurrent clients. Every warm-up and measured response passed the health JSON checks:
+
+| Raw run                                   | Median latency | p95 latency | Requests/second |
+| ----------------------------------------- | -------------- | ----------- | --------------- |
+| [Run 1](benchmarks/api-d013bb4-run1.json) | 6.870 ms       | 13.737 ms   | 1,342.71        |
+| [Run 2](benchmarks/api-d013bb4-run2.json) | 7.934 ms       | 15.265 ms   | 1,195.24        |
+| [Run 3](benchmarks/api-d013bb4-run3.json) | 6.219 ms       | 12.326 ms   | 1,431.49        |
+
+This is loopback `/health` performance only: it does not benchmark database readiness, authorization, deployment capacity, or application traffic. Existing caches were not cleared; no cold-build claim is made. The retained JSON files are byte-for-byte stdout copies and excluded from automatic formatting. The measured deployment file's SHA-256 is `4a5f406174c8bf5edccdb5bf9681b5251c59ee55159ab6a599ce9c803a68cd6e`.
+
+The baseline highlights periodic stage dispatch as a refinement target. Follow-up measurements must retain the same workload/profile and document any source, cache, host-load, or configuration differences; do not combine this baseline with a changed pipeline or fabricate aggregate results.
 
 ## Principles
 

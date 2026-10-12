@@ -44,6 +44,8 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 
 ### Added
 
+- Published unedited exact-revision local warm-cache deployment and repeated API-liveness benchmark reports, with service/resource versions, host load, cache methodology, correctness checks, and explicit shared-host/sample-size limitations. Five deployments and all three 1,000-request runs passed; no production-capacity claim is made.
+
 - Added `pnpm acceptance:dashboard` to evaluate all versioned Prometheus dashboard targets and verify live API/worker scrapes, recent heartbeat, and recorded activation. Added rollback preparation outcome and duration panels; validated all seven starter alert rules against real Prometheus.
 
 - Added `pnpm setup:local` to generate private local credentials, prepare proxy configuration, and provision the pinned constrained BuildKit daemon in the worker's isolated Docker configuration.

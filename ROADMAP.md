@@ -239,13 +239,13 @@ Exit gate: independently verify invalid, duplicate, unsupported, oversized, retr
 
 ### Phase 13 — Observability
 
-**Status:** In progress — live request/stage correlation verified; dashboard and independent acceptance remain
+**Status:** In progress — live correlation and dashboard queries verified; clean-release independent acceptance remains
 
 Structured logs and worker health are available. API/worker metrics include bounded request and webhook counters/histograms, active jobs and queue handlers, queue depth by state, queue wait and handler-processing duration, durable deployment-job stage duration/outcome by supported kind, deployment final-outcome/duration, build-cache hits/misses, worker heartbeat age, build/runtime cleanup duration, retry/timeout and health-grace exhaustion counters, orphan inventory, route configuration repairs, reconciliation, health-check outcomes/latency, runtime failures, and resource cleanup. Worker readiness also checks Docker daemon access and configured Buildx builder bootstrap, cached for one heartbeat interval. A loopback-only optional Compose overlay provisions Prometheus and Grafana with a read-only data source, operations dashboard, and starter alert rules. API server spans extract W3C trace context, capture route-template/status/duration, and export through the optional OTLP/HTTP endpoint. BullMQ producer and consumer spans carry W3C context in BullMQ telemetry metadata, separate from the identifier-only job data; worker processing, reconciliation, and persistence-adapter operations add bounded spans without SQL statements or parameters. Remote metrics aggregation, individual SQL-statement spans, and independent canary-secret/collector verification remain.
 
 Exit gate: independently verify a full deployment/failure correlation across logs, metrics, traces, events, dashboard queries, and worker state without exposing secrets; verify collector failure/drop behavior and secret-free OTLP payloads.
 
-Incremental evidence: the real 17-check lifecycle scenario correlates successful and failed work through HTTP, persistence, reconstructed queue stages, worker logs, and post-commit outcome metrics. Local collector canaries and failure injection passed; the bounded SDK export test preserves all 1,500 application operations while dropping excess spans. Dashboard queries and exact-clean-release independent review still need acceptance.
+Incremental evidence: the real 17-check lifecycle scenario correlates successful and failed work through HTTP, persistence, reconstructed queue stages, worker logs, and post-commit outcome metrics. Local collector canaries and failure injection passed; the bounded SDK export test preserves all 1,500 application operations while dropping excess spans. A real Prometheus receiver evaluated all 39 versioned dashboard queries, scraped API/worker successfully, and observed a recent worker heartbeat and activation outcomes; all seven starter alert rules pass `promtool` validation. Exact-clean-release independent review and Grafana rendering still need acceptance.
 
 ### Phase 14 — Failure recovery
 
@@ -263,7 +263,7 @@ Deployment controllers can create a deployment from a full exact commit SHA, wit
 
 Exit gate: Playwright accessibility/user-flow checks pass, logs and deployment controls are correctly scoped, and the README demonstrates a real working milestone.
 
-Incremental browser evidence: landing, walkthrough, sign-in, and signed-out workspace passed WCAG 2 A/AA and WCAG 2.1 A/AA axe-core checks at 1280 and 390 pixels with no horizontal overflow. Keyboard testing found and corrected client-side skip-link navigation that scrolled without focusing; native navigation now focuses `main-content`. Real owner sign-in also passed. Complete signed-in project/control flows and screenshots still remain.
+Incremental browser evidence: landing, walkthrough, sign-in, signed-out workspace, owner project editor, and owner active deployment/log views passed WCAG 2 A/AA and WCAG 2.1 A/AA axe-core checks at 1280 and 390 pixels with no horizontal overflow. Keyboard testing found and corrected client-side skip-link navigation that scrolled without focusing; native navigation now focuses `main-content`. Real owner sign-in, invalid-field focus, project creation/editing, exact-SHA activation, and confirmation Escape/focus return also passed. Viewer review, non-empty logs, complete operator flows, and screenshots remain.
 
 ### Phase 16 — Benchmarks and public release
 

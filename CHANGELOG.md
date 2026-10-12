@@ -38,6 +38,8 @@ All notable user-facing changes will be documented here. LaunchRail follows [Kee
 
 ### Added
 
+- Added `pnpm acceptance:dashboard` to evaluate all versioned Prometheus dashboard targets and verify live API/worker scrapes, recent heartbeat, and recorded activation. Added rollback preparation outcome and duration panels; validated all seven starter alert rules against real Prometheus.
+
 - Added `pnpm setup:local` to generate private local credentials, prepare proxy configuration, and provision the pinned constrained BuildKit daemon in the worker's isolated Docker configuration.
 
 - Pinned Traefik file-provider routing with collision-resistant deployment hostnames, atomic private route files, bounded targets, stale-file reconciliation, and real proxy acceptance coverage.

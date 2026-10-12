@@ -4,6 +4,8 @@ This is an incremental verification record, not a release approval. Remaining ga
 
 ## Observability correlation verification
 
+The dedicated real Prometheus instance evaluated all 39 versioned dashboard target expressions, including new rollback preparation outcome/duration panels. Both service scrapes were up, the worker heartbeat was recent, and activation counters were present. Twenty-six query results contained samples; unexercised failure-specific series remain explicitly empty. `promtool check rules` validated all seven starter alert rules. The repeatable `pnpm acceptance:dashboard` command also rejects stale-heartbeat fixtures, and the full unit suite now passes 337 tests. Grafana rendering and externally delivered notifications are not established by query validation.
+
 Published observability revision `22c6f5c478398bf71b00deac9c3db9e4deba0b63` passed all three [CI jobs](https://github.com/Zamuel66666/LaunchRail/actions/runs/38220439999). Local real-service acceptance additionally passed eight BuildKit, five Docker runtime/example, and one Traefik routing tests. A repeated real 17-check lifecycle scenario passed after publication; its report records a dirty worktree because the separate skip-link accessibility correction was being tested concurrently, so it is not clean-release proof.
 
 ## Incremental keyboard and responsive review
